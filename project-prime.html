@@ -1,0 +1,1863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Prime</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0F1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #E8EAF0; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0F1117; }
+    ::-webkit-scrollbar-thumb { background: #2A2D3A; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const FORM_GUIDES = {
+  // WARM-UP
+  "Banded Clamshell": "Lie on your side, knees bent at 90°, band above knees. Keep feet stacked and together. Rotate top knee upward like a clamshell opening. Hold 1 second at top, lower slowly. Don't let hips rock backward — keep pelvis stable throughout. Targets glute medius, a primary driver of both low back pain and plantar fasciitis.",
+  "Glute Bridge": "Lie on back, knees bent, feet flat on floor hip-width apart. Press through heels and drive hips toward ceiling. Squeeze glutes hard at top — don't hyperextend lower back. Hold 2 seconds. Lower slowly. Keep core braced throughout. This is your low-back-safe glute activation before hip thrusts.",
+  // CHEST
+  "Incline Dumbbell Press": "Set bench to 30-45 degrees. Lie back, dumbbells at shoulder height, palms forward. Press up and slightly inward — converge at the top. Lower with control until elbows are just below bench level. Feel the upper chest stretch at the bottom. Priority chest movement — upper pec development. SUPERSET with Dumbbell Row: go straight from your last press rep to the row with minimal rest.",
+  "Flat Dumbbell Press": "Lie flat on bench, feet on floor. Dumbbells at chest level, elbows at 45-75 degrees from torso. Press straight up. Lower with control. Squeeze shoulder blades into bench. Targets mid chest. SUPERSET with Pull-up: finish your press reps then go straight to the bar.",
+  "Dumbbell Fly": "Lie flat, dumbbells above chest with slight elbow bend — maintain that bend throughout. Lower arms wide in an arc until you feel a deep pec stretch. Squeeze pecs to bring arms back together at the top. Arc motion, not a press. Targets inner chest — the sternum strip.",
+  "Dips": "Lean torso forward — chin tucked to chest, body angled slightly forward. Lower until upper arms are parallel to floor. Press back up. Forward lean is essential — upright dips work triceps, forward lean works lower chest.",
+  // BACK
+  "Dumbbell Row": "Plant one knee and same-side hand on bench. Pull dumbbell to hip, elbow close to body. Squeeze shoulder blade at top — hold 1 second. Lower with full control. Keep back flat. SUPERSET with Incline Press — rest 60 sec after completing both exercises.",
+  "Pull-up / Chin-up": "Hang from bar, arms fully extended — briefly decompresses the lumbar spine. Pull-up: palms away, wider grip. Chin-up: palms toward you, adds more bicep. Pull until chin clears bar. Lower slowly. SUPERSET with Flat Press — rest 60 sec after completing both exercises.",
+  // POSTERIOR CHAIN
+  "Hip Thrust": "Sit on floor with upper back against bench edge. Feet flat, hip-width apart. Drive hips up by squeezing glutes — not by arching lower back. Hold 1-2 seconds at top. Lower slowly. Zero spinal compression. Most important exercise for glutes and plantar fasciitis root cause correction.",
+  "Single-Leg Hip Thrust": "Same setup as hip thrust but one leg extended. Drive through the planted heel, squeeze glute hard at top. Keep hips level. Add this at week 4 after bilateral hip thrust is solid. Optional — skip if session is running long.",
+  "Dumbbell RDL": "Stand, dumbbells in front of thighs. Soft knee bend throughout. Hinge at hips, push them backward as dumbbells lower along your legs. Feel hamstring stretch. Neutral spine — no rounding. Slow eccentric — 3 seconds down.",
+  "Prone Dumbbell Hamstring Curl": "Lie face down on bench, legs hanging off. Hold dumbbell between feet. Curl heels toward glutes. Lower slowly — 3-4 second eccentric. Keep hips flat on bench. Start light.",
+  "Single-Leg Dumbbell RDL": "Stand on one leg, slight knee bend. Hold dumbbell in opposite hand. Hinge at hip, free leg goes back — body forms a T. Feel hamstring stretch in standing leg. Drive through heel to return. Keep hips square. Slow controlled descent.",
+  "Bulgarian Split Squat": "Rear foot on bench behind you. Front foot forward — shin vertical when you descend. Lower rear knee toward floor. Drive through front heel to rise. Use heel elevation if foot pain.",
+  // SHOULDERS / ARMS
+  "Seated Overhead Press": "Sit on bench with back support or against a wall. Dumbbells at shoulder height. Press straight overhead. Seated position prevents lumbar extension — do not do this standing.",
+  "Bicep Curl": "Elbows pinned to sides. Curl dumbbells up — don't swing. Squeeze at top. Lower slowly 2-3 seconds. SUPERSET with Tricep Extension — alternate sets with minimal rest.",
+  "Tricep Extension": "Hold dumbbell overhead with both hands. Lower behind head by bending elbows — keep elbows pointed up. Extend fully. SUPERSET with Bicep Curl — alternate sets with minimal rest.",
+  // ABS
+  "Leg Raise": "Lie flat on your back, hands under glutes or gripping a bench edge. Keep legs straight or slightly bent. Raise legs to 90 degrees, lower slowly — 3 seconds down. Don't let lower back arch off the floor. Keep core braced throughout. If lower back feels stressed, bend knees slightly.",
+  "Core Rotation": "Sit on floor or bench, knees bent, torso leaned back slightly at 45 degrees. Hold a dumbbell or kettlebell with both hands. Rotate torso side to side, touching weight to floor on each side. Keep movement controlled — this is not a momentum exercise. Spine stays neutral, rotation comes from the obliques.",
+  "Dead Bug": "Lie on back, arms straight up toward ceiling, knees bent at 90 degrees in the air. Slowly lower opposite arm and leg toward floor simultaneously — keep lower back pressed flat into floor. Return and alternate. The key is maintaining spinal contact with the floor. Excellent for low back stability without compression.",
+};
+
+// superset field links exercises that should be done back-to-back
+// type: "weighted" | "bodyweight" | "banded"
+const EXERCISE_LIST = [
+  // Warm-up
+  { name: "Banded Clamshell",           muscleGroup: "Warm-up",    type: "banded",     flag: null,                                          defaultSets: "2", defaultReps: "15", superset: null },
+  { name: "Glute Bridge",               muscleGroup: "Warm-up",    type: "bodyweight", flag: null,                                          defaultSets: "2", defaultReps: "15", superset: null },
+  // Chest + Back supersets
+  { name: "Incline Dumbbell Press",     muscleGroup: "Chest",      type: "weighted",   flag: null,                                          defaultSets: "4", defaultReps: "10", superset: "Dumbbell Row" },
+  { name: "Dumbbell Row",               muscleGroup: "Back",       type: "weighted",   flag: null,                                          defaultSets: "4", defaultReps: "10", superset: "Incline Dumbbell Press" },
+  { name: "Flat Dumbbell Press",        muscleGroup: "Chest",      type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "10", superset: "Pull-up / Chin-up" },
+  { name: "Pull-up / Chin-up",          muscleGroup: "Back",       type: "bodyweight", flag: null,                                          defaultSets: "3", defaultReps: "5",  superset: "Flat Dumbbell Press" },
+  { name: "Dumbbell Fly",               muscleGroup: "Chest",      type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: null },
+  { name: "Dips",                       muscleGroup: "Chest",      type: "bodyweight", flag: null,                                          defaultSets: "3", defaultReps: "10", superset: null },
+  // Posterior Chain
+  { name: "Hip Thrust",                 muscleGroup: "Glutes",     type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: null },
+  { name: "Single-Leg Hip Thrust",      muscleGroup: "Glutes",     type: "bodyweight", flag: "⚠️ Optional — add week 4+",                   defaultSets: "3", defaultReps: "8",  superset: null },
+  { name: "Dumbbell RDL",               muscleGroup: "Hamstrings", type: "weighted",   flag: "⚠️ Neutral spine — no rounding",              defaultSets: "3", defaultReps: "10", superset: null },
+  { name: "Prone Dumbbell Hamstring Curl", muscleGroup: "Hamstrings", type: "weighted", flag: null,                                         defaultSets: "3", defaultReps: "12", superset: null },
+  { name: "Single-Leg Dumbbell RDL",    muscleGroup: "Hamstrings", type: "weighted",   flag: "⚠️ Each side — slow descent",                 defaultSets: "3", defaultReps: "8",  superset: null },
+  { name: "Bulgarian Split Squat",      muscleGroup: "Legs",       type: "weighted",   flag: "⚠️ Heel elevation if foot pain",              defaultSets: "3", defaultReps: "10", superset: null },
+  // Shoulders
+  { name: "Seated Overhead Press",      muscleGroup: "Shoulders",  type: "weighted",   flag: "⚠️ Seated only — protects low back",          defaultSets: "3", defaultReps: "10", superset: null },
+  // Arms superset
+  { name: "Bicep Curl",                 muscleGroup: "Arms",       type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: "Tricep Extension" },
+  { name: "Tricep Extension",           muscleGroup: "Arms",       type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: "Bicep Curl" },
+  // Abs
+  { name: "Leg Raise",                  muscleGroup: "Core",       type: "bodyweight", flag: null,                                          defaultSets: "3", defaultReps: "15", superset: null },
+  { name: "Core Rotation",              muscleGroup: "Core",       type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "15", superset: null },
+  { name: "Dead Bug",                   muscleGroup: "Core",       type: "bodyweight", flag: "⚠️ Keep lower back flat on floor",            defaultSets: "3", defaultReps: "10", superset: null },
+];
+
+const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({
+  id: i + 1, name: e.name, active: true, muscleGroup: e.muscleGroup,
+  type: e.type, flag: e.flag, defaultSets: e.defaultSets, defaultReps: e.defaultReps,
+  superset: e.superset,
+}));
+
+const MUSCLE_COLORS = {
+  "Warm-up":   "#4B5563",
+  "Chest":     "#4A90D9",
+  "Back":      "#7B68EE",
+  "Legs":      "#E8A838",
+  "Glutes":    "#E87D38",
+  "Hamstrings":"#D9844A",
+  "Shoulders": "#4AD9A0",
+  "Arms":      "#D94A7A",
+  "Core":      "#4AD9D9",
+};
+
+const NAV = [
+  { id: "workout", label: "Workout", icon: "💪" },
+  { id: "progress", label: "Progress", icon: "📈" },
+  { id: "body", label: "Body", icon: "⚖️" },
+  { id: "nutrition", label: "Nutrition", icon: "🥩" },
+  { id: "phase", label: "Phase Tracker", icon: "🗓️" },
+];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const sf = (sets, reps, weight, type) => {
+  if (type === "bodyweight") return sets * reps * 10;
+  if (type === "banded")     return sets * reps;
+  return sets * reps * (weight || 0);
+};
+const fmtDate = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const fmtDateLong = (d) => new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+// ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
+function Sparkline({ data, width = 120, height = 40 }) {
+  if (!data || data.length < 2) return <span style={{ color: "#3A3D4A", fontSize: 11 }}>No history</span>;
+  const vals = data.map(d => d.value);
+  const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1;
+  const pts = vals.map((v, i) => {
+    const x = (i / (vals.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 6) - 3;
+    return `${x},${y}`;
+  });
+  const trend = vals[vals.length - 1] >= vals[0];
+  const lc = trend ? "#4AD99A" : "#D94A4A";
+  return (
+    <svg width={width} height={height}>
+      <polyline points={pts.join(" ")} fill="none" stroke={lc} strokeWidth={2} strokeLinejoin="round" />
+      <circle cx={pts[pts.length-1].split(",")[0]} cy={pts[pts.length-1].split(",")[1]} r={3.5} fill={lc} />
+    </svg>
+  );
+}
+
+function BarChart({ data, height = 140 }) {
+  if (!data.length) return <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 13 }}>No sessions logged yet</div>;
+  const maxV = Math.max(...data.map(d => d.value));
+  const last = data[data.length - 1];
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height }}>
+      {data.map((d, i) => {
+        const h = Math.max(6, (d.value / maxV) * (height - 30));
+        const isLast = i === data.length - 1;
+        return (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+            <div style={{ fontSize: 10, color: isLast ? "#E8A838" : "#3A3D4A", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+              {isLast ? d.value.toLocaleString() : ""}
+            </div>
+            <div style={{ width: "100%", height: h, background: isLast ? "#E8A838" : "#4A90D9", borderRadius: "4px 4px 0 0", opacity: isLast ? 1 : 0.5 }} />
+            <div style={{ fontSize: 9, color: "#3A3D4A", whiteSpace: "nowrap", transform: "rotate(-30deg)", transformOrigin: "top center", marginTop: 4 }}>
+              {fmtDate(d.date)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MacroRing({ pct, color, label, val, target, unit }) {
+  const r = 36, circ = 2 * Math.PI * r;
+  const dash = Math.min(pct / 100, 1) * circ;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+      <svg width={90} height={90} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={45} cy={45} r={r} fill="none" stroke="#1A1D26" strokeWidth={8} />
+        <circle cx={45} cy={45} r={r} fill="none" stroke={color} strokeWidth={8}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{ transition: "stroke-dasharray 0.4s" }} />
+      </svg>
+      <div style={{ textAlign: "center", marginTop: -8 }}>
+        <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{val}</div>
+        <div style={{ color: "#8B92A5", fontSize: 10 }}>{unit} / {target}</div>
+        <div style={{ color, fontSize: 11, fontWeight: 600, marginTop: 2 }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function Modal({ title, onClose, children, width = 480 }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "#1A1D26", borderRadius: 14, padding: 32, width, maxHeight: "85vh", overflowY: "auto", border: "1px solid #2A2D3A", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#E8EAF0" }}>{title}</h2>
+          <button onClick={onClose} style={{ background: "#2A2D3A", border: "none", color: "#8B92A5", fontSize: 18, cursor: "pointer", width: 32, height: 32, borderRadius: 6, lineHeight: 1 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+const inputStyle = {
+  background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, color: "#E8EAF0",
+  padding: "10px 14px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none",
+  fontFamily: "inherit",
+};
+
+function Pill({ label, color }) {
+  return (
+    <span style={{ background: color + "22", color, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{label}</span>
+  );
+}
+
+function Card({ children, style = {} }) {
+  return (
+    <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 20, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>{children}</div>;
+}
+
+// ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
+function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
+  const [formGuide, setFormGuide] = useState(null);
+  const [logging, setLogging] = useState(null);
+  const [logSets, setLogSets] = useState("3");
+  const [logReps, setLogReps] = useState("8");
+  const [logWeight, setLogWeight] = useState("");
+  const [logNotes, setLogNotes] = useState("");
+
+  const active = exercises.filter(e => e.active);
+  const lastEntry = (id) => { const l = workoutLogs.filter(x => x.exerciseId === id); return l.length ? l[l.length - 1] : null; };
+  const sfHistory = (id) => {
+    const ex = exercises.find(e => e.id === id);
+    return workoutLogs.filter(x => x.exerciseId === id).map(x => ({ value: sf(x.sets, x.reps, x.weight, ex?.type), date: x.date }));
+  };
+  const todaySets = workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString()).length;
+
+  const previewSF = logSets && logReps ? sf(+logSets, +logReps, +logWeight, logging?.type) : null;
+
+  const saveSet = () => {
+    onLogSet(logging.id, { sets: +logSets, reps: +logReps, weight: logging.type === "weighted" ? +logWeight : 0, notes: logNotes, date: new Date().toISOString() });
+    setLogging(null); setLogWeight(""); setLogNotes("");
+  };
+
+  // Group order
+  const GROUP_ORDER = ["Warm-up", "Chest", "Back", "Glutes", "Hamstrings", "Legs", "Shoulders", "Arms", "Core"];
+  const byGroup = {};
+  GROUP_ORDER.forEach(g => { byGroup[g] = []; });
+  active.forEach(e => { if (byGroup[e.muscleGroup]) byGroup[e.muscleGroup].push(e); else { byGroup[e.muscleGroup] = [e]; } });
+
+  return (
+    <div style={{ display: "flex", gap: 24, height: "100%" }}>
+      {/* Left: exercise list */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
+            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · {todaySets} sets logged today</div>
+          </div>
+        </div>
+
+        {GROUP_ORDER.filter(g => byGroup[g] && byGroup[g].length > 0).map((group) => (
+          <div key={group} style={{ marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 3, height: 16, background: MUSCLE_COLORS[group] || "#4B5563", borderRadius: 2 }} />
+              <span style={{ color: MUSCLE_COLORS[group] || "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{group}</span>
+              {group === "Warm-up" && <span style={{ color: "#4B5563", fontSize: 11 }}>— complete before main work</span>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {byGroup[group].map(ex => {
+                const last = lastEntry(ex.id);
+                const hist = sfHistory(ex.id);
+                const latestSF = hist.length ? hist[hist.length - 1].value : null;
+                return (
+                  <Card key={ex.id} style={{ padding: "14px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontWeight: 600, color: "#E8EAF0", fontSize: 15 }}>{ex.name}</span>
+                          {ex.superset && (
+                            <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                              ⚡ SUPERSET w/ {ex.superset}
+                            </span>
+                          )}
+                          {ex.flag && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{ex.flag}</span>}
+                        </div>
+                        {last ? (
+                          <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
+                            Last: {last.sets}×{last.reps} @ {last.weight} lbs — {fmtDate(last.date)}
+                          </div>
+                        ) : (
+                          <div style={{ color: "#3A3D4A", fontSize: 12, marginTop: 2 }}>No previous sessions</div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                        <div style={{ textAlign: "right" }}>
+                          <Sparkline data={hist} width={100} height={36} />
+                          {latestSF && <div style={{ color: "#E8A838", fontSize: 11, fontWeight: 700, marginTop: 2 }}>SF {latestSF.toLocaleString()}</div>}
+                        </div>
+                        <button onClick={() => setFormGuide(ex)}
+                          style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                          Form Guide
+                        </button>
+                        <button onClick={() => { setLogging(ex); setLogSets(ex.defaultSets || "3"); setLogReps(ex.defaultReps || "10"); setLogWeight(""); setLogNotes(""); }}
+                          style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                          + Log Set
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* Alfredson Protocol */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ width: 3, height: 16, background: "#4AD9D9", borderRadius: 2 }} />
+            <span style={{ color: "#4AD9D9", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Daily Protocol</span>
+            <span style={{ color: "#4B5563", fontSize: 11 }}>— every day, not just workout days</span>
+          </div>
+          <Card style={{ border: "1px solid #4AD9D933", padding: "16px 20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 15 }}>Alfredson Eccentric Calf Protocol</span>
+                  <span style={{ background: "#4AD9D922", color: "#4AD9D9", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>Plantar Fasciitis Rx</span>
+                </div>
+                <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 10 }}>3×15 each leg · Straight knee + Bent knee · Twice per day · 12-week commitment</div>
+                <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#8B92A5", lineHeight: 1.6 }}>
+                  <strong style={{ color: "#C8CDD8" }}>How:</strong> Stand on a step, heel hanging off edge. Rise on both feet. Lower slowly on affected foot only — 3 seconds down. That eccentric is the medicine.
+                  <br /><span style={{ color: "#E8A838", fontWeight: 600 }}>⚠️ Pain during this protocol is expected and acceptable. Push through — research shows better outcomes for those who do.</span>
+                </div>
+              </div>
+              <div style={{ textAlign: "right", marginLeft: 20, flexShrink: 0 }}>
+                <div style={{ color: "#4AD9D9", fontSize: 26, fontWeight: 800 }}>2×</div>
+                <div style={{ color: "#4B5563", fontSize: 11 }}>per day</div>
+                <div style={{ color: "#4AD9D9", fontSize: 14, fontWeight: 700, marginTop: 4 }}>12 wks</div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Right: today's log */}
+      <div style={{ width: 280, flexShrink: 0 }}>
+        <Card style={{ position: "sticky", top: 0 }}>
+          <SectionLabel>Today's Log</SectionLabel>
+          {workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString()).length === 0 ? (
+            <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sets logged yet today</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[...workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString())].reverse().map((l, i) => {
+                const ex = exercises.find(e => e.id === l.exerciseId);
+                return (
+                  <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#C8CDD8", fontSize: 13, fontWeight: 600 }}>{ex?.name}</span>
+                      <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>{sf(l.sets, l.reps, l.weight, ex?.type).toLocaleString()}</span>
+                    </div>
+                    <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
+                      {ex?.type === "weighted" ? `${l.sets} sets × ${l.reps} reps @ ${l.weight} lbs` : `${l.sets} sets × ${l.reps} reps`}
+                    </div>
+                    {l.notes && <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3, fontStyle: "italic" }}>{l.notes}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {formGuide && (
+        <Modal title={formGuide.name} onClose={() => setFormGuide(null)}>
+          <Pill label={formGuide.muscleGroup} color={MUSCLE_COLORS[formGuide.muscleGroup] || "#4B5563"} />
+
+          <p style={{ color: "#C8CDD8", fontSize: 15, lineHeight: 1.8, margin: "16px 0 0" }}>{FORM_GUIDES[formGuide.name]}</p>
+        </Modal>
+      )}
+
+      {logging && (
+        <Modal title={`Log Set — ${logging.name}`} onClose={() => setLogging(null)}>
+          <div style={{ display: "grid", gridTemplateColumns: logging.type === "weighted" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
+            {[["Sets", logSets, setLogSets], ["Reps", logReps, setLogReps]].map(([lbl, val, set]) => (
+              <div key={lbl}>
+                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>{lbl}</label>
+                <input type="number" value={val} onChange={e => set(e.target.value)} style={inputStyle} />
+              </div>
+            ))}
+            {logging.type === "weighted" && (
+              <div>
+                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Weight (lbs)</label>
+                <input type="number" value={logWeight} onChange={e => setLogWeight(e.target.value)} style={inputStyle} placeholder="0" />
+              </div>
+            )}
+          </div>
+          {logging.type !== "weighted" && (
+            <div style={{ background: "#0F1117", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 12, color: "#8B92A5" }}>
+              {logging.type === "bodyweight"
+                ? "💪 Bodyweight exercise — SF calculated as sets × reps × 10"
+                : "🎗️ Banded exercise — SF calculated as sets × reps"}
+            </div>
+          )}
+          {previewSF !== null && (
+            <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "#8B92A5", fontSize: 13 }}>Strength Factor Preview</span>
+              <span style={{ color: "#E8A838", fontSize: 26, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{previewSF.toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Notes (optional)</label>
+            <textarea value={logNotes} onChange={e => setLogNotes(e.target.value)} rows={2}
+              style={{ ...inputStyle, resize: "vertical" }} placeholder="How it felt..." />
+          </div>
+          <button onClick={saveSet}
+            style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", width: "100%", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            Save Set
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── PROGRESS TAB ─────────────────────────────────────────────────────────────
+function ProgressTab({ exercises, workoutLogs }) {
+  const [selected, setSelected] = useState(null);
+  const [view, setView] = useState("dashboard"); // "dashboard" | "detail"
+
+  // ── Per-exercise stats ──────────────────────────────────────────────────────
+  const exStats = exercises.filter(e => e.active).map(ex => {
+    const logs = workoutLogs.filter(l => l.exerciseId === ex.id);
+    const sfSeries = logs.map(l => ({ value: sf(l.sets, l.reps, l.weight, ex.type), date: l.date }));
+    const first = sfSeries[0]?.value;
+    const last  = sfSeries[sfSeries.length - 1]?.value;
+    const prev  = sfSeries[sfSeries.length - 2]?.value;
+    const totalGain  = first && last  ? ((last  - first) / first * 100) : null;
+    const sessionGain = last && prev  ? ((last  - prev)  / prev  * 100) : null;
+    const peak = sfSeries.length ? Math.max(...sfSeries.map(d => d.value)) : null;
+    return { ex, logs, sfSeries, first, last, prev, totalGain, sessionGain, peak };
+  });
+
+  // ── Overall Progress Score (avg of all exercises with ≥2 sessions) ──────────
+  const scored = exStats.filter(s => s.totalGain !== null);
+  const overallScore = scored.length
+    ? scored.reduce((a, s) => a + s.totalGain, 0) / scored.length
+    : null;
+
+  // ── Group scores ────────────────────────────────────────────────────────────
+  const groupScores = {};
+  scored.forEach(s => {
+    const g = s.ex.muscleGroup;
+    if (!groupScores[g]) groupScores[g] = [];
+    groupScores[g].push(s.totalGain);
+  });
+  const groupAvgs = Object.entries(groupScores).map(([g, vals]) => ({
+    group: g, avg: vals.reduce((a, v) => a + v, 0) / vals.length,
+  })).sort((a, b) => b.avg - a.avg);
+
+  // ── Detail view data ────────────────────────────────────────────────────────
+  const selStats = selected ? exStats.find(s => s.ex.id === selected) : null;
+
+  const openDetail = (id) => { setSelected(id); setView("detail"); };
+
+  // ── Trend direction for overall ─────────────────────────────────────────────
+  const trendColor = overallScore === null ? "#4B5563" : overallScore >= 0 ? "#4AD99A" : "#D94A4A";
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Progress Dashboard</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Normalized across all exercises</div>
+        </div>
+        <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
+          {[["dashboard", "Dashboard"], ["detail", "Exercise Detail"]].map(([id, label]) => (
+            <button key={id} onClick={() => setView(id)}
+              style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
+                border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === "dashboard" && (
+        <div>
+          {/* Top row: Overall score + group scores */}
+          <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 20, marginBottom: 20 }}>
+
+            {/* Overall Progress Score */}
+            <Card style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, border: `1px solid ${trendColor}44` }}>
+              <div style={{ color: "#8B92A5", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Overall Progress Score</div>
+              {overallScore !== null ? (
+                <>
+                  <div style={{ color: trendColor, fontSize: 56, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                    {overallScore >= 0 ? "+" : ""}{overallScore.toFixed(1)}%
+                  </div>
+                  <div style={{ color: "#4B5563", fontSize: 12, marginTop: 8, textAlign: "center" }}>
+                    avg gain from first → latest session<br />across {scored.length} exercise{scored.length !== 1 ? "s" : ""}
+                  </div>
+                </>
+              ) : (
+                <div style={{ color: "#3A3D4A", fontSize: 14, textAlign: "center" }}>Log at least 2 sessions per exercise to see your score</div>
+              )}
+            </Card>
+
+            {/* Group scores */}
+            <Card>
+              <SectionLabel>Progress by Muscle Group</SectionLabel>
+              {groupAvgs.length === 0 ? (
+                <div style={{ color: "#3A3D4A", fontSize: 13 }}>No data yet — log some sessions first</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {groupAvgs.map(({ group, avg }) => {
+                    const color = MUSCLE_COLORS[group] || "#4B5563";
+                    const pct = Math.min(100, Math.max(0, avg));
+                    return (
+                      <div key={group}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ color, fontSize: 13, fontWeight: 600 }}>{group}</span>
+                          <span style={{ color: avg >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 13, fontWeight: 700 }}>
+                            {avg >= 0 ? "+" : ""}{avg.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div style={{ background: "#0F1117", borderRadius: 4, height: 6 }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4, transition: "width 0.4s" }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Exercise grid */}
+          <SectionLabel>All Exercises — Click to Drill Down</SectionLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {exStats.map(({ ex, sfSeries, totalGain, sessionGain, last }) => {
+              const color = MUSCLE_COLORS[ex.muscleGroup] || "#4B5563";
+              const hasData = sfSeries.length > 0;
+              const gainColor = totalGain === null ? "#4B5563" : totalGain >= 0 ? "#4AD99A" : "#D94A4A";
+              return (
+                <div key={ex.id} onClick={() => openDetail(ex.id)}
+                  style={{ background: "#1A1D26", border: `1px solid #2A2D3A`, borderRadius: 10, padding: "14px 16px", cursor: "pointer",
+                    transition: "border-color 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = color}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "#2A2D3A"}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div>
+                      <div style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 13, marginBottom: 2 }}>{ex.name}</div>
+                      <Pill label={ex.muscleGroup} color={color} />
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      {totalGain !== null ? (
+                        <>
+                          <div style={{ color: gainColor, fontSize: 18, fontWeight: 800 }}>
+                            {totalGain >= 0 ? "+" : ""}{totalGain.toFixed(1)}%
+                          </div>
+                          <div style={{ color: "#4B5563", fontSize: 10 }}>total gain</div>
+                        </>
+                      ) : (
+                        <div style={{ color: "#3A3D4A", fontSize: 11 }}>no data</div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                    <div>
+                      <Sparkline data={sfSeries} width={90} height={32} />
+                      <div style={{ color: "#4B5563", fontSize: 10, marginTop: 2 }}>{sfSeries.length} session{sfSeries.length !== 1 ? "s" : ""}</div>
+                    </div>
+                    {sessionGain !== null && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: sessionGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 12, fontWeight: 700 }}>
+                          {sessionGain >= 0 ? "+" : ""}{sessionGain.toFixed(1)}%
+                        </div>
+                        <div style={{ color: "#4B5563", fontSize: 10 }}>last session</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {view === "detail" && (
+        <div>
+          {/* Exercise selector */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+            {exercises.filter(e => e.active).map(e => (
+              <button key={e.id} onClick={() => setSelected(e.id)}
+                style={{ background: selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#1A1D26",
+                  color: selected === e.id ? "#fff" : "#8B92A5",
+                  border: `1px solid ${selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#2A2D3A"}`,
+                  borderRadius: 20, padding: "7px 16px", fontSize: 13, cursor: "pointer",
+                  fontWeight: selected === e.id ? 700 : 400 }}>
+                {e.name}
+              </button>
+            ))}
+          </div>
+
+          {selStats && (
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+              <Card>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 700, color: "#E8EAF0" }}>{selStats.ex.name}</div>
+                    <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
+                      {selStats.ex.type === "weighted" ? "SF = sets × reps × weight" : selStats.ex.type === "bodyweight" ? "SF = sets × reps × 10" : "SF = sets × reps"}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    {selStats.totalGain !== null && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: selStats.totalGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 22, fontWeight: 800 }}>
+                          {selStats.totalGain >= 0 ? "+" : ""}{selStats.totalGain.toFixed(1)}%
+                        </div>
+                        <div style={{ color: "#4B5563", fontSize: 11 }}>total gain</div>
+                      </div>
+                    )}
+                    {selStats.sessionGain !== null && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: selStats.sessionGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 22, fontWeight: 800 }}>
+                          {selStats.sessionGain >= 0 ? "+" : ""}{selStats.sessionGain.toFixed(1)}%
+                        </div>
+                        <div style={{ color: "#4B5563", fontSize: 11 }}>vs last session</div>
+                      </div>
+                    )}
+                    {selStats.peak && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{selStats.peak.toLocaleString()}</div>
+                        <div style={{ color: "#4B5563", fontSize: 11 }}>peak SF</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <BarChart data={selStats.sfSeries.slice(-12)} height={160} />
+              </Card>
+
+              <Card>
+                <SectionLabel>Session History</SectionLabel>
+                {selStats.logs.length === 0 ? (
+                  <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
+                    {[...selStats.logs].reverse().map((l, i) => (
+                      <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
+                          <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{sf(l.sets, l.reps, l.weight, selStats.ex.type).toLocaleString()}</span>
+                        </div>
+                        <div style={{ color: "#C8CDD8", fontSize: 13, marginTop: 2 }}>
+                          {selStats.ex.type === "weighted" ? `${l.sets}×${l.reps} @ ${l.weight} lbs` : `${l.sets}×${l.reps}`}
+                        </div>
+                        {l.notes && <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2, fontStyle: "italic" }}>{l.notes}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+
+          {!selected && (
+            <div style={{ color: "#3A3D4A", textAlign: "center", padding: "60px 0", fontSize: 14 }}>Select an exercise above to see its detail</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── BODY TAB ─────────────────────────────────────────────────────────────────
+function BodyTab({ bodyLogs, onSave }) {
+  const [showForm, setShowForm] = useState(false);
+  const [fields, setFields] = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
+
+  const setF = (k) => (e) => setFields(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = () => {
+    onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, Number(v) || 0])) });
+    setShowForm(false);
+    setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
+  };
+
+  const recent = [...bodyLogs].reverse().slice(0, 10);
+  const weightData = bodyLogs.filter(l => l.weight).map(l => ({ value: l.weight, date: l.date }));
+  const latestWeight = weightData.length ? weightData[weightData.length - 1].value : null;
+  const startWeight = weightData.length ? weightData[0].value : null;
+
+  const MEASURES = [
+    { key: "chest", label: "Chest" }, { key: "waist", label: "Waist" },
+    { key: "hips", label: "Hips" }, { key: "glutes", label: "Glutes" },
+    { key: "thighs", label: "Thighs" }, { key: "arms", label: "Arms" },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Body Tracking</h2>
+        <button onClick={() => setShowForm(true)}
+          style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+          + Log Today
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+        <Card>
+          <SectionLabel>Current Weight</SectionLabel>
+          <div style={{ fontSize: 40, fontWeight: 800, color: "#E8EAF0", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+            {latestWeight ? `${latestWeight}` : "—"}
+          </div>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 4 }}>lbs</div>
+          {startWeight && latestWeight && startWeight !== latestWeight && (
+            <div style={{ color: latestWeight < startWeight ? "#4AD99A" : "#D94A4A", fontSize: 14, fontWeight: 700, marginTop: 8 }}>
+              {latestWeight < startWeight ? "↓" : "↑"} {Math.abs(latestWeight - startWeight).toFixed(1)} lbs from start
+            </div>
+          )}
+        </Card>
+        <Card style={{ gridColumn: "span 2" }}>
+          <SectionLabel>Weight Trend</SectionLabel>
+          {weightData.length < 2 ? (
+            <div style={{ color: "#3A3D4A", fontSize: 13 }}>Log at least 2 entries to see trend</div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}>
+              {weightData.slice(-20).map((d, i) => {
+                const vals = weightData.slice(-20).map(x => x.value);
+                const min = Math.min(...vals), max = Math.max(...vals);
+                const h = Math.max(4, ((d.value - min) / (max - min + 0.1)) * 60 + 12);
+                const isLast = i === Math.min(weightData.length, 20) - 1;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    {isLast && <div style={{ color: "#4A90D9", fontSize: 10, marginBottom: 2 }}>{d.value}</div>}
+                    <div style={{ width: "100%", height: h, background: isLast ? "#4A90D9" : "#2A2D3A", borderRadius: "3px 3px 0 0" }} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* History table */}
+      {recent.length > 0 && (
+        <Card>
+          <SectionLabel>Measurement History</SectionLabel>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms"].map(h => (
+                    <th key={h} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((l, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #1A1D26" }}>
+                    <td style={{ color: "#8B92A5", padding: "8px 12px" }}>{fmtDateLong(l.date)}</td>
+                    {["weight", "chest", "waist", "hips", "glutes", "thighs", "arms"].map(k => (
+                      <td key={k} style={{ color: "#C8CDD8", padding: "8px 12px", fontVariantNumeric: "tabular-nums" }}>
+                        {l[k] ? `${l[k]}${k === "weight" ? " lbs" : '"'}` : "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {showForm && (
+        <Modal title="Log Body Measurements" onClose={() => setShowForm(false)} width={520}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+            <div>
+              <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Weight (lbs)</label>
+              <input type="number" value={fields.weight} onChange={setF("weight")} style={inputStyle} placeholder="191" />
+            </div>
+            {MEASURES.map(({ key, label }) => (
+              <div key={key}>
+                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>{label} (in)</label>
+                <input type="number" value={fields[key]} onChange={setF(key)} style={inputStyle} />
+              </div>
+            ))}
+          </div>
+          <button onClick={handleSave}
+            style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", width: "100%", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            Save
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── LOG VIEW (edit/delete/date nav) ─────────────────────────────────────────
+function LogView({ nutritionLogs, onSave, onDelete, onEdit, totals, TARGETS }) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toDateString());
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editFields, setEditFields] = useState({});
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
+  // Build list of unique dates that have entries, plus today
+  const allDates = [...new Set([
+    new Date().toDateString(),
+    ...nutritionLogs.map(l => new Date(l.date).toDateString())
+  ])].sort((a, b) => new Date(b) - new Date(a)).slice(0, 30);
+
+  const dayLogs = nutritionLogs
+    .map((l, globalIdx) => ({ ...l, globalIdx }))
+    .filter(l => new Date(l.date).toDateString() === selectedDate)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const dayTotals = dayLogs.reduce((a, l) => ({
+    calories: a.calories + (l.calories || 0),
+    protein: a.protein + (l.protein || 0),
+    carbs: a.carbs + (l.carbs || 0),
+    fat: a.fat + (l.fat || 0),
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+  const isToday = selectedDate === new Date().toDateString();
+  const selectedDateObj = new Date(selectedDate);
+
+  const startEdit = (entry) => {
+    setEditingIdx(entry.globalIdx);
+    setEditFields({ calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes || "" });
+  };
+
+  const saveEdit = () => {
+    onEdit(editingIdx, {
+      calories: +editFields.calories,
+      protein: +editFields.protein,
+      carbs: +editFields.carbs,
+      fat: +editFields.fat,
+      notes: editFields.notes,
+    });
+    setEditingIdx(null);
+  };
+
+  const fmtDayLabel = (ds) => {
+    const d = new Date(ds);
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (ds === today) return "Today";
+    if (ds === yesterday) return "Yesterday";
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  return (
+    <div style={{ overflowY: "auto", flex: 1 }}>
+      {/* Date navigation */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+        {allDates.map(ds => (
+          <button key={ds} onClick={() => { setSelectedDate(ds); setEditingIdx(null); }}
+            style={{ background: selectedDate === ds ? "#4A90D9" : "#1A1D26",
+              color: selectedDate === ds ? "#fff" : "#8B92A5",
+              border: `1px solid ${selectedDate === ds ? "#4A90D9" : "#2A2D3A"}`,
+              borderRadius: 20, padding: "5px 14px", fontSize: 12, cursor: "pointer",
+              fontWeight: selectedDate === ds ? 700 : 400 }}>
+            {fmtDayLabel(ds)}
+          </button>
+        ))}
+      </div>
+
+      {/* Day macro summary */}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>
+            {fmtDayLabel(selectedDate)}
+            {isToday && <span style={{ color: "#4B5563", fontSize: 12, fontWeight: 400, marginLeft: 8 }}>— in progress</span>}
+          </div>
+          <div style={{ color: "#8B92A5", fontSize: 12 }}>{dayLogs.length} meal{dayLogs.length !== 1 ? "s" : ""} logged</div>
+        </div>
+        <div style={{ display: "flex", gap: 20 }}>
+          {[
+            { label: "Calories", val: dayTotals.calories, target: TARGETS.calories, color: "#E8A838", unit: "kcal" },
+            { label: "Protein",  val: dayTotals.protein,  target: TARGETS.protein,  color: "#4A90D9", unit: "g" },
+            { label: "Carbs",    val: dayTotals.carbs,    target: TARGETS.carbs,    color: "#7B68EE", unit: "g" },
+            { label: "Fat",      val: dayTotals.fat,      target: TARGETS.fat,      color: "#4AD9A0", unit: "g" },
+          ].map(({ label, val, target, color, unit }) => {
+            const pct = Math.min(100, (val / target) * 100);
+            return (
+              <div key={label} style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                  <span style={{ color: "#8B92A5", fontSize: 11 }}>{label}</span>
+                  <span style={{ color, fontSize: 11, fontWeight: 700 }}>{val}<span style={{ color: "#4B5563" }}>/{target}{unit}</span></span>
+                </div>
+                <div style={{ background: "#0F1117", borderRadius: 3, height: 4 }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Meal entries */}
+      {dayLogs.length === 0 ? (
+        <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 14 }}>
+          No meals logged for this day — use the 🤖 Coach tab to add meals.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {dayLogs.map((entry, i) => (
+            <Card key={i} style={{ padding: "14px 16px" }}>
+              {editingIdx === entry.globalIdx ? (
+                // ── Edit mode ──
+                <div>
+                  <div style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 14, marginBottom: 12 }}>
+                    Editing: {entry.notes || "Meal"}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                    {[["Calories", "calories"], ["Protein (g)", "protein"], ["Carbs (g)", "carbs"], ["Fat (g)", "fat"]].map(([lbl, k]) => (
+                      <div key={k}>
+                        <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
+                        <input type="number" value={editFields[k]}
+                          onChange={e => setEditFields(f => ({ ...f, [k]: e.target.value }))}
+                          style={inputStyle} />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>Meal Name / Notes</label>
+                    <input value={editFields.notes} onChange={e => setEditFields(f => ({ ...f, notes: e.target.value }))}
+                      style={inputStyle} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={saveEdit}
+                      style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      Save Changes
+                    </button>
+                    <button onClick={() => setEditingIdx(null)}
+                      style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // ── View mode ──
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 14 }}>{entry.notes || "Meal"}</span>
+                      <span style={{ color: "#4B5563", fontSize: 11 }}>{new Date(entry.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 16 }}>
+                      <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{entry.calories} kcal</span>
+                      <span style={{ color: "#4A90D9", fontSize: 13 }}>{entry.protein}g protein</span>
+                      <span style={{ color: "#7B68EE", fontSize: 13 }}>{entry.carbs}g carbs</span>
+                      <span style={{ color: "#4AD9A0", fontSize: 13 }}>{entry.fat}g fat</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => startEdit(entry)}
+                      style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>
+                      ✏️ Edit
+                    </button>
+                    {confirmDelete === entry.globalIdx ? (
+                      <>
+                        <button onClick={() => { onDelete(entry.globalIdx); setConfirmDelete(null); }}
+                          style={{ background: "#D94A4A", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>
+                          Confirm
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                          ✕
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(entry.globalIdx)}
+                        style={{ background: "#2A2D3A", color: "#4B5563", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                        🗑️
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── NUTRITION TAB ────────────────────────────────────────────────────────────
+const DAILY_SCHEDULE = [
+  {
+    time: "6:30 am", label: "Pre-Workout", tag: "🏋️ Fuel", tagColor: "#E8A838",
+    calories: 200, protein: 25,
+    purpose: "Light fuel — easy to digest before training",
+    foods: ["3 whole eggs scrambled"],
+    note: "Skip toast & yogurt. Just eggs. You don't wake up hungry — don't force it.",
+  },
+  {
+    time: "7:00 – 8:00 am", label: "Workout", tag: "💪 Train", tagColor: "#4AD99A",
+    calories: null, protein: null,
+    purpose: "Full body · 3×/week · Progressive overload",
+    foods: [], note: null, isWorkout: true,
+  },
+  {
+    time: "8:00 – 8:30 am", label: "Post-Workout Breakfast", tag: "⚡ Recovery", tagColor: "#4AD99A",
+    calories: 450, protein: 30,
+    purpose: "Most important meal — muscles primed to absorb nutrients",
+    foods: ["2 slices sourdough toast", "1 tbsp butter", "1 cup Greek yogurt", "Berries"],
+    note: "Carbs replenish glycogen. Protein drives synthesis. Don't skip this window.",
+  },
+  {
+    time: "10:00 am", label: "Mid-Morning Snack", tag: "🥤 Extend", tagColor: "#7B68EE",
+    calories: 350, protein: 30,
+    purpose: "Extends post-workout recovery window",
+    foods: ["Protein shake", "1 banana", "1 tbsp peanut butter"],
+    note: "Secondary recovery hit. Banana + PB adds clean carbs and healthy fat.",
+  },
+  {
+    time: "1:00 pm", label: "Lunch", tag: "🍗 Refuel", tagColor: "#4A90D9",
+    calories: 600, protein: 50,
+    purpose: "Midday refuel — largest meal of the day",
+    foods: ["6 oz chicken breast", "1 cup rice", "Roasted zucchini / peppers / mushrooms", "Side salad with dressing"],
+    note: "Olive oil on the vegetables adds quality fat. Rice is your primary carb anchor.",
+  },
+  {
+    time: "4:00 pm", label: "Afternoon Snack", tag: "🧀 Bridge", tagColor: "#E87D38",
+    calories: 250, protein: 25,
+    purpose: "Bridges lunch to dinner — keeps protein synthesis elevated",
+    foods: ["Cottage cheese", "Apple slices", "1 Chomps stick"],
+    note: "High protein, moderate carb. Keeps you out of a caloric valley before dinner.",
+  },
+  {
+    time: "6:30 – 7:00 pm", label: "Dinner", tag: "🐟 Build", tagColor: "#D94A7A",
+    calories: 550, protein: 40,
+    purpose: "Evening build — protein + complex carbs before overnight fast",
+    foods: ["6 oz salmon or sea bass", "Medium baked potato with butter", "Large vegetable side"],
+    note: "Fish gives omega-3s which reduce inflammation and support recovery.",
+  },
+  {
+    time: "9:00 pm", label: "Bed Snack", tag: "🌙 Overnight", tagColor: "#4AD9D9",
+    calories: 200, protein: 20,
+    purpose: "Slow-digesting casein feeds muscles during sleep",
+    foods: ["Greek yogurt or cottage cheese", "Small handful of berries"],
+    note: "Casein protein digests over 6–8 hours. This is muscle building while you sleep.",
+  },
+];
+
+function NutritionTab({ nutritionLogs, onSave, onEdit, onDelete }) {
+  const [view, setView] = useState("coach");
+  const [messages, setMessages] = useState([
+    { role: "assistant", content: "Hey! I'm your nutrition coach. Tell me what you ate in plain English and I'll log it with macros — or ask me anything about your nutrition.\n\nTry: \"8am, scrambled eggs 2 whole eggs, half cup egg beaters, half cup cottage cheese, one slice sourdough with peanut butter\"\n\nOr ask: \"I'm low on protein and not hungry, what do I do?\"", type: "greeting" }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [pendingLog, setPendingLog] = useState(null);
+
+  const TARGETS = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
+  const today = nutritionLogs.filter(l => new Date(l.date).toDateString() === new Date().toDateString());
+  const totals = today.reduce((a, l) => ({
+    calories: a.calories + l.calories, protein: a.protein + l.protein,
+    carbs: a.carbs + l.carbs, fat: a.fat + l.fat,
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const recent = [...nutritionLogs].reverse().slice(0, 7);
+  const totalScheduleCalories = DAILY_SCHEDULE.filter(m => m.calories).reduce((a, m) => a + m.calories, 0);
+  const totalScheduleProtein = DAILY_SCHEDULE.filter(m => m.protein).reduce((a, m) => a + m.protein, 0);
+
+  const buildSystemPrompt = () => `You are a nutrition coach embedded in Project Prime, a fitness tracking app for Jimmy Durham.
+
+JIMMY'S PROFILE:
+- Goal: Gain phase (muscle building), ~195 lbs
+- Daily targets: ${TARGETS.calories} kcal, ${TARGETS.protein}g protein, ${TARGETS.carbs}g carbs, ${TARGETS.fat}g fat
+- Maintenance calories: 2,400/day. Surplus target: ~300 cal
+- Training: Full body 3x/week, Mon/Wed/Fri
+- TRT: Yes — elevated muscle-building response
+- Known foods: eggs, egg beaters, chicken breast, lean ground turkey, sea bass, salmon, deli turkey, Greek yogurt, cottage cheese, protein shakes, protein bars, Chomps sticks, sourdough bread, rice, potatoes, apples, strawberries, berries, peanut butter, cheese, olive oil, zucchini, squash, mushrooms, bell peppers, onions
+
+TODAY'S LOGGED TOTALS SO FAR:
+- Calories: ${totals.calories} / ${TARGETS.calories} (${Math.max(0, TARGETS.calories - totals.calories)} remaining)
+- Protein: ${totals.protein}g / ${TARGETS.protein}g (${Math.max(0, TARGETS.protein - totals.protein)}g remaining)
+- Carbs: ${totals.carbs}g / ${TARGETS.carbs}g
+- Fat: ${totals.fat}g / ${TARGETS.fat}g
+- Meals logged today: ${today.length}
+
+YOU HAVE TWO MODES — detect which applies:
+
+MODE 1 — MEAL LOG: User describes food they ate. Extract and return ONLY this JSON (no other text, no markdown backticks):
+{"type":"meal_log","meal_name":"string","calories":number,"protein":number,"carbs":number,"fat":number,"notes":"string"}
+
+MODE 2 — COACHING QUESTION: User asks a nutrition question. Give a direct, practical, personalized answer in 2-4 sentences. Reference their actual remaining macros. Be specific — suggest foods from their known list.
+
+For meal logs use accurate estimates: cottage cheese 1/2 cup = 14g protein 80 cal. Egg beaters 1/2 cup = 15g protein 60 cal. Whole egg = 6g protein 70 cal. Sourdough slice = 120 cal 4g protein 22g carbs. Peanut butter 1 tbsp = 95 cal 4g protein 8g fat 3g carbs.`;
+
+  const OPENAI_KEY = "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";
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setLoading(true);
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          max_tokens: 1000,
+          messages: [
+            { role: "system", content: buildSystemPrompt() },
+            { role: "user", content: userMsg },
+          ],
+        }),
+      });
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content?.trim() || "Sorry, I couldn't process that.";
+      let parsed = null;
+      try { parsed = JSON.parse(text.replace(/```json|```/g, "").trim()); } catch (e) { parsed = null; }
+      if (parsed && parsed.type === "meal_log") {
+        setPendingLog(parsed);
+        setMessages(prev => [...prev, { role: "assistant", content: "Got it — here's what I parsed:", type: "meal_preview", data: parsed }]);
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: text, type: "coaching" }]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Connection error — check your internet and try again.", type: "error" }]);
+    }
+    setLoading(false);
+  };
+
+  const confirmLog = () => {
+    if (!pendingLog) return;
+    onSave({ date: new Date().toISOString(), calories: pendingLog.calories, protein: pendingLog.protein, carbs: pendingLog.carbs, fat: pendingLog.fat, notes: pendingLog.meal_name || pendingLog.notes });
+    setMessages(prev => [...prev, { role: "assistant", content: `✅ Logged: ${pendingLog.meal_name} — ${pendingLog.calories} kcal, ${pendingLog.protein}g protein`, type: "success" }]);
+    setPendingLog(null);
+  };
+
+  const dismissLog = () => {
+    setPendingLog(null);
+    setMessages(prev => [...prev, { role: "assistant", content: "Not logged. Tell me what to adjust.", type: "info" }]);
+  };
+
+  const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
+
+  const QUICK_PROMPTS = [
+    "Low on protein, not hungry — what do I do?",
+    "Got home late, nothing prepped — quick ideas",
+    "I'm sick — what's my nutrition plan?",
+    "What should I eat before my workout today?",
+    "How am I tracking vs my targets today?",
+  ];
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20, height: "calc(100vh - 130px)" }}>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexShrink: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Nutrition</h2>
+          <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
+            {[["coach", "🤖 Coach"], ["schedule", "📋 Schedule"], ["log", "📊 Log"]].map(([id, label]) => (
+              <button key={id} onClick={() => setView(id)}
+                style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
+                  border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {view === "coach" && (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12, flexShrink: 0 }}>
+              {QUICK_PROMPTS.map((p, i) => (
+                <button key={i} onClick={() => setInput(p)}
+                  style={{ background: "#1A1D26", color: "#8B92A5", border: "1px solid #2A2D3A", borderRadius: 20,
+                    padding: "4px 12px", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  {p}
+                </button>
+              ))}
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, marginBottom: 12, paddingRight: 4 }}>
+              {messages.map((msg, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div style={{ maxWidth: "78%",
+                    background: msg.role === "user" ? "#4A90D9" : msg.type === "success" ? "#4AD99A22" : msg.type === "error" ? "#D94A4A22" : "#1A1D26",
+                    border: msg.type === "success" ? "1px solid #4AD99A44" : msg.type === "error" ? "1px solid #D94A4A44" : msg.role === "user" ? "none" : "1px solid #2A2D3A",
+                    borderRadius: msg.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                    padding: "10px 14px" }}>
+                    {msg.type === "meal_preview" && msg.data ? (
+                      <div>
+                        <div style={{ color: "#E8EAF0", fontSize: 13, marginBottom: 10 }}>{msg.content}</div>
+                        <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+                          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{msg.data.meal_name}</div>
+                          <div style={{ display: "flex", gap: 16 }}>
+                            <div><span style={{ color: "#E8A838", fontWeight: 700, fontSize: 18 }}>{msg.data.calories}</span><div style={{ color: "#4B5563", fontSize: 10 }}>kcal</div></div>
+                            <div><span style={{ color: "#4A90D9", fontWeight: 700, fontSize: 18 }}>{msg.data.protein}g</span><div style={{ color: "#4B5563", fontSize: 10 }}>protein</div></div>
+                            <div><span style={{ color: "#7B68EE", fontWeight: 700, fontSize: 18 }}>{msg.data.carbs}g</span><div style={{ color: "#4B5563", fontSize: 10 }}>carbs</div></div>
+                            <div><span style={{ color: "#4AD9A0", fontWeight: 700, fontSize: 18 }}>{msg.data.fat}g</span><div style={{ color: "#4B5563", fontSize: 10 }}>fat</div></div>
+                          </div>
+                        </div>
+                        {pendingLog && pendingLog.meal_name === msg.data.meal_name && (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={confirmLog}
+                              style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                              ✓ Log This
+                            </button>
+                            <button onClick={dismissLog}
+                              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ color: msg.role === "user" ? "#fff" : msg.type === "success" ? "#4AD99A" : "#C8CDD8", fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                        {msg.content}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div style={{ display: "flex" }}>
+                  <div style={{ background: "#1A1D26", border: "1px solid #2A2D3A", borderRadius: "12px 12px 12px 2px", padding: "12px 16px" }}>
+                    <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                      {[0,1,2].map(j => <div key={j} style={{ width: 7, height: 7, borderRadius: "50%", background: "#4A90D9", opacity: 0.6 }} />)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+              <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+                placeholder="Log a meal or ask a nutrition question... (Enter to send)"
+                rows={2} style={{ ...inputStyle, flex: 1, resize: "none", lineHeight: 1.5 }} />
+              <button onClick={sendMessage} disabled={loading || !input.trim()}
+                style={{ background: loading || !input.trim() ? "#2A2D3A" : "#4A90D9",
+                  color: loading || !input.trim() ? "#4B5563" : "#fff",
+                  border: "none", borderRadius: 9, padding: "0 20px", fontSize: 22, cursor: loading || !input.trim() ? "default" : "pointer", flexShrink: 0 }}>
+                ↑
+              </button>
+            </div>
+          </div>
+        )}
+
+        {view === "schedule" && (
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {DAILY_SCHEDULE.map((meal, i) => (
+              <div key={i} style={{ display: "flex", gap: 0 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: meal.isWorkout ? "#4AD99A" : meal.tagColor, marginTop: 20, flexShrink: 0 }} />
+                  {i < DAILY_SCHEDULE.length - 1 && <div style={{ width: 2, flex: 1, background: "#2A2D3A", minHeight: 16 }} />}
+                </div>
+                <div style={{ flex: 1, marginBottom: 10, marginLeft: 8 }}>
+                  {meal.isWorkout ? (
+                    <div style={{ background: "#4AD99A11", border: "1px dashed #4AD99A44", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 20 }}>💪</span>
+                      <div>
+                        <div style={{ color: "#4AD99A", fontWeight: 700, fontSize: 14 }}>Workout — {meal.time}</div>
+                        <div style={{ color: "#8B92A5", fontSize: 12 }}>{meal.purpose}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ background: "#1A1D26", border: "1px solid #2A2D3A", borderRadius: 10, padding: "14px 16px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                            <span style={{ color: "#8B92A5", fontSize: 11 }}>{meal.time}</span>
+                            <span style={{ background: meal.tagColor + "22", color: meal.tagColor, padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{meal.tag}</span>
+                          </div>
+                          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{meal.label}</div>
+                          <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{meal.purpose}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 12, textAlign: "right", flexShrink: 0 }}>
+                          <div><div style={{ color: "#E8A838", fontSize: 16, fontWeight: 800 }}>{meal.calories}</div><div style={{ color: "#4B5563", fontSize: 10 }}>kcal</div></div>
+                          <div><div style={{ color: "#4A90D9", fontSize: 16, fontWeight: 800 }}>{meal.protein}g</div><div style={{ color: "#4B5563", fontSize: 10 }}>protein</div></div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: meal.note ? 8 : 0 }}>
+                        {meal.foods.map((f, fi) => <span key={fi} style={{ background: "#0F1117", color: "#C8CDD8", padding: "3px 8px", borderRadius: 4, fontSize: 12 }}>{f}</span>)}
+                      </div>
+                      {meal.note && <div style={{ color: "#4B5563", fontSize: 11, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 8, marginTop: 4 }}>💡 {meal.note}</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {view === "log" && (
+          <LogView nutritionLogs={nutritionLogs} onSave={onSave} onDelete={onDelete} onEdit={onEdit} totals={totals} TARGETS={TARGETS} />
+        )}
+      </div>
+
+      {/* Right sidebar */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+        <Card>
+          <SectionLabel>Today's Progress</SectionLabel>
+          {[
+            { label: "Calories", val: totals.calories, target: TARGETS.calories, color: "#E8A838", unit: "kcal" },
+            { label: "Protein",  val: totals.protein,  target: TARGETS.protein,  color: "#4A90D9", unit: "g" },
+            { label: "Carbs",    val: totals.carbs,    target: TARGETS.carbs,    color: "#7B68EE", unit: "g" },
+            { label: "Fat",      val: totals.fat,      target: TARGETS.fat,      color: "#4AD9A0", unit: "g" },
+          ].map(({ label, val, target, color, unit }) => {
+            const pct = Math.min(100, (val / target) * 100);
+            return (
+              <div key={label} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
+                  <span style={{ color, fontSize: 12, fontWeight: 700 }}>{val}<span style={{ color: "#4B5563", fontWeight: 400 }}>/{target}{unit}</span></span>
+                </div>
+                <div style={{ background: "#0F1117", borderRadius: 4, height: 6, marginBottom: 2 }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
+                </div>
+                <div style={{ color: "#4B5563", fontSize: 10 }}>{Math.max(0, target - val)}{unit} remaining</div>
+              </div>
+            );
+          })}
+        </Card>
+
+        <Card>
+          <SectionLabel>Plan Targets</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { label: "Daily Calories", val: `${totalScheduleCalories}`, unit: "kcal", color: "#E8A838" },
+              { label: "Protein Target", val: `${totalScheduleProtein}g`, unit: "goal 191g", color: "#4A90D9" },
+              { label: "Surplus", val: `+${totalScheduleCalories - 2400}`, unit: "vs maintenance", color: "#4AD99A" },
+            ].map(({ label, val, unit, color }) => (
+              <div key={label} style={{ background: "#0F1117", borderRadius: 7, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ color, fontSize: 14, fontWeight: 700 }}>{val}</span>
+                  <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <SectionLabel>Today's Meals ({today.length})</SectionLabel>
+          {today.length === 0 ? (
+            <div style={{ color: "#3A3D4A", fontSize: 12, textAlign: "center", padding: "12px 0" }}>Nothing logged yet</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[...today].reverse().map((l, i) => (
+                <div key={i} style={{ background: "#0F1117", borderRadius: 6, padding: "7px 10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#C8CDD8", fontSize: 12, fontWeight: 600 }}>{l.notes || "Meal"}</span>
+                    <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>{l.calories} kcal</span>
+                  </div>
+                  <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>{l.protein}g pro · {l.carbs}g carbs · {l.fat}g fat</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── PHASE TRACKER ───────────────────────────────────────────────────────────
+const PHASE_CONFIG = {
+  gain: { label: "Gain Phase", color: "#4AD99A", bg: "#4AD99A22", icon: "📈", weeks: 12, calories: 2200, description: "Caloric surplus · Build muscle · Progressive overload" },
+  cut:  { label: "Cut Phase",  color: "#4A90D9", bg: "#4A90D922", icon: "🔥", weeks: 4,  calories: 1600, description: "Caloric deficit · Preserve muscle · Shed fat" },
+};
+
+function PhaseTracker({ phase, setPhase }) {
+  const [showSetup, setShowSetup] = useState(!phase);
+  const [setupType, setSetupType] = useState("gain");
+  const [setupStart, setSetupStart] = useState(new Date().toISOString().split("T")[0]);
+
+  const cfg = phase ? PHASE_CONFIG[phase.type] : null;
+
+  const startPhase = () => {
+    const start = new Date(setupStart);
+    const weeks = PHASE_CONFIG[setupType].weeks;
+    const end = new Date(start);
+    end.setDate(end.getDate() + weeks * 7);
+    setPhase({ type: setupType, startDate: start.toISOString(), endDate: end.toISOString(), history: phase?.history || [] });
+    setShowSetup(false);
+  };
+
+  const completePhase = () => {
+    const history = [...(phase.history || []), { type: phase.type, startDate: phase.startDate, endDate: new Date().toISOString() }];
+    setPhase({ ...phase, history });
+    setShowSetup(true);
+    // pre-select the opposite phase
+    setSetupType(phase.type === "gain" ? "cut" : "gain");
+  };
+
+  const getDayInfo = () => {
+    if (!phase) return null;
+    const start = new Date(phase.startDate);
+    const end = new Date(phase.endDate);
+    const now = new Date();
+    const totalDays = Math.round((end - start) / 86400000);
+    const elapsed = Math.max(0, Math.round((now - start) / 86400000));
+    const remaining = Math.max(0, totalDays - elapsed);
+    const pct = Math.min(100, (elapsed / totalDays) * 100);
+    const week = Math.floor(elapsed / 7) + 1;
+    return { totalDays, elapsed, remaining, pct, week, totalWeeks: cfg.weeks };
+  };
+
+  const info = phase ? getDayInfo() : null;
+
+  // Cycle history summary
+  const history = phase?.history || [];
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Phase Tracker</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Bulk / Cut cycle management</div>
+        </div>
+        {phase && (
+          <button onClick={() => { setShowSetup(true); setSetupType(phase.type); setSetupStart(new Date().toISOString().split("T")[0]); }}
+            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+            Edit Phase
+          </button>
+        )}
+      </div>
+
+      {/* No phase set */}
+      {!phase && !showSetup && (
+        <Card style={{ textAlign: "center", padding: 48 }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🗓️</div>
+          <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No active phase</div>
+          <div style={{ color: "#8B92A5", fontSize: 14, marginBottom: 24 }}>Set up your first gain or cut phase to start tracking your cycle.</div>
+          <button onClick={() => setShowSetup(true)}
+            style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            Set Up Phase
+          </button>
+        </Card>
+      )}
+
+      {/* Active phase */}
+      {phase && info && (
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 20 }}>
+          {/* Main phase card */}
+          <Card style={{ border: `1px solid ${cfg.color}44` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 24 }}>{cfg.icon}</span>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: cfg.color }}>{cfg.label}</span>
+                </div>
+                <div style={{ color: "#8B92A5", fontSize: 13 }}>{cfg.description}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: cfg.color, fontSize: 36, fontWeight: 800, lineHeight: 1 }}>{info.remaining}</div>
+                <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>days remaining</div>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ color: "#8B92A5", fontSize: 12 }}>Week {Math.min(info.week, info.totalWeeks)} of {info.totalWeeks}</span>
+                <span style={{ color: cfg.color, fontSize: 12, fontWeight: 700 }}>{Math.round(info.pct)}% complete</span>
+              </div>
+              <div style={{ background: "#0F1117", borderRadius: 6, height: 10, overflow: "hidden" }}>
+                <div style={{ width: `${info.pct}%`, height: "100%", background: cfg.color, borderRadius: 6, transition: "width 0.4s" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                <span style={{ color: "#4B5563", fontSize: 11 }}>{fmtDate(phase.startDate)}</span>
+                <span style={{ color: "#4B5563", fontSize: 11 }}>{fmtDate(phase.endDate)}</span>
+              </div>
+            </div>
+
+            {/* Week timeline */}
+            <div style={{ display: "flex", gap: 3, marginBottom: 20 }}>
+              {Array.from({ length: info.totalWeeks }).map((_, i) => {
+                const done = i < info.week - 1;
+                const current = i === info.week - 1;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                    <div style={{ width: "100%", height: 28, borderRadius: 4, background: done ? cfg.color : current ? cfg.color + "66" : "#1A1D26",
+                      border: current ? `1px solid ${cfg.color}` : "1px solid #2A2D3A",
+                      display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {done && <span style={{ fontSize: 12 }}>✓</span>}
+                      {current && <span style={{ color: cfg.color, fontSize: 10, fontWeight: 700 }}>NOW</span>}
+                    </div>
+                    <div style={{ color: "#3A3D4A", fontSize: 9 }}>W{i + 1}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={completePhase}
+              style={{ background: cfg.color, color: "#0F1117", border: "none", borderRadius: 9, padding: "11px 0", width: "100%", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+              Complete Phase → Start {phase.type === "gain" ? "Cut" : "Gain"}
+            </button>
+          </Card>
+
+          {/* Right column: targets + stats */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Card>
+              <SectionLabel>Daily Targets</SectionLabel>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  { label: "Calories", val: cfg.calories.toLocaleString(), unit: "kcal", color: "#E8A838" },
+                  { label: "Protein", val: "191", unit: "g", color: "#4A90D9" },
+                  { label: "Training", val: "3×", unit: "/ week", color: "#4AD9A0" },
+                  { label: "Surplus/Deficit", val: phase.type === "gain" ? "+500" : "-600", unit: "kcal", color: cfg.color },
+                ].map(({ label, val, unit, color }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1117", borderRadius: 7, padding: "8px 12px" }}>
+                    <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                    <span style={{ color, fontSize: 15, fontWeight: 700 }}>{val} <span style={{ fontSize: 11, fontWeight: 400, color: "#4B5563" }}>{unit}</span></span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card>
+              <SectionLabel>Phase Stats</SectionLabel>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Day</span>
+                  <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 700 }}>{info.elapsed + 1} of {info.totalDays}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Started</span>
+                  <span style={{ color: "#E8EAF0", fontSize: 13 }}>{fmtDate(phase.startDate)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Ends</span>
+                  <span style={{ color: "#E8EAF0", fontSize: 13 }}>{fmtDate(phase.endDate)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Cycles completed</span>
+                  <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{history.length}</span>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Cycle history */}
+      {history.length > 0 && (
+        <Card>
+          <SectionLabel>Cycle History</SectionLabel>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {history.map((h, i) => {
+              const hcfg = PHASE_CONFIG[h.type];
+              const days = Math.round((new Date(h.endDate) - new Date(h.startDate)) / 86400000);
+              return (
+                <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px", border: `1px solid ${hcfg.color}33` }}>
+                  <div style={{ color: hcfg.color, fontWeight: 700, fontSize: 13 }}>{hcfg.icon} {hcfg.label}</div>
+                  <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{fmtDate(h.startDate)} → {fmtDate(h.endDate)}</div>
+                  <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>{days} days</div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Setup modal */}
+      {showSetup && (
+        <Modal title="Set Up Phase" onClose={() => phase && setShowSetup(false)} width={480}>
+          <div style={{ marginBottom: 20 }}>
+            <SectionLabel>Phase Type</SectionLabel>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {(["gain", "cut"]).map(type => {
+                const c = PHASE_CONFIG[type];
+                return (
+                  <button key={type} onClick={() => setSetupType(type)}
+                    style={{ background: setupType === type ? c.bg : "#0F1117", border: `2px solid ${setupType === type ? c.color : "#2A2D3A"}`,
+                      borderRadius: 10, padding: "16px 12px", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>{c.icon}</div>
+                    <div style={{ color: setupType === type ? c.color : "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{c.label}</div>
+                    <div style={{ color: "#8B92A5", fontSize: 11, marginTop: 4 }}>{c.weeks} weeks · {c.calories} kcal/day</div>
+                    <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{c.description}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Start Date</label>
+            <input type="date" value={setupStart} onChange={e => setSetupStart(e.target.value)} style={inputStyle} />
+          </div>
+          <div style={{ background: "#0F1117", borderRadius: 8, padding: "12px 16px", marginBottom: 20 }}>
+            <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 4 }}>Phase ends on</div>
+            <div style={{ color: PHASE_CONFIG[setupType].color, fontSize: 18, fontWeight: 700 }}>
+              {(() => { const d = new Date(setupStart); d.setDate(d.getDate() + PHASE_CONFIG[setupType].weeks * 7); return fmtDateLong(d.toISOString()); })()}
+            </div>
+          </div>
+          <button onClick={startPhase}
+            style={{ background: PHASE_CONFIG[setupType].color, color: "#0F1117", border: "none", borderRadius: 9, padding: "13px 0", width: "100%", fontSize: 15, fontWeight: 800, cursor: "pointer" }}>
+            Start {PHASE_CONFIG[setupType].label}
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
+
+const sb = (path, opts = {}) => fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+  headers: {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    "Content-Type": "application/json",
+    "Prefer": opts.prefer || "return=representation",
+    ...opts.headers,
+  },
+  ...opts,
+});
+
+// Auto-create tables on first load
+async function initDB() {
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS workout_logs (
+      id bigint generated always as identity primary key,
+      exercise_id int, sets int, reps int, weight float,
+      notes text, date timestamptz, created_at timestamptz default now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS body_logs (
+      id bigint generated always as identity primary key,
+      weight float, chest float, waist float, hips float,
+      glutes float, thighs float, arms float,
+      date timestamptz, created_at timestamptz default now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS nutrition_logs (
+      id bigint generated always as identity primary key,
+      calories int, protein int, carbs int, fat int,
+      notes text, date timestamptz, created_at timestamptz default now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS phase_data (
+      id bigint generated always as identity primary key,
+      type text, start_date timestamptz, end_date timestamptz,
+      history jsonb default '[]',
+      created_at timestamptz default now()
+    )`,
+  ];
+  for (const sql of tables) {
+    await sb("rpc/exec_sql", { method: "POST", body: JSON.stringify({ query: sql }) }).catch(() => {});
+  }
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab] = useState("workout");
+  const [exercises] = useState(INITIAL_EXERCISES);
+  const [workoutLogs, setWorkoutLogs] = useState([]);
+  const [bodyLogs, setBodyLogs] = useState([]);
+  const [nutritionLogs, setNutritionLogs] = useState([]);
+  const [phase, setPhase] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dbError, setDbError] = useState(false);
+
+  // ── Load all data on mount ─────────────────────────────────────────────────
+  useState(() => {
+    loadAll();
+  }, []);
+
+  async function loadAll() {
+    setLoading(true);
+    try {
+      const [wRes, bRes, nRes, pRes] = await Promise.all([
+        sb("workout_logs?order=date.asc&limit=2000"),
+        sb("body_logs?order=date.asc&limit=500"),
+        sb("nutrition_logs?order=date.asc&limit=5000"),
+        sb("phase_data?order=created_at.desc&limit=1"),
+      ]);
+
+      if (!wRes.ok) { setDbError(true); setLoading(false); return; }
+
+      const [wData, bData, nData, pData] = await Promise.all([
+        wRes.json(), bRes.json(), nRes.json(), pRes.json()
+      ]);
+
+      setWorkoutLogs((wData || []).map(r => ({
+        id: r.id, exerciseId: r.exercise_id, sets: r.sets, reps: r.reps,
+        weight: r.weight, notes: r.notes, date: r.date,
+      })));
+      setBodyLogs((bData || []).map(r => ({
+        id: r.id, weight: r.weight, chest: r.chest, waist: r.waist,
+        hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date,
+      })));
+      setNutritionLogs((nData || []).map(r => ({
+        id: r.id, calories: r.calories, protein: r.protein,
+        carbs: r.carbs, fat: r.fat, notes: r.notes, date: r.date,
+      })));
+      if (pData && pData.length > 0) {
+        setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [] });
+      }
+    } catch (e) {
+      setDbError(true);
+    }
+    setLoading(false);
+  }
+
+  // ── Workout log handlers ───────────────────────────────────────────────────
+  const addWorkoutLog = async (exerciseId, entry) => {
+    const res = await sb("workout_logs", {
+      method: "POST",
+      body: JSON.stringify({ exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date }),
+    });
+    const [row] = await res.json();
+    setWorkoutLogs(p => [...p, { id: row.id, exerciseId, ...entry }]);
+  };
+
+  // ── Body log handlers ──────────────────────────────────────────────────────
+  const addBodyLog = async (entry) => {
+    const res = await sb("body_logs", {
+      method: "POST",
+      body: JSON.stringify({ weight: entry.weight, chest: entry.chest, waist: entry.waist, hips: entry.hips, glutes: entry.glutes, thighs: entry.thighs, arms: entry.arms, date: entry.date }),
+    });
+    const [row] = await res.json();
+    setBodyLogs(p => [...p, { ...entry, id: row.id }]);
+  };
+
+  // ── Nutrition log handlers ─────────────────────────────────────────────────
+  const addNutritionLog = async (entry) => {
+    const res = await sb("nutrition_logs", {
+      method: "POST",
+      body: JSON.stringify({ calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes, date: entry.date }),
+    });
+    const [row] = await res.json();
+    setNutritionLogs(p => [...p, { ...entry, id: row.id }]);
+  };
+
+  const editNutritionLog = async (idx, updated) => {
+    const entry = nutritionLogs[idx];
+    if (!entry?.id) return;
+    await sb(`nutrition_logs?id=eq.${entry.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ calories: updated.calories, protein: updated.protein, carbs: updated.carbs, fat: updated.fat, notes: updated.notes }),
+    });
+    setNutritionLogs(p => p.map((l, i) => i === idx ? { ...l, ...updated } : l));
+  };
+
+  const deleteNutritionLog = async (idx) => {
+    const entry = nutritionLogs[idx];
+    if (!entry?.id) return;
+    await sb(`nutrition_logs?id=eq.${entry.id}`, { method: "DELETE", prefer: "return=minimal" });
+    setNutritionLogs(p => p.filter((_, i) => i !== idx));
+  };
+
+  // ── Phase handlers ─────────────────────────────────────────────────────────
+  const savePhase = async (newPhase) => {
+    if (newPhase?.id) {
+      await sb(`phase_data?id=eq.${newPhase.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ type: newPhase.type, start_date: newPhase.startDate, end_date: newPhase.endDate, history: newPhase.history }),
+      });
+    } else {
+      const res = await sb("phase_data", {
+        method: "POST",
+        body: JSON.stringify({ type: newPhase.type, start_date: newPhase.startDate, end_date: newPhase.endDate, history: newPhase.history || [] }),
+      });
+      const [row] = await res.json();
+      newPhase = { ...newPhase, id: row.id };
+    }
+    setPhase(newPhase);
+  };
+
+  const totalSets = workoutLogs.length;
+  const phaseCfg = phase ? PHASE_CONFIG[phase.type] : null;
+  const phaseInfo = phase && phaseCfg ? (() => {
+    const start = new Date(phase.startDate), end = new Date(phase.endDate), now = new Date();
+    const totalDays = Math.round((end - start) / 86400000);
+    const elapsed = Math.max(0, Math.round((now - start) / 86400000));
+    const remaining = Math.max(0, totalDays - elapsed);
+    const week = Math.floor(elapsed / 7) + 1;
+    return { remaining, week, totalWeeks: phaseCfg.weeks };
+  })() : null;
+
+  if (loading) return (
+    <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+      <div style={{ fontSize: 11, color: "#4A90D9", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>DURHAM CAPITAL</div>
+      <div style={{ fontSize: 32, fontWeight: 800, color: "#E8EAF0" }}>PROJECT PRIME</div>
+      <div style={{ color: "#8B92A5", fontSize: 14 }}>Loading your data...</div>
+    </div>
+  );
+
+  if (dbError) return (
+    <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, padding: 32 }}>
+      <div style={{ fontSize: 32, fontWeight: 800, color: "#E8EAF0" }}>PROJECT PRIME</div>
+      <div style={{ color: "#D94A4A", fontSize: 15, textAlign: "center" }}>Could not connect to database. Check your Supabase credentials in the HTML file.</div>
+      <button onClick={loadAll} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, cursor: "pointer" }}>Retry</button>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", height: "100vh", background: "#0F1117", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#E8EAF0" }}>
+
+      {/* Sidebar */}
+      <div style={{ width: 220, background: "#1A1D26", borderRight: "1px solid #2A2D3A", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        <div style={{ padding: "24px 20px 20px" }}>
+          <div style={{ fontSize: 11, color: "#4A90D9", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>DURHAM CAPITAL</div>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.5px", color: "#E8EAF0", lineHeight: 1 }}>PROJECT PRIME</div>
+          <div style={{ fontSize: 11, color: "#4B5563", marginTop: 4 }}>Build the best version of you</div>
+        </div>
+
+        <nav style={{ flex: 1, padding: "0 10px" }}>
+          {NAV.map(n => (
+            <button key={n.id} onClick={() => setTab(n.id)}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "11px 12px", borderRadius: 9, border: "none", cursor: "pointer", marginBottom: 3,
+                background: tab === n.id ? "#4A90D9" + "22" : "none",
+                color: tab === n.id ? "#4A90D9" : "#8B92A5",
+                fontWeight: tab === n.id ? 700 : 400, fontSize: 14, textAlign: "left" }}>
+              <span style={{ fontSize: 18 }}>{n.icon}</span>
+              {n.label}
+              {tab === n.id && <div style={{ marginLeft: "auto", width: 3, height: 16, background: "#4A90D9", borderRadius: 2 }} />}
+            </button>
+          ))}
+        </nav>
+
+        {/* Stats footer */}
+        <div style={{ padding: 16, borderTop: "1px solid #2A2D3A", display: "flex", flexDirection: "column", gap: 10 }}>
+          {phase && phaseCfg && phaseInfo && (
+            <div style={{ background: phaseCfg.bg, borderRadius: 8, padding: "10px 12px", border: `1px solid ${phaseCfg.color}44` }}>
+              <div style={{ color: phaseCfg.color, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{phaseCfg.label}</div>
+              <div style={{ color: phaseCfg.color, fontSize: 20, fontWeight: 800, marginTop: 2 }}>{phaseInfo.remaining}d left</div>
+              <div style={{ color: "#4B5563", fontSize: 10, marginTop: 1 }}>Week {Math.min(phaseInfo.week, phaseInfo.totalWeeks)} of {phaseInfo.totalWeeks}</div>
+            </div>
+          )}
+          <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Total Sets Logged</div>
+            <div style={{ color: "#4A90D9", fontSize: 24, fontWeight: 800, marginTop: 2 }}>{totalSets}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 32 }}>
+        {tab === "workout" && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogSet={addWorkoutLog} />}
+        {tab === "progress" && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
+        {tab === "body" && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
+        {tab === "nutrition" && <NutritionTab
+          nutritionLogs={nutritionLogs}
+          onSave={addNutritionLog}
+          onEdit={editNutritionLog}
+          onDelete={deleteNutritionLog}
+        />}
+        {tab === "phase" && <PhaseTracker phase={phase} setPhase={savePhase} />}
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
