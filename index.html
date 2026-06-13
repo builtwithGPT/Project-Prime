@@ -1300,10 +1300,6 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
-const SUPABASE_URL      = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
-
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 function App() {
   const [tab, setTab]               = useState("workout");
@@ -1336,21 +1332,20 @@ function App() {
       const data = JSON.stringify({ token: session, uid: userId });
       localStorage.setItem("pp_session", data);
       sessionStorage.setItem("pp_session", data);
-      loadAll();
+      loadAll(session, userId);
     }
   }, [session, userId]);
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (token, uid) => {
     setLoading(true); setDbError(false);
     try {
       const [wData, bData, nData, pData] = await Promise.all([
-        sbGet(`workout_logs?user_id=eq.${userId}&order=date.asc&limit=5000`, session),
-        sbGet(`body_logs?user_id=eq.${userId}&order=date.asc&limit=500`, session),
-        sbGet(`nutrition_logs?user_id=eq.${userId}&order=date.asc&limit=5000`, session),
-        sbGet(`phase_data?user_id=eq.${userId}&order=created_at.desc&limit=1`, session),
+        sbGet(`workout_logs?user_id=eq.${uid}&order=date.asc&limit=5000`, token),
+        sbGet(`body_logs?user_id=eq.${uid}&order=date.asc&limit=500`, token),
+        sbGet(`nutrition_logs?user_id=eq.${uid}&order=date.asc&limit=5000`, token),
+        sbGet(`phase_data?user_id=eq.${uid}&order=created_at.desc&limit=1`, token),
       ]);
 
-      // Merge with localStorage buffer
       const lsWorkout   = lsGet(LS_KEYS.workout);
       const lsBody      = lsGet(LS_KEYS.body);
       const lsNutrition = lsGet(LS_KEYS.nutrition);
@@ -1376,9 +1371,9 @@ function App() {
       if (pData?.[0]) {
         setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [] });
       }
-    } catch { setDbError(true); }
+    } catch (e) { setDbError(true); }
     setLoading(false);
-  }, [session, userId]);
+  }, []);
 
   const signOut = () => {
     localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
@@ -1482,7 +1477,7 @@ function App() {
     <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, padding: 32 }}>
       <div style={{ fontSize: 32, fontWeight: 800, color: "#E8EAF0" }}>PROJECT PRIME</div>
       <div style={{ color: "#D94A4A", fontSize: 15, textAlign: "center" }}>Could not connect. Your locally saved data is safe — check your connection and retry.</div>
-      <button onClick={loadAll} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, cursor: "pointer" }}>Retry</button>
+      <button onClick={() => loadAll(session, userId)} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, cursor: "pointer" }}>Retry</button>
     </div>
   );
 
