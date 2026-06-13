@@ -81,6 +81,8 @@ function calcPF(sets, reps, weight, type, laterality) {
 }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const OPENAI_KEY = "YOUR_OPENAI_KEY";
+
 const MUSCLE_COLORS = {
   "Warm-up": "#4B5563", "Chest": "#4A90D9", "Back": "#7B68EE",
   "Legs": "#E8A838", "Glutes": "#E87D38", "Hamstrings": "#D9844A",
@@ -88,11 +90,12 @@ const MUSCLE_COLORS = {
 };
 
 const NAV = [
-  { id: "workout",  label: "Workout",      icon: "💪" },
-  { id: "progress", label: "Progress",     icon: "📈" },
-  { id: "body",     label: "Body",         icon: "⚖️" },
-  { id: "nutrition",label: "Nutrition",    icon: "🥩" },
-  { id: "phase",    label: "Phase Tracker",icon: "🗓️" },
+  { id: "workout",  label: "Workout",   icon: "💪" },
+  { id: "progress", label: "Progress",  icon: "📈" },
+  { id: "body",     label: "Body",      icon: "⚖️" },
+  { id: "nutrition",label: "Nutrition", icon: "🥩" },
+  { id: "recovery", label: "Recovery",  icon: "🩺" },
+  { id: "phase",    label: "Phase",     icon: "🗓️" },
 ];
 
 const PHASE_CONFIG = {
@@ -111,6 +114,7 @@ const LS_KEYS = {
   workout:   "pp_workout_logs",
   body:      "pp_body_logs",
   nutrition: "pp_nutrition_logs",
+  recovery:  "pp_recovery_logs",
 };
 
 function lsGet(key) {
@@ -253,10 +257,11 @@ function MacroRing({ pct, color, label, val, target, unit }) {
 }
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
-function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
+function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
   const active = exercises.filter(e => e.active);
   const [activeMode, setActiveMode] = useState(false);
   const [workoutEnded, setWorkoutEnded] = useState(false);
+  const [workoutSummary, setWorkoutSummary] = useState(null);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [logSets, setLogSets] = useState("3");
   const [logReps, setLogReps] = useState("10");
@@ -306,9 +311,32 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
   };
 
   const endWorkout = () => {
+    // Build workout summary
+    const todayCompleted = active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id));
+    // Previous session PF — find last workout day before today
+    const prevDayLogs = workoutLogs.filter(x => new Date(x.date).toDateString() !== new Date().toDateString());
+    const prevDates = [...new Set(prevDayLogs.map(l => new Date(l.date).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
+    const prevSessionLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toDateString() === prevDates[0]) : [];
+    const prevPF = prevSessionLogs.reduce((sum, l) => {
+      const ex = exercises.find(e => e.id === l.exerciseId);
+      return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
+    }, 0);
+    const pfChange = prevPF > 0 ? ((sessionPF - prevPF) / prevPF * 100) : null;
+    // Count PRs
+    let prs = 0;
+    todayLogs.forEach(l => {
+      const ex = exercises.find(e => e.id === l.exerciseId);
+      if (!ex) return;
+      const thisPF = calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
+      const hist = workoutLogs.filter(x => x.exerciseId === l.exerciseId && new Date(x.date).toDateString() !== new Date().toDateString());
+      const bestPrev = hist.reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, ex.type, ex.laterality)), 0);
+      if (thisPF > bestPrev && bestPrev > 0) prs++;
+    });
+    setWorkoutSummary({ completed: todayCompleted.length, total: active.length, sessionPF, prevPF, pfChange, prs });
     setActiveMode(false);
     setWorkoutEnded(true);
     setLoggedIds(new Set());
+    onSaveSummary && onSaveSummary({ completed: todayCompleted.length, total: active.length, sessionPF, prevPF, pfChange, prs });
   };
 
   const saveExercise = async () => {
@@ -337,6 +365,56 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
   })() : null;
 
   const pfDiff = previewPF && lastPF ? ((previewPF - lastPF) / lastPF * 100) : null;
+
+  // ── WORKOUT SUMMARY SCREEN ───────────────────────────────────────────────────
+  if (workoutSummary && !activeMode) {
+    const { completed, total, sessionPF, prevPF, pfChange, prs } = workoutSummary;
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #4AD99A44", padding: 48, maxWidth: 520, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🏆</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#4AD99A", marginBottom: 4 }}>WORKOUT COMPLETE</div>
+          <div style={{ color: "#4B5563", fontSize: 14, marginBottom: 36 }}>{fmtDateLong(new Date())}</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
+            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
+              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Exercises</div>
+              <div style={{ fontSize: 36, fontWeight: 800, color: "#E8EAF0" }}>{completed}<span style={{ fontSize: 18, color: "#4B5563" }}>/{total}</span></div>
+            </div>
+            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
+              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Session PF</div>
+              <div style={{ fontSize: 36, fontWeight: 800, color: "#E8A838" }}>{sessionPF.toLocaleString()}</div>
+            </div>
+            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
+              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>vs Last Workout</div>
+              {pfChange !== null ? (
+                <div style={{ fontSize: 36, fontWeight: 800, color: pfChange >= 0 ? "#4AD99A" : "#D94A4A" }}>
+                  {pfChange >= 0 ? "+" : ""}{pfChange.toFixed(1)}%
+                </div>
+              ) : (
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#4B5563" }}>First session</div>
+              )}
+            </div>
+            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
+              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>New PRs</div>
+              <div style={{ fontSize: 36, fontWeight: 800, color: prs > 0 ? "#FFD700" : "#4B5563" }}>{prs}</div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); }}
+              style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, height: 52, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+              Done
+            </button>
+            <button onClick={() => { setWorkoutSummary(null); startWorkout(); }}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 52, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
+              Continue Workout
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── LIST VIEW ────────────────────────────────────────────────────────────────
   if (!activeMode) {
@@ -491,13 +569,21 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
           ))}
         </div>
 
-        {/* PF preview */}
-        <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 18px", border: `1px solid ${pfDiff !== null && pfDiff >= 0 ? "#4AD99A44" : "#2A2D3A"}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* PF preview with PR/progress indicator */}
+        <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 18px", border: `1px solid ${
+          previewPF > 0 && lastPF && previewPF > lastPF * 1.05 ? "#FFD70044" :
+          pfDiff !== null && pfDiff >= 0 ? "#4AD99A44" : "#2A2D3A"}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: "#8B92A5", fontSize: 14 }}>Prime Factor</div>
           <div style={{ fontSize: 32, fontWeight: 800, color: "#E8A838", fontVariantNumeric: "tabular-nums" }}>{previewPF.toLocaleString()}</div>
           {pfDiff !== null && (
             <div style={{ textAlign: "right" }}>
-              <div style={{ color: pfDiff >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 14, fontWeight: 700 }}>{pfDiff >= 0 ? "+" : ""}{pfDiff.toFixed(1)}%</div>
+              {previewPF > 0 && lastPF && previewPF > lastPF * 1.05 ? (
+                <div style={{ color: "#FFD700", fontSize: 18, fontWeight: 800 }}>🥇 NEW PR</div>
+              ) : (
+                <div style={{ color: pfDiff > 2 ? "#4AD99A" : pfDiff >= -2 ? "#E8A838" : "#D94A4A", fontSize: 14, fontWeight: 700 }}>
+                  {pfDiff > 2 ? "▲" : pfDiff >= -2 ? "▬" : "▼"} {pfDiff >= 0 ? "+" : ""}{pfDiff.toFixed(1)}%
+                </div>
+              )}
               <div style={{ color: "#4B5563", fontSize: 11 }}>vs last session</div>
             </div>
           )}
@@ -946,222 +1032,573 @@ function BodyTab({ bodyLogs, onSave }) {
 }
 
 // ─── NUTRITION TAB ────────────────────────────────────────────────────────────
-function NutritionTab({ nutritionLogs, onSave, onEdit, onDelete }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toDateString());
-  const [editingIdx, setEditingIdx] = useState(null);
-  const [editFields, setEditFields] = useState({});
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const [addFields, setAddFields] = useState({ calories: "", protein: "", carbs: "", fat: "", notes: "" });
-  const [saveStatus, setSaveStatus] = useState(null);
+function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
+  const [view, setView] = useState("log"); // "log" | "import" | "history"
+  const [pasteText, setPasteText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState("");
+  const [preview, setPreview] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
 
   const T = NUTRITION_TARGETS;
+  const today = new Date().toISOString().split("T")[0];
+  const todayRecord = nutritionDays.find(d => d.date === today);
+  const recentDays = [...nutritionDays].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 14);
 
-  const today = nutritionLogs.filter(l => new Date(l.date).toDateString() === new Date().toDateString());
-  const todayTotals = today.reduce((a, l) => ({
-    calories: a.calories + (l.calories || 0), protein: a.protein + (l.protein || 0),
-    carbs: a.carbs + (l.carbs || 0), fat: a.fat + (l.fat || 0),
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-  const allDates = [...new Set([new Date().toDateString(), ...nutritionLogs.map(l => new Date(l.date).toDateString())])].sort((a, b) => new Date(b) - new Date(a)).slice(0, 30);
-  const dayLogs = nutritionLogs.map((l, i) => ({ ...l, globalIdx: i })).filter(l => new Date(l.date).toDateString() === selectedDate).sort((a, b) => new Date(a.date) - new Date(b.date));
-  const dayTotals = dayLogs.reduce((a, l) => ({ calories: a.calories + (l.calories || 0), protein: a.protein + (l.protein || 0), carbs: a.carbs + (l.carbs || 0), fat: a.fat + (l.fat || 0) }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-  const fmtDay = (ds) => {
-    const today = new Date().toDateString(), yesterday = new Date(Date.now() - 86400000).toDateString();
-    if (ds === today) return "Today"; if (ds === yesterday) return "Yesterday";
-    return new Date(ds).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const parseWithGPT = async () => {
+    if (!pasteText.trim()) return;
+    setParsing(true); setParseError(""); setPreview(null);
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          max_tokens: 1500,
+          messages: [{
+            role: "system",
+            content: `You are a nutrition data parser for Project Prime fitness app. Extract structured nutrition data from the user's text and return ONLY valid JSON with no markdown. 
+Return this exact structure:
+{
+  "date": "YYYY-MM-DD",
+  "phase": "string",
+  "targets": {"calories": number, "protein": number, "carbs": number, "fat": number},
+  "totals": {"calories": number, "protein": number, "carbs": number, "fat": number},
+  "remaining": {"calories": number, "protein": number, "carbs": number, "fat": number},
+  "compliance": "string",
+  "notes": "string",
+  "entries": [{"time": "string", "type": "string", "name": "string", "items": "string", "calories": number, "protein": number, "carbs": number, "fat": number}]
+}
+If date is missing use today: ${today}. Be tolerant of format variations.`
+          }, {
+            role: "user",
+            content: pasteText
+          }]
+        })
+      });
+      const data = await res.json();
+      const text = data.choices?.[0]?.message?.content?.trim();
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      setPreview(parsed);
+    } catch (e) {
+      setParseError("Could not parse nutrition record. Check the format and try again.");
+    }
+    setParsing(false);
   };
 
-  const handleAdd = async () => {
-    setSaveStatus("saving");
-    const ok = await onSave({ date: new Date().toISOString(), calories: +addFields.calories, protein: +addFields.protein, carbs: +addFields.carbs, fat: +addFields.fat, notes: addFields.notes });
-    setSaveStatus(ok ? "saved" : "error");
-    setTimeout(() => setSaveStatus(null), 3000);
-    setAddFields({ calories: "", protein: "", carbs: "", fat: "", notes: "" });
-    setShowAdd(false);
+  const saveDay = async () => {
+    if (!preview) return;
+    setSaving(true);
+    const ok = await onSaveDay(preview, pasteText);
+    if (ok) {
+      setSavedMsg("Nutrition record saved.");
+      setPreview(null); setPasteText(""); setView("log");
+      setTimeout(() => setSavedMsg(""), 3000);
+    }
+    setSaving(false);
   };
 
-  const saveEdit = async () => {
-    await onEdit(editingIdx, { calories: +editFields.calories, protein: +editFields.protein, carbs: +editFields.carbs, fat: +editFields.fat, notes: editFields.notes });
-    setEditingIdx(null);
+  const MacroBar = ({ label, val, target, color }) => {
+    const pct = Math.min(100, (val / target) * 100);
+    return (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+          <span style={{ color, fontSize: 13, fontWeight: 700 }}>{val}<span style={{ color: "#4B5563" }}>/{target}{label === "Calories" ? " kcal" : "g"}</span></span>
+        </div>
+        <div style={{ background: "#0F1117", borderRadius: 4, height: 8 }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
+        </div>
+        <div style={{ color: "#4B5563", fontSize: 10, marginTop: 2 }}>{Math.max(0, target - val)}{label === "Calories" ? " kcal" : "g"} remaining</div>
+      </div>
+    );
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20 }}>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Nutrition Log</h2>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <SaveStatus status={saveStatus} />
-            <button onClick={() => setShowAdd(true)}
-              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-              + Add Meal
-            </button>
-          </div>
-        </div>
-
-        {/* Date nav */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-          {allDates.map(ds => (
-            <button key={ds} onClick={() => { setSelectedDate(ds); setEditingIdx(null); }}
-              style={{ background: selectedDate === ds ? "#4A90D9" : "#1A1D26", color: selectedDate === ds ? "#fff" : "#8B92A5",
-                border: `1px solid ${selectedDate === ds ? "#4A90D9" : "#2A2D3A"}`, borderRadius: 20,
-                padding: "5px 14px", fontSize: 12, cursor: "pointer", fontWeight: selectedDate === ds ? 700 : 400 }}>
-              {fmtDay(ds)}
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Nutrition</h2>
+        <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
+          {[["log", "Today"], ["import", "Import"], ["history", "History"]].map(([id, label]) => (
+            <button key={id} onClick={() => setView(id)}
+              style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
+                border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
+              {label}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Day summary */}
-        <Card style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ color: "#E8EAF0", fontWeight: 700 }}>{fmtDay(selectedDate)}</div>
-            <div style={{ color: "#8B92A5", fontSize: 12 }}>{dayLogs.length} meal{dayLogs.length !== 1 ? "s" : ""}</div>
-          </div>
-          <div style={{ display: "flex", gap: 16 }}>
-            {[["Calories", dayTotals.calories, T.calories, "#E8A838", "kcal"],
-              ["Protein",  dayTotals.protein,  T.protein,  "#4A90D9", "g"],
-              ["Carbs",    dayTotals.carbs,    T.carbs,    "#7B68EE", "g"],
-              ["Fat",      dayTotals.fat,      T.fat,      "#4AD9A0", "g"]].map(([label, val, target, color, unit]) => (
-              <div key={label} style={{ flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                  <span style={{ color: "#8B92A5", fontSize: 11 }}>{label}</span>
-                  <span style={{ color, fontSize: 11, fontWeight: 700 }}>{val}<span style={{ color: "#4B5563" }}>/{target}{unit}</span></span>
-                </div>
-                <div style={{ background: "#0F1117", borderRadius: 3, height: 4 }}>
-                  <div style={{ width: `${Math.min(100, (val/target)*100)}%`, height: "100%", background: color, borderRadius: 3 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+      {savedMsg && <div style={{ background: "#4AD99A22", border: "1px solid #4AD99A44", color: "#4AD99A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontWeight: 600 }}>{savedMsg}</div>}
 
-        {showAdd && (
-          <Card style={{ marginBottom: 16, border: "1px solid #4A90D944" }}>
-            <SectionLabel>Add Meal Entry</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-              {[["Calories", "calories"], ["Protein (g)", "protein"], ["Carbs (g)", "carbs"], ["Fat (g)", "fat"]].map(([lbl, k]) => (
-                <div key={k}>
-                  <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
-                  <input type="number" value={addFields[k]} onChange={e => setAddFields(f => ({ ...f, [k]: e.target.value }))} style={inputStyle} />
+      {/* TODAY VIEW */}
+      {view === "log" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div>
+            {todayRecord ? (
+              <Card>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Today — {todayRecord.phase || "Gain Phase"}</div>
+                    {todayRecord.compliance && <div style={{ color: "#4AD99A", fontSize: 12, marginTop: 3 }}>Compliance: {todayRecord.compliance}</div>}
+                  </div>
+                  <button onClick={() => setView("import")}
+                    style={{ background: "#4A90D922", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    Update
+                  </button>
+                </div>
+                <MacroBar label="Calories" val={todayRecord.total_calories || 0} target={todayRecord.target_calories || T.calories} color="#E8A838" />
+                <MacroBar label="Protein" val={todayRecord.total_protein || 0} target={todayRecord.target_protein || T.protein} color="#4A90D9" />
+                <MacroBar label="Carbs" val={todayRecord.total_carbs || 0} target={todayRecord.target_carbs || T.carbs} color="#7B68EE" />
+                <MacroBar label="Fat" val={todayRecord.total_fat || 0} target={todayRecord.target_fat || T.fat} color="#4AD9A0" />
+                {todayRecord.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 16, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 12 }}>{todayRecord.notes}</div>}
+              </Card>
+            ) : (
+              <Card style={{ textAlign: "center", padding: 48 }}>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>🥩</div>
+                <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No nutrition record today</div>
+                <div style={{ color: "#8B92A5", fontSize: 14, marginBottom: 24 }}>Log your day with ChatGPT then import the record here.</div>
+                <button onClick={() => setView("import")}
+                  style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
+                  Import Today's Record
+                </button>
+              </Card>
+            )}
+
+            {/* Meal timeline */}
+            {todayRecord?.entries?.length > 0 && (
+              <Card style={{ marginTop: 16 }}>
+                <SectionLabel>Meal Timeline</SectionLabel>
+                {todayRecord.entries.map((e, i) => (
+                  <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < todayRecord.entries.length - 1 ? "1px solid #2A2D3A" : "none" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <div>
+                        <span style={{ color: "#8B92A5", fontSize: 11 }}>{e.entry_time} · </span>
+                        <span style={{ color: "#E8EAF0", fontSize: 14, fontWeight: 600 }}>{e.meal_name}</span>
+                      </div>
+                      <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{e.calories} kcal</span>
+                    </div>
+                    {e.items && <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 4 }}>{e.items}</div>}
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <span style={{ color: "#4A90D9", fontSize: 12 }}>{e.protein}g P</span>
+                      <span style={{ color: "#7B68EE", fontSize: 12 }}>{e.carbs}g C</span>
+                      <span style={{ color: "#4AD9A0", fontSize: 12 }}>{e.fat}g F</span>
+                    </div>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </div>
+
+          <div>
+            <Card>
+              <SectionLabel>Gain Phase Targets</SectionLabel>
+              {[["Calories", T.calories, "kcal/day", "#E8A838"],
+                ["Protein", `${T.protein}g`, "per day", "#4A90D9"],
+                ["Carbs", `${T.carbs}g`, "per day", "#7B68EE"],
+                ["Fat", `${T.fat}g`, "per day", "#4AD9A0"],
+                ["Surplus", "+250", "vs 2,400 maint.", "#4AD99A"]].map(([label, val, unit, color]) => (
+                <div key={label} style={{ background: "#0F1117", borderRadius: 7, padding: "8px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ color, fontSize: 14, fontWeight: 700 }}>{val}</span>
+                    <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
+                  </div>
                 </div>
               ))}
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>Meal Name</label>
-              <input value={addFields.notes} onChange={e => setAddFields(f => ({ ...f, notes: e.target.value }))} style={inputStyle} placeholder="e.g. Breakfast — eggs + sourdough" />
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={handleAdd} style={{ flex: 1, background: "#4A90D9", color: "#fff", border: "none", borderRadius: 7, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Save</button>
-              <button onClick={() => setShowAdd(false)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "10px 16px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-            </div>
-          </Card>
-        )}
-
-        {dayLogs.length === 0 ? (
-          <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 14 }}>No meals logged — use + Add Meal above.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {dayLogs.map((entry, i) => (
-              <Card key={i} style={{ padding: "14px 16px" }}>
-                {editingIdx === entry.globalIdx ? (
-                  <div>
-                    <div style={{ color: "#E8EAF0", fontWeight: 600, marginBottom: 12 }}>Editing: {entry.notes || "Meal"}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                      {[["Calories", "calories"], ["Protein", "protein"], ["Carbs", "carbs"], ["Fat", "fat"]].map(([lbl, k]) => (
-                        <div key={k}>
-                          <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
-                          <input type="number" value={editFields[k]} onChange={e => setEditFields(f => ({ ...f, [k]: e.target.value }))} style={inputStyle} />
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginBottom: 12 }}>
-                      <input value={editFields.notes} onChange={e => setEditFields(f => ({ ...f, notes: e.target.value }))} style={inputStyle} placeholder="Meal name" />
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={saveEdit} style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
-                      <button onClick={() => setEditingIdx(null)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                        <span style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 14 }}>{entry.notes || "Meal"}</span>
-                        <span style={{ color: "#4B5563", fontSize: 11 }}>{new Date(entry.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
-                      </div>
-                      <div style={{ display: "flex", gap: 16 }}>
-                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{entry.calories} kcal</span>
-                        <span style={{ color: "#4A90D9", fontSize: 13 }}>{entry.protein}g protein</span>
-                        <span style={{ color: "#7B68EE", fontSize: 13 }}>{entry.carbs}g carbs</span>
-                        <span style={{ color: "#4AD9A0", fontSize: 13 }}>{entry.fat}g fat</span>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => { setEditingIdx(entry.globalIdx); setEditFields({ calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes || "" }); }}
-                        style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "8px 12px", fontSize: 12, cursor: "pointer", height: 44 }}>✏️ Edit</button>
-                      {confirmDelete === entry.globalIdx ? (
-                        <>
-                          <button onClick={() => { onDelete(entry.globalIdx); setConfirmDelete(null); }}
-                            style={{ background: "#D94A4A", color: "#fff", border: "none", borderRadius: 6, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 700, height: 44 }}>Confirm</button>
-                          <button onClick={() => setConfirmDelete(null)}
-                            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "8px 10px", fontSize: 12, cursor: "pointer", height: 44 }}>✕</button>
-                        </>
-                      ) : (
-                        <button onClick={() => setConfirmDelete(entry.globalIdx)}
-                          style={{ background: "#2A2D3A", color: "#4B5563", border: "none", borderRadius: 6, padding: "8px 10px", fontSize: 12, cursor: "pointer", height: 44 }}>🗑️</button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            ))}
+            </Card>
           </div>
+        </div>
+      )}
+
+      {/* IMPORT VIEW */}
+      {view === "import" && (
+        <div style={{ maxWidth: 700 }}>
+          {!preview ? (
+            <Card>
+              <SectionLabel>Paste Daily Nutrition Record</SectionLabel>
+              <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+                Ask ChatGPT: <span style={{ color: "#4A90D9", fontStyle: "italic" }}>"Recap the daily nutrition statement/record for Prime App."</span> Then paste the result below.
+              </div>
+              <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
+                placeholder="Paste your PRIME_NUTRITION_RECORD here..."
+                style={{ ...inputStyle, height: 280, resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
+              {parseError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 12 }}>{parseError}</div>}
+              <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+                <button onClick={parseWithGPT} disabled={parsing || !pasteText.trim()}
+                  style={{ flex: 1, background: parsing || !pasteText.trim() ? "#2A2D3A" : "#4A90D9",
+                    color: parsing || !pasteText.trim() ? "#4B5563" : "#fff",
+                    border: "none", borderRadius: 10, height: 56, fontSize: 16, fontWeight: 700, cursor: parsing || !pasteText.trim() ? "default" : "pointer" }}>
+                  {parsing ? "Parsing with GPT-4o..." : "Parse Record"}
+                </button>
+                <button onClick={() => { setPasteText(""); setParseError(""); setView("log"); }}
+                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
+                  Cancel
+                </button>
+              </div>
+            </Card>
+          ) : (
+            <div>
+              <Card style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div>
+                    <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Preview — {preview.date}</div>
+                    <div style={{ color: "#8B92A5", fontSize: 13 }}>{preview.phase}</div>
+                  </div>
+                  {preview.compliance && <span style={{ background: "#4AD99A22", color: "#4AD99A", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>Compliance: {preview.compliance}</span>}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  <div>
+                    <SectionLabel>Totals</SectionLabel>
+                    <MacroBar label="Calories" val={preview.totals?.calories || 0} target={preview.targets?.calories || T.calories} color="#E8A838" />
+                    <MacroBar label="Protein" val={preview.totals?.protein || 0} target={preview.targets?.protein || T.protein} color="#4A90D9" />
+                    <MacroBar label="Carbs" val={preview.totals?.carbs || 0} target={preview.targets?.carbs || T.carbs} color="#7B68EE" />
+                    <MacroBar label="Fat" val={preview.totals?.fat || 0} target={preview.targets?.fat || T.fat} color="#4AD9A0" />
+                  </div>
+                  <div>
+                    <SectionLabel>Remaining</SectionLabel>
+                    {[["Calories", preview.remaining?.calories || 0, "#E8A838"],
+                      ["Protein", `${preview.remaining?.protein || 0}g`, "#4A90D9"],
+                      ["Carbs", `${preview.remaining?.carbs || 0}g`, "#7B68EE"],
+                      ["Fat", `${preview.remaining?.fat || 0}g`, "#4AD9A0"]].map(([label, val, color]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #2A2D3A" }}>
+                        <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                        <span style={{ color, fontSize: 13, fontWeight: 700 }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {preview.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 16, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 12 }}>{preview.notes}</div>}
+              </Card>
+
+              {preview.entries?.length > 0 && (
+                <Card style={{ marginBottom: 16 }}>
+                  <SectionLabel>Meal Timeline ({preview.entries.length} entries)</SectionLabel>
+                  {preview.entries.map((e, i) => (
+                    <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < preview.entries.length - 1 ? "1px solid #2A2D3A" : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                        <div>
+                          <span style={{ color: "#8B92A5", fontSize: 11 }}>{e.time} · </span>
+                          <span style={{ color: "#E8EAF0", fontSize: 14, fontWeight: 600 }}>{e.name}</span>
+                        </div>
+                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{e.calories} kcal</span>
+                      </div>
+                      {e.items && <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 3 }}>{e.items}</div>}
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <span style={{ color: "#4A90D9", fontSize: 12 }}>{e.protein}g P</span>
+                        <span style={{ color: "#7B68EE", fontSize: 12 }}>{e.carbs}g C</span>
+                        <span style={{ color: "#4AD9A0", fontSize: 12 }}>{e.fat}g F</span>
+                      </div>
+                    </div>
+                  ))}
+                </Card>
+              )}
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={saveDay} disabled={saving}
+                  style={{ flex: 1, background: saving ? "#2A2D3A" : "#4AD99A", color: saving ? "#4B5563" : "#0F1117",
+                    border: "none", borderRadius: 10, height: 56, fontSize: 17, fontWeight: 800, cursor: saving ? "default" : "pointer" }}>
+                  {saving ? "Saving..." : "Save Nutrition Record"}
+                </button>
+                <button onClick={() => setPreview(null)}
+                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
+                  Re-paste
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HISTORY VIEW */}
+      {view === "history" && (
+        <div>
+          {recentDays.length === 0 ? (
+            <Card style={{ textAlign: "center", padding: 40 }}>
+              <div style={{ color: "#3A3D4A", fontSize: 14 }}>No nutrition records yet.</div>
+            </Card>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {recentDays.map((d, i) => (
+                <Card key={i} style={{ padding: "16px 20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
+                      <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{d.phase} {d.compliance ? `· Compliance: ${d.compliance}` : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 20, textAlign: "right" }}>
+                      <div><div style={{ color: "#E8A838", fontSize: 18, fontWeight: 700 }}>{d.total_calories}</div><div style={{ color: "#4B5563", fontSize: 10 }}>kcal</div></div>
+                      <div><div style={{ color: "#4A90D9", fontSize: 18, fontWeight: 700 }}>{d.total_protein}g</div><div style={{ color: "#4B5563", fontSize: 10 }}>protein</div></div>
+                      <div><div style={{ color: d.total_calories >= (d.target_calories || 2400) ? "#4AD99A" : "#E8A838", fontSize: 18, fontWeight: 700 }}>
+                        {Math.round((d.total_calories / (d.target_calories || 2650)) * 100)}%
+                      </div><div style={{ color: "#4B5563", fontSize: 10 }}>of target</div></div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── RECOVERY TAB ────────────────────────────────────────────────────────────
+function RecoveryTab({ recoveryLogs, onSave }) {
+  const today = new Date().toISOString().split("T")[0];
+  const todayLog = recoveryLogs.find(r => r.date === today);
+  const [editing, setEditing] = useState(!todayLog);
+  const [fields, setFields] = useState({
+    sleep_quality: todayLog?.sleep_quality || 3,
+    energy: todayLog?.energy || 3,
+    muscle_soreness: todayLog?.muscle_soreness || 3,
+    heel_pain: todayLog?.heel_pain || 0,
+    low_back_pain: todayLog?.low_back_pain || 0,
+    alfredson_morning_straight: todayLog?.alfredson_morning_straight || false,
+    alfredson_morning_bent: todayLog?.alfredson_morning_bent || false,
+    alfredson_evening_straight: todayLog?.alfredson_evening_straight || false,
+    alfredson_evening_bent: todayLog?.alfredson_evening_bent || false,
+    notes: todayLog?.notes || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const setF = (k, v) => setFields(f => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    const ok = await onSave({ ...fields, date: today });
+    setSaveStatus(ok ? "saved" : "error");
+    setTimeout(() => setSaveStatus(null), 3000);
+    setEditing(false);
+    setSaving(false);
+  };
+
+  const alfredsonComplete = [fields.alfredson_morning_straight, fields.alfredson_morning_bent, fields.alfredson_evening_straight, fields.alfredson_evening_bent].filter(Boolean).length;
+
+  // Weekly Alfredson compliance
+  const last7 = recoveryLogs.filter(r => {
+    const d = new Date(r.date);
+    const now = new Date();
+    return (now - d) / 86400000 <= 7;
+  });
+  const weeklyCompliance = last7.length ? Math.round(last7.reduce((sum, r) => {
+    const done = [r.alfredson_morning_straight, r.alfredson_morning_bent, r.alfredson_evening_straight, r.alfredson_evening_bent].filter(Boolean).length;
+    return sum + (done / 4);
+  }, 0) / last7.length * 100) : null;
+
+  const StarRating = ({ label, value, onChange, max = 5, color = "#4A90D9" }) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ color: "#8B92A5", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>{label}</div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {Array.from({ length: max }).map((_, i) => (
+          <button key={i} onClick={() => onChange(i + 1)}
+            style={{ width: 52, height: 52, borderRadius: 8, border: `2px solid ${i < value ? color : "#2A2D3A"}`,
+              background: i < value ? color + "22" : "#0F1117", color: i < value ? color : "#4B5563",
+              fontSize: 18, fontWeight: 800, cursor: "pointer" }}>
+            {i + 1}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const PainSlider = ({ label, value, onChange, color }) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ color: "#8B92A5", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+        <span style={{ color: value === 0 ? "#4AD99A" : value <= 3 ? "#E8A838" : "#D94A4A", fontSize: 18, fontWeight: 800 }}>{value}/10</span>
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {Array.from({ length: 11 }).map((_, i) => (
+          <button key={i} onClick={() => onChange(i)}
+            style={{ flex: 1, height: 44, borderRadius: 6, border: "none",
+              background: i === value ? (i === 0 ? "#4AD99A" : i <= 3 ? "#E8A838" : "#D94A4A") : "#2A2D3A",
+              color: i === value ? "#0F1117" : "#4B5563", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            {i}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const AlfredsonCheck = ({ label, checked, onChange }) => (
+    <button onClick={() => onChange(!checked)}
+      style={{ display: "flex", alignItems: "center", gap: 12, background: checked ? "#4AD99A22" : "#0F1117",
+        border: `1px solid ${checked ? "#4AD99A44" : "#2A2D3A"}`, borderRadius: 8, padding: "12px 16px",
+        cursor: "pointer", width: "100%", textAlign: "left" }}>
+      <div style={{ width: 24, height: 24, borderRadius: 6, background: checked ? "#4AD99A" : "#2A2D3A",
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
+        {checked ? "✓" : ""}
+      </div>
+      <span style={{ color: checked ? "#4AD99A" : "#8B92A5", fontSize: 14, fontWeight: checked ? 700 : 400 }}>{label}</span>
+    </button>
+  );
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Recovery & Durability</h2>
+            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())}</div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <SaveStatus status={saveStatus} />
+            {!editing && <button onClick={() => setEditing(true)}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+              Edit Today
+            </button>}
+          </div>
+        </div>
+
+        {editing ? (
+          <div>
+            <Card style={{ marginBottom: 16 }}>
+              <SectionLabel>Recovery Metrics</SectionLabel>
+              <StarRating label="Sleep Quality" value={fields.sleep_quality} onChange={v => setF("sleep_quality", v)} color="#7B68EE" />
+              <StarRating label="Energy Level" value={fields.energy} onChange={v => setF("energy", v)} color="#4AD99A" />
+              <StarRating label="Muscle Soreness" value={fields.muscle_soreness} onChange={v => setF("muscle_soreness", v)} color="#E8A838" />
+            </Card>
+
+            <Card style={{ marginBottom: 16 }}>
+              <SectionLabel>Pain Tracking</SectionLabel>
+              <PainSlider label="Heel Pain" value={fields.heel_pain} onChange={v => setF("heel_pain", v)} />
+              <PainSlider label="Low Back Pain" value={fields.low_back_pain} onChange={v => setF("low_back_pain", v)} />
+            </Card>
+
+            <Card style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <SectionLabel>Alfredson Protocol</SectionLabel>
+                <span style={{ color: alfredsonComplete === 4 ? "#4AD99A" : "#E8A838", fontSize: 13, fontWeight: 700 }}>{alfredsonComplete}/4 complete</span>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Morning</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <AlfredsonCheck label="Straight-knee eccentric calf raises (3×15)" checked={fields.alfredson_morning_straight} onChange={v => setF("alfredson_morning_straight", v)} />
+                  <AlfredsonCheck label="Bent-knee eccentric calf raises (3×15)" checked={fields.alfredson_morning_bent} onChange={v => setF("alfredson_morning_bent", v)} />
+                </div>
+              </div>
+              <div>
+                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Evening</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <AlfredsonCheck label="Straight-knee eccentric calf raises (3×15)" checked={fields.alfredson_evening_straight} onChange={v => setF("alfredson_evening_straight", v)} />
+                  <AlfredsonCheck label="Bent-knee eccentric calf raises (3×15)" checked={fields.alfredson_evening_bent} onChange={v => setF("alfredson_evening_bent", v)} />
+                </div>
+              </div>
+            </Card>
+
+            <Card style={{ marginBottom: 20 }}>
+              <SectionLabel>Notes</SectionLabel>
+              <textarea value={fields.notes} onChange={e => setF("notes", e.target.value)} rows={3}
+                placeholder="How are you feeling? Any observations..."
+                style={{ ...inputStyle, resize: "none" }} />
+            </Card>
+
+            <button onClick={handleSave} disabled={saving}
+              style={{ background: saving ? "#2A2D3A" : "#4AD99A", color: saving ? "#4B5563" : "#0F1117",
+                border: "none", borderRadius: 10, height: 56, width: "100%", fontSize: 17, fontWeight: 800, cursor: saving ? "default" : "pointer" }}>
+              {saving ? "Saving..." : "Save Recovery Check-in"}
+            </button>
+          </div>
+        ) : todayLog ? (
+          <div>
+            <Card style={{ marginBottom: 16 }}>
+              <SectionLabel>Today's Check-in</SectionLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
+                {[["Sleep", todayLog.sleep_quality, 5, "#7B68EE"],
+                  ["Energy", todayLog.energy, 5, "#4AD99A"],
+                  ["Soreness", todayLog.muscle_soreness, 5, "#E8A838"]].map(([label, val, max, color]) => (
+                  <div key={label} style={{ background: "#0F1117", borderRadius: 10, padding: "16px", textAlign: "center" }}>
+                    <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
+                    <div style={{ fontSize: 32, fontWeight: 800, color }}>{val}<span style={{ color: "#4B5563", fontSize: 16 }}>/{max}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {[["Heel Pain", todayLog.heel_pain], ["Low Back Pain", todayLog.low_back_pain]].map(([label, val]) => (
+                  <div key={label} style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                    <span style={{ color: val === 0 ? "#4AD99A" : val <= 3 ? "#E8A838" : "#D94A4A", fontSize: 22, fontWeight: 800 }}>{val}/10</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card>
+              <SectionLabel>Alfredson Protocol</SectionLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[["Morning Straight", todayLog.alfredson_morning_straight],
+                  ["Morning Bent", todayLog.alfredson_morning_bent],
+                  ["Evening Straight", todayLog.alfredson_evening_straight],
+                  ["Evening Bent", todayLog.alfredson_evening_bent]].map(([label, done]) => (
+                  <div key={label} style={{ background: done ? "#4AD99A22" : "#0F1117", border: `1px solid ${done ? "#4AD99A44" : "#2A2D3A"}`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>{done ? "✓" : "○"}</span>
+                    <span style={{ color: done ? "#4AD99A" : "#4B5563", fontSize: 13, fontWeight: done ? 700 : 400 }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <Card style={{ textAlign: "center", padding: 48 }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🩺</div>
+            <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No check-in yet today</div>
+            <button onClick={() => setEditing(true)}
+              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
+              Start Check-in
+            </button>
+          </Card>
         )}
       </div>
 
-      {/* Right sidebar — macro targets reference */}
+      {/* Right sidebar */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Card>
-          <SectionLabel>Today's Progress</SectionLabel>
-          {[["Calories", todayTotals.calories, T.calories, "#E8A838", "kcal"],
-            ["Protein",  todayTotals.protein,  T.protein,  "#4A90D9", "g"],
-            ["Carbs",    todayTotals.carbs,    T.carbs,    "#7B68EE", "g"],
-            ["Fat",      todayTotals.fat,      T.fat,      "#4AD9A0", "g"]].map(([label, val, target, color, unit]) => {
-            const pct = Math.min(100, (val / target) * 100);
-            return (
-              <div key={label} style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
-                  <span style={{ color, fontSize: 12, fontWeight: 700 }}>{val}<span style={{ color: "#4B5563", fontWeight: 400 }}>/{target}{unit}</span></span>
-                </div>
-                <div style={{ background: "#0F1117", borderRadius: 4, height: 6, marginBottom: 2 }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
-                </div>
-                <div style={{ color: "#4B5563", fontSize: 10 }}>{Math.max(0, target - val)}{unit} remaining</div>
+          <SectionLabel>7-Day Alfredson Compliance</SectionLabel>
+          {weeklyCompliance !== null ? (
+            <div>
+              <div style={{ fontSize: 48, fontWeight: 800, color: weeklyCompliance >= 80 ? "#4AD99A" : weeklyCompliance >= 50 ? "#E8A838" : "#D94A4A", marginBottom: 4 }}>
+                {weeklyCompliance}%
               </div>
-            );
-          })}
+              <div style={{ background: "#0F1117", borderRadius: 6, height: 8, marginBottom: 8 }}>
+                <div style={{ width: `${weeklyCompliance}%`, height: "100%", background: weeklyCompliance >= 80 ? "#4AD99A" : weeklyCompliance >= 50 ? "#E8A838" : "#D94A4A", borderRadius: 6 }} />
+              </div>
+              <div style={{ color: "#4B5563", fontSize: 12 }}>{last7.length} days logged this week</div>
+            </div>
+          ) : (
+            <div style={{ color: "#3A3D4A", fontSize: 13 }}>No data yet</div>
+          )}
         </Card>
 
         <Card>
-          <SectionLabel>Gain Phase Targets</SectionLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[["Calories", "2,650", "kcal/day", "#E8A838"],
-              ["Protein",  "191g",  "per day",  "#4A90D9"],
-              ["Carbs",    "220g",  "per day",  "#7B68EE"],
-              ["Fat",      "65g",   "per day",  "#4AD9A0"],
-              ["Surplus",  "+250",  "vs 2,400 maint.", "#4AD99A"]].map(([label, val, unit, color]) => (
-              <div key={label} style={{ background: "#0F1117", borderRadius: 7, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
-                <div style={{ textAlign: "right" }}>
-                  <span style={{ color, fontSize: 14, fontWeight: 700 }}>{val}</span>
-                  <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <SectionLabel>Recent Check-ins</SectionLabel>
+          {recoveryLogs.length === 0 ? (
+            <div style={{ color: "#3A3D4A", fontSize: 13 }}>No logs yet</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[...recoveryLogs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 7).map((r, i) => {
+                const alfDone = [r.alfredson_morning_straight, r.alfredson_morning_bent, r.alfredson_evening_straight, r.alfredson_evening_bent].filter(Boolean).length;
+                return (
+                  <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(r.date + "T12:00:00")}</span>
+                      <span style={{ color: alfDone === 4 ? "#4AD99A" : "#E8A838", fontSize: 12, fontWeight: 700 }}>Alf {alfDone}/4</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <span style={{ color: "#7B68EE", fontSize: 12 }}>💤 {r.sleep_quality}</span>
+                      <span style={{ color: "#4AD99A", fontSize: 12 }}>⚡ {r.energy}</span>
+                      <span style={{ color: "#E8A838", fontSize: 12 }}>💪 {r.muscle_soreness}</span>
+                      {r.heel_pain > 0 && <span style={{ color: "#D94A4A", fontSize: 12 }}>🦶 {r.heel_pain}</span>}
+                      {r.low_back_pain > 0 && <span style={{ color: "#D94A4A", fontSize: 12 }}>⬇️ {r.low_back_pain}</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
     </div>
@@ -1433,7 +1870,8 @@ function App() {
   const [exercises]                 = useState(INITIAL_EXERCISES);
   const [workoutLogs, setWorkoutLogs]     = useState([]);
   const [bodyLogs, setBodyLogs]           = useState([]);
-  const [nutritionLogs, setNutritionLogs] = useState([]);
+  const [nutritionDays, setNutritionDays] = useState([]);
+  const [recoveryLogs, setRecoveryLogs]   = useState([]);
   const [phase, setPhase]           = useState(null);
   const [loading, setLoading]       = useState(true);
   const [dbError, setDbError]       = useState(false);
@@ -1466,16 +1904,16 @@ function App() {
   const loadAll = useCallback(async (token, uid) => {
     setLoading(true); setDbError(false);
     try {
-      const [wData, bData, nData, pData] = await Promise.all([
+      const [wData, bData, ndData, rlData, pData] = await Promise.all([
         sbGet(`workout_logs?user_id=eq.${uid}&order=date.asc&limit=5000`, token),
         sbGet(`body_logs?user_id=eq.${uid}&order=date.asc&limit=500`, token),
-        sbGet(`nutrition_logs?user_id=eq.${uid}&order=date.asc&limit=5000`, token),
+        sbGet(`nutrition_days?user_id=eq.${uid}&order=date.desc&limit=100`, token),
+        sbGet(`recovery_logs?user_id=eq.${uid}&order=date.desc&limit=100`, token),
         sbGet(`phase_data?user_id=eq.${uid}&order=created_at.desc&limit=1`, token),
       ]);
 
-      const lsWorkout   = lsGet(LS_KEYS.workout);
-      const lsBody      = lsGet(LS_KEYS.body);
-      const lsNutrition = lsGet(LS_KEYS.nutrition);
+      const lsWorkout = lsGet(LS_KEYS.workout);
+      const lsBody    = lsGet(LS_KEYS.body);
 
       const merged = (remote, local) => {
         if (!remote) return local;
@@ -1486,14 +1924,24 @@ function App() {
 
       const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date }));
       const bLogs = merged(bData, lsBody).map(r => ({ id: r.id, weight: r.weight, chest: r.chest, waist: r.waist, hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date }));
-      const nLogs = merged(nData, lsNutrition).map(r => ({ id: r.id, calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat, notes: r.notes, date: r.date }));
+
+      // Load nutrition entries for each day
+      let nDays = ndData || [];
+      if (nDays.length > 0) {
+        const dayIds = nDays.map(d => d.id).join(",");
+        const entries = await sbGet(`nutrition_entries?nutrition_day_id=in.(${dayIds})&order=created_at.asc`, token);
+        nDays = nDays.map(d => ({
+          ...d,
+          entries: (entries || []).filter(e => e.nutrition_day_id === d.id)
+        }));
+      }
 
       setWorkoutLogs(wLogs);
       setBodyLogs(bLogs);
-      setNutritionLogs(nLogs);
+      setNutritionDays(nDays);
+      setRecoveryLogs(rlData || []);
       lsSet(LS_KEYS.workout, wLogs);
       lsSet(LS_KEYS.body, bLogs);
-      lsSet(LS_KEYS.nutrition, nLogs);
 
       if (pData?.[0]) {
         setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [] });
@@ -1505,7 +1953,7 @@ function App() {
   const signOut = () => {
     localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
     setSession(null); setUserId(null);
-    setWorkoutLogs([]); setBodyLogs([]); setNutritionLogs([]); setPhase(null);
+    setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]); setRecoveryLogs([]); setPhase(null);
   };
 
   // ── Workout handlers ───────────────────────────────────────────────────────
@@ -1539,31 +1987,66 @@ function App() {
   };
 
   // ── Nutrition handlers ─────────────────────────────────────────────────────
-  const addNutritionLog = async (entry) => {
-    const localEntry = { ...entry, _pending: true };
-    const updated = [...nutritionLogs, localEntry];
-    setNutritionLogs(updated); lsSet(LS_KEYS.nutrition, updated);
-    const rows = await sbPost("nutrition_logs", { calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes, date: entry.date, user_id: userId }, session);
-    if (rows?.[0]) {
-      const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id } : l);
-      setNutritionLogs(synced); lsSet(LS_KEYS.nutrition, synced);
+  const saveNutritionDay = async (parsed, rawText) => {
+    try {
+      const dayPayload = {
+        user_id: userId, date: parsed.date, phase: parsed.phase,
+        target_calories: parsed.targets?.calories, target_protein: parsed.targets?.protein,
+        target_carbs: parsed.targets?.carbs, target_fat: parsed.targets?.fat,
+        total_calories: parsed.totals?.calories, total_protein: parsed.totals?.protein,
+        total_carbs: parsed.totals?.carbs, total_fat: parsed.totals?.fat,
+        remaining_calories: parsed.remaining?.calories, remaining_protein: parsed.remaining?.protein,
+        remaining_carbs: parsed.remaining?.carbs, remaining_fat: parsed.remaining?.fat,
+        compliance: parsed.compliance, notes: parsed.notes, raw_import: rawText,
+      };
+      // Upsert day (delete existing if same date, then insert)
+      const existing = nutritionDays.find(d => d.date === parsed.date);
+      if (existing?.id) await sbDelete(`nutrition_days?id=eq.${existing.id}`, session);
+
+      const rows = await sbPost("nutrition_days", dayPayload, session);
+      if (!rows?.[0]) return false;
+      const dayId = rows[0].id;
+
+      // Insert entries
+      const entries = parsed.entries || [];
+      const entryRows = [];
+      for (const e of entries) {
+        const eRow = await sbPost("nutrition_entries", {
+          user_id: userId, nutrition_day_id: dayId,
+          entry_time: e.time, entry_type: e.type, meal_name: e.name,
+          items: e.items, calories: e.calories, protein: e.protein, carbs: e.carbs, fat: e.fat,
+        }, session);
+        if (eRow?.[0]) entryRows.push(eRow[0]);
+      }
+
+      const newDay = { ...rows[0], entries: entryRows };
+      setNutritionDays(prev => [newDay, ...prev.filter(d => d.date !== parsed.date)]);
       return true;
-    }
-    return false;
+    } catch { return false; }
   };
 
-  const editNutritionLog = async (idx, updated) => {
-    const entry = nutritionLogs[idx];
-    const newLogs = nutritionLogs.map((l, i) => i === idx ? { ...l, ...updated } : l);
-    setNutritionLogs(newLogs); lsSet(LS_KEYS.nutrition, newLogs);
-    if (entry?.id) await sbPatch(`nutrition_logs?id=eq.${entry.id}`, updated, session);
+  // ── Recovery handlers ──────────────────────────────────────────────────────
+  const saveRecoveryLog = async (entry) => {
+    try {
+      const existing = recoveryLogs.find(r => r.date === entry.date);
+      if (existing?.id) await sbDelete(`recovery_logs?id=eq.${existing.id}`, session);
+      const rows = await sbPost("recovery_logs", { ...entry, user_id: userId }, session);
+      if (!rows?.[0]) return false;
+      setRecoveryLogs(prev => [rows[0], ...prev.filter(r => r.date !== entry.date)]);
+      return true;
+    } catch { return false; }
   };
 
-  const deleteNutritionLog = async (idx) => {
-    const entry = nutritionLogs[idx];
-    const newLogs = nutritionLogs.filter((_, i) => i !== idx);
-    setNutritionLogs(newLogs); lsSet(LS_KEYS.nutrition, newLogs);
-    if (entry?.id) await sbDelete(`nutrition_logs?id=eq.${entry.id}`, session);
+  // ── Workout summary handler ────────────────────────────────────────────────
+  const saveWorkoutSummary = async (summary) => {
+    try {
+      await sbPost("workout_summaries", {
+        user_id: userId, date: new Date().toISOString().split("T")[0],
+        exercises_completed: summary.completed, exercises_total: summary.total,
+        session_pf: summary.sessionPF, previous_session_pf: summary.prevPF,
+        pf_change_pct: summary.pfChange, personal_records: summary.prs,
+      }, session);
+    } catch {}
   };
 
   // ── Phase handlers ─────────────────────────────────────────────────────────
@@ -1637,10 +2120,11 @@ function App() {
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", minHeight: 0 }}>
-        {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} />}
+        {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
-        {tab === "nutrition" && <NutritionTab nutritionLogs={nutritionLogs} onSave={addNutritionLog} onEdit={editNutritionLog} onDelete={deleteNutritionLog} />}
+        {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} />}
+        {tab === "recovery"  && <RecoveryTab recoveryLogs={recoveryLogs} onSave={saveRecoveryLog} />}
         {tab === "phase"     && <PhaseTracker phase={phase} setPhase={savePhase} />}
       </div>
 
