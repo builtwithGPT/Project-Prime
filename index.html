@@ -256,6 +256,7 @@ function MacroRing({ pct, color, label, val, target, unit }) {
 function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
   const active = exercises.filter(e => e.active);
   const [activeMode, setActiveMode] = useState(false);
+  const [workoutEnded, setWorkoutEnded] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [logSets, setLogSets] = useState("3");
   const [logReps, setLogReps] = useState("10");
@@ -299,8 +300,15 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
 
   const startWorkout = () => {
     setLoggedIds(new Set(todayLogs.map(l => l.exerciseId)));
+    setWorkoutEnded(false);
     loadExercise(0);
     setActiveMode(true);
+  };
+
+  const endWorkout = () => {
+    setActiveMode(false);
+    setWorkoutEnded(true);
+    setLoggedIds(new Set());
   };
 
   const saveExercise = async () => {
@@ -348,7 +356,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
             {todayLogs.length > 0 && <div style={{ color: "#E8A838", fontSize: 14, fontWeight: 700 }}>Session PF {sessionPF.toLocaleString()}</div>}
             <button onClick={startWorkout}
               style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              {todayLogs.length > 0 ? "Resume Workout" : "Start Workout"}
+              {todayLogs.length > 0 && !workoutEnded ? "Resume Workout" : "Start Workout"}
             </button>
           </div>
         </div>
@@ -433,8 +441,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
             )}
           </div>
           <button onClick={() => setActiveMode(false)}
-            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", flexShrink: 0, marginLeft: 16 }}>
-            Exit Workout
+            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer", flexShrink: 0, marginLeft: 16 }}>
+            ← Back to list
           </button>
         </div>
 
@@ -526,7 +534,13 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
 
         {/* Exercise plan */}
         <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto" }}>
-          <div style={{ fontSize: 11, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Workout Plan</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Workout Plan</div>
+            <button onClick={endWorkout}
+              style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              End Workout
+            </button>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {active.map((e, i) => {
               const isActive = i === currentIdx;
