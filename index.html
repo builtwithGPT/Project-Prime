@@ -108,6 +108,17 @@ const NAV = [
   { id: "phase", label: "Phase Tracker", icon: "🗓️" },
 ];
 
+const DAILY_SCHEDULE = [
+  { time: "6:30 am", label: "Pre-Workout", tag: "🏋️ Fuel", tagColor: "#E8A838", calories: 200, protein: 25, purpose: "Light fuel — easy to digest before training", foods: ["3 whole eggs scrambled"], note: "Skip toast & yogurt. Just eggs. You don't wake up hungry — don't force it." },
+  { time: "7:00 – 8:00 am", label: "Workout", tag: "💪 Train", tagColor: "#4AD99A", calories: null, protein: null, purpose: "Full body · 3×/week · Progressive overload", foods: [], note: null, isWorkout: true },
+  { time: "8:00 – 8:30 am", label: "Post-Workout Breakfast", tag: "⚡ Recovery", tagColor: "#4AD99A", calories: 450, protein: 30, purpose: "Most important meal — muscles primed to absorb nutrients", foods: ["2 slices sourdough toast", "1 tbsp butter", "1 cup Greek yogurt", "Berries"], note: "Carbs replenish glycogen. Protein drives synthesis. Don't skip this window." },
+  { time: "10:00 am", label: "Mid-Morning Snack", tag: "🥤 Extend", tagColor: "#7B68EE", calories: 350, protein: 30, purpose: "Extends post-workout recovery window", foods: ["Protein shake", "1 banana", "1 tbsp peanut butter"], note: "Secondary recovery hit. Banana + PB adds clean carbs and healthy fat." },
+  { time: "1:00 pm", label: "Lunch", tag: "🍗 Refuel", tagColor: "#4A90D9", calories: 600, protein: 50, purpose: "Midday refuel — largest meal of the day", foods: ["6 oz chicken breast", "1 cup rice", "Roasted zucchini / peppers / mushrooms", "Side salad with dressing"], note: "Olive oil on the vegetables adds quality fat. Rice is your primary carb anchor." },
+  { time: "4:00 pm", label: "Afternoon Snack", tag: "🧀 Bridge", tagColor: "#E87D38", calories: 250, protein: 25, purpose: "Bridges lunch to dinner — keeps protein synthesis elevated", foods: ["Cottage cheese", "Apple slices", "1 Chomps stick"], note: "High protein, moderate carb. Keeps you out of a caloric valley before dinner." },
+  { time: "6:30 – 7:00 pm", label: "Dinner", tag: "🐟 Build", tagColor: "#D94A7A", calories: 550, protein: 40, purpose: "Evening build — protein + complex carbs before overnight fast", foods: ["6 oz salmon or sea bass", "Medium baked potato with butter", "Large vegetable side"], note: "Fish gives omega-3s which reduce inflammation and support recovery." },
+  { time: "9:00 pm", label: "Bed Snack", tag: "🌙 Overnight", tagColor: "#4AD9D9", calories: 200, protein: 20, purpose: "Slow-digesting casein feeds muscles during sleep", foods: ["Greek yogurt or cottage cheese", "Small handful of berries"], note: "Casein protein digests over 6–8 hours. This is muscle building while you sleep." },
+];
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const sf = (sets, reps, weight, type) => {
   if (type === "bodyweight") return sets * reps * 10;
@@ -1534,13 +1545,13 @@ function App() {
       }
     } else {
       // Check localStorage for existing session
-      const stored = localStorage.getItem("pp_session");
+      const stored = localStorage.getItem("pp_session") || sessionStorage.getItem("pp_session");
       if (stored) {
         try {
           const { token, uid } = JSON.parse(stored);
           setSession(token);
           setUserId(uid);
-        } catch(e) {}
+        } catch(e) { setLoading(false); }
       } else {
         setLoading(false);
       }
@@ -1550,7 +1561,9 @@ function App() {
   // ── Load data when session is ready ───────────────────────────────────────
   useState(() => {
     if (session && userId) {
-      localStorage.setItem("pp_session", JSON.stringify({ token: session, uid: userId }));
+      const data = JSON.stringify({ token: session, uid: userId });
+      localStorage.setItem("pp_session", data);
+      sessionStorage.setItem("pp_session", data);
       loadAll();
     }
   }, [session, userId]);
@@ -1576,6 +1589,7 @@ function App() {
 
   const signOut = () => {
     localStorage.removeItem("pp_session");
+    sessionStorage.removeItem("pp_session");
     setSession(null); setUserId(null);
     setWorkoutLogs([]); setBodyLogs([]); setNutritionLogs([]); setPhase(null);
   };
