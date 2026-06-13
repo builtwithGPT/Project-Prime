@@ -1444,17 +1444,25 @@ const sbDelete = async (path, token) => {
 
 // ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState("jdurham@outlook.com");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const sendMagicLink = async () => {
-    if (!email.trim()) return;
+  const signIn = async () => {
+    if (!email.trim() || !password.trim()) return;
     setLoading(true); setError("");
-    const data = await sbAuth("magiclink", { email: email.trim() });
-    if (data.error) { setError(data.error.message || "Failed to send link"); }
-    else { setSent(true); }
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      onLogin(data.access_token, data.user.id);
+    } else {
+      setError(data.error_description || data.msg || "Invalid email or password");
+    }
     setLoading(false);
   };
 
@@ -1466,28 +1474,27 @@ function LoginScreen({ onLogin }) {
           <div style={{ fontSize: 28, fontWeight: 800, color: "#E8EAF0", marginBottom: 6 }}>PROJECT PRIME</div>
           <div style={{ fontSize: 13, color: "#4B5563" }}>Build the best version of you</div>
         </div>
-        {sent ? (
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>📬</div>
-            <div style={{ color: "#4AD99A", fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Check your email</div>
-            <div style={{ color: "#8B92A5", fontSize: 13, lineHeight: 1.6 }}>We sent a magic link to <strong style={{ color: "#E8EAF0" }}>{email}</strong>. Click it to sign in — no password needed.</div>
-          </div>
-        ) : (
-          <div>
-            <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 8 }}>Email address</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && sendMagicLink()}
-              placeholder="you@example.com"
-              style={{ ...inputStyle, marginBottom: 16, fontSize: 15 }} />
-            {error && <div style={{ color: "#D94A4A", fontSize: 12, marginBottom: 12 }}>{error}</div>}
-            <button onClick={sendMagicLink} disabled={loading || !email.trim()}
-              style={{ width: "100%", background: loading || !email.trim() ? "#2A2D3A" : "#4A90D9",
-                color: loading || !email.trim() ? "#4B5563" : "#fff",
-                border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: loading || !email.trim() ? "default" : "pointer" }}>
-              {loading ? "Sending..." : "Send Magic Link"}
-            </button>
-          </div>
-        )}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && signIn()}
+            style={{ ...inputStyle, fontSize: 15 }} />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Password</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && signIn()}
+            placeholder="Enter your password"
+            style={{ ...inputStyle, fontSize: 15 }} />
+        </div>
+        {error && <div style={{ color: "#D94A4A", fontSize: 12, marginBottom: 14 }}>{error}</div>}
+        <button onClick={signIn} disabled={loading || !password.trim()}
+          style={{ width: "100%", background: loading || !password.trim() ? "#2A2D3A" : "#4A90D9",
+            color: loading || !password.trim() ? "#4B5563" : "#fff",
+            border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700,
+            cursor: loading || !password.trim() ? "default" : "pointer" }}>
+          {loading ? "Signing in..." : "Sign In"}
+        </button>
       </div>
     </div>
   );
