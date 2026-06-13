@@ -18,117 +18,202 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect, useCallback } = React;
 
 
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 const FORM_GUIDES = {
-  // WARM-UP
-  "Banded Clamshell": "Lie on your side, knees bent at 90°, band above knees. Keep feet stacked and together. Rotate top knee upward like a clamshell opening. Hold 1 second at top, lower slowly. Don't let hips rock backward — keep pelvis stable throughout. Targets glute medius, a primary driver of both low back pain and plantar fasciitis.",
-  "Glute Bridge": "Lie on back, knees bent, feet flat on floor hip-width apart. Press through heels and drive hips toward ceiling. Squeeze glutes hard at top — don't hyperextend lower back. Hold 2 seconds. Lower slowly. Keep core braced throughout. This is your low-back-safe glute activation before hip thrusts.",
-  // CHEST
-  "Incline Dumbbell Press": "Set bench to 30-45 degrees. Lie back, dumbbells at shoulder height, palms forward. Press up and slightly inward — converge at the top. Lower with control until elbows are just below bench level. Feel the upper chest stretch at the bottom. Priority chest movement — upper pec development. SUPERSET with Dumbbell Row: go straight from your last press rep to the row with minimal rest.",
-  "Flat Dumbbell Press": "Lie flat on bench, feet on floor. Dumbbells at chest level, elbows at 45-75 degrees from torso. Press straight up. Lower with control. Squeeze shoulder blades into bench. Targets mid chest. SUPERSET with Pull-up: finish your press reps then go straight to the bar.",
-  "Dumbbell Fly": "Lie flat, dumbbells above chest with slight elbow bend — maintain that bend throughout. Lower arms wide in an arc until you feel a deep pec stretch. Squeeze pecs to bring arms back together at the top. Arc motion, not a press. Targets inner chest — the sternum strip.",
-  "Dips": "Lean torso forward — chin tucked to chest, body angled slightly forward. Lower until upper arms are parallel to floor. Press back up. Forward lean is essential — upright dips work triceps, forward lean works lower chest.",
-  // BACK
-  "Dumbbell Row": "Plant one knee and same-side hand on bench. Pull dumbbell to hip, elbow close to body. Squeeze shoulder blade at top — hold 1 second. Lower with full control. Keep back flat. SUPERSET with Incline Press — rest 60 sec after completing both exercises.",
-  "Pull-up / Chin-up": "Hang from bar, arms fully extended — briefly decompresses the lumbar spine. Pull-up: palms away, wider grip. Chin-up: palms toward you, adds more bicep. Pull until chin clears bar. Lower slowly. SUPERSET with Flat Press — rest 60 sec after completing both exercises.",
-  // POSTERIOR CHAIN
-  "Hip Thrust": "Sit on floor with upper back against bench edge. Feet flat, hip-width apart. Drive hips up by squeezing glutes — not by arching lower back. Hold 1-2 seconds at top. Lower slowly. Zero spinal compression. Most important exercise for glutes and plantar fasciitis root cause correction.",
-  "Single-Leg Hip Thrust": "Same setup as hip thrust but one leg extended. Drive through the planted heel, squeeze glute hard at top. Keep hips level. Add this at week 4 after bilateral hip thrust is solid. Optional — skip if session is running long.",
-  "Dumbbell RDL": "Stand, dumbbells in front of thighs. Soft knee bend throughout. Hinge at hips, push them backward as dumbbells lower along your legs. Feel hamstring stretch. Neutral spine — no rounding. Slow eccentric — 3 seconds down.",
-  "Prone Dumbbell Hamstring Curl": "Lie face down on bench, legs hanging off. Hold dumbbell between feet. Curl heels toward glutes. Lower slowly — 3-4 second eccentric. Keep hips flat on bench. Start light.",
-  "Single-Leg Dumbbell RDL": "Stand on one leg, slight knee bend. Hold dumbbell in opposite hand. Hinge at hip, free leg goes back — body forms a T. Feel hamstring stretch in standing leg. Drive through heel to return. Keep hips square. Slow controlled descent.",
-  "Bulgarian Split Squat": "Rear foot on bench behind you. Front foot forward — shin vertical when you descend. Lower rear knee toward floor. Drive through front heel to rise. Use heel elevation if foot pain.",
-  // SHOULDERS / ARMS
-  "Seated Overhead Press": "Sit on bench with back support or against a wall. Dumbbells at shoulder height. Press straight overhead. Seated position prevents lumbar extension — do not do this standing.",
-  "Bicep Curl": "Elbows pinned to sides. Curl dumbbells up — don't swing. Squeeze at top. Lower slowly 2-3 seconds. SUPERSET with Tricep Extension — alternate sets with minimal rest.",
-  "Tricep Extension": "Hold dumbbell overhead with both hands. Lower behind head by bending elbows — keep elbows pointed up. Extend fully. SUPERSET with Bicep Curl — alternate sets with minimal rest.",
-  // ABS
-  "Leg Raise": "Lie flat on your back, hands under glutes or gripping a bench edge. Keep legs straight or slightly bent. Raise legs to 90 degrees, lower slowly — 3 seconds down. Don't let lower back arch off the floor. Keep core braced throughout. If lower back feels stressed, bend knees slightly.",
-  "Core Rotation": "Sit on floor or bench, knees bent, torso leaned back slightly at 45 degrees. Hold a dumbbell or kettlebell with both hands. Rotate torso side to side, touching weight to floor on each side. Keep movement controlled — this is not a momentum exercise. Spine stays neutral, rotation comes from the obliques.",
-  "Dead Bug": "Lie on back, arms straight up toward ceiling, knees bent at 90 degrees in the air. Slowly lower opposite arm and leg toward floor simultaneously — keep lower back pressed flat into floor. Return and alternate. The key is maintaining spinal contact with the floor. Excellent for low back stability without compression.",
+  "Banded Clamshell": "Lie on your side, knees bent at 90°, band above knees. Keep feet stacked. Rotate top knee upward like a clamshell opening. Hold 1 second at top, lower slowly. Don't let hips rock backward. Targets glute medius — primary driver of both low back pain and plantar fasciitis.",
+  "Glute Bridge": "Lie on back, knees bent, feet flat hip-width apart. Press through heels, drive hips to ceiling. Squeeze glutes hard at top — don't hyperextend lower back. Hold 2 seconds. Lower slowly. Core braced throughout.",
+  "Incline Dumbbell Press": "Set bench 30-45°. Dumbbells at shoulder height, palms forward. Press up and slightly inward. Lower with control until elbows just below bench level. Feel upper chest stretch at bottom. SUPERSET with Dumbbell Row.",
+  "Flat Dumbbell Press": "Lie flat, feet on floor. Dumbbells at chest level, elbows 45-75° from torso. Press straight up. Squeeze shoulder blades into bench. Targets mid chest. SUPERSET with Pull-up / Chin-up.",
+  "Dumbbell Fly": "Lie flat, slight elbow bend — maintain throughout. Lower arms wide in an arc until deep pec stretch. Squeeze pecs together at top. Arc motion, not a press. Targets inner chest.",
+  "Dips": "Lean torso forward — chin tucked, body angled forward. Lower until upper arms parallel to floor. Press back up. Forward lean works lower chest. Upright works triceps.",
+  "Dumbbell Row": "Plant one knee and hand on bench. Pull dumbbell to hip, elbow close to body. Squeeze shoulder blade at top — hold 1 second. Lower with full control. Back flat. SUPERSET with Incline Press.",
+  "Pull-up / Chin-up": "Hang fully extended — decompresses lumbar spine. Pull-up: palms away, wider grip, targets lats. Chin-up: palms toward you, more bicep. Pull until chin clears bar. Lower slowly. SUPERSET with Flat Press.",
+  "Hip Thrust": "Upper back on bench edge. Feet flat, hip-width. Drive hips up squeezing glutes — not arching lower back. Hold 1-2 seconds at top. Lower slowly. Zero spinal compression.",
+  "Single-Leg Hip Thrust": "Same setup as hip thrust but one leg extended. Drive through planted heel, squeeze glute hard. Keep hips level — don't let non-working side drop. Enter reps per side — app doubles for Prime Factor.",
+  "Dumbbell RDL": "Stand, dumbbells in front of thighs. Soft knee bend throughout. Hinge at hips, push them backward as dumbbells lower along legs. Feel hamstring stretch. Neutral spine — no rounding. 3 seconds down.",
+  "Prone Dumbbell Hamstring Curl": "Lie face down on bench, legs hanging off. Hold dumbbell between feet. Curl heels toward glutes. Lower slowly — 3-4 second eccentric. Keep hips flat on bench.",
+  "Single-Leg Dumbbell RDL": "Stand on one leg, slight knee bend. Hold dumbbell in opposite hand. Hinge at hip, free leg goes back — body forms a T. Feel hamstring stretch in standing leg. Drive through heel to return. Hips square. Enter reps per side.",
+  "Bulgarian Split Squat": "Rear foot on bench. Front foot forward — shin vertical when descending. Lower rear knee toward floor. Drive through front heel to rise. Enter reps per side. Heel elevation if foot pain.",
+  "Seated Overhead Press": "Sit with back support or against wall. Dumbbells at shoulder height. Press straight overhead. Seated position prevents lumbar extension — do not do this standing.",
+  "Bicep Curl": "Elbows pinned to sides. Curl up — don't swing. Squeeze at top. Lower slowly 2-3 seconds. Enter reps per side. SUPERSET with Tricep Extension.",
+  "Tricep Extension": "Hold dumbbell overhead with both hands. Lower behind head — keep elbows pointed up, close to ears. Extend fully. SUPERSET with Bicep Curl.",
+  "Leg Raise": "Lie flat, hands under glutes or gripping bench edge. Legs straight or slightly bent. Raise to 90°, lower slowly — 3 seconds down. Don't let lower back arch off floor.",
+  "Core Rotation": "Sit on floor or bench, knees bent, torso at 45°. Hold dumbbell or kettlebell. Rotate torso side to side, controlled. Rotation from obliques — not momentum.",
+  "Dead Bug": "Lie on back, arms up, knees bent at 90° in air. Lower opposite arm and leg simultaneously — keep lower back pressed flat. Return and alternate. Key: maintain spinal contact with floor.",
 };
 
-// superset field links exercises that should be done back-to-back
-// type: "weighted" | "bodyweight" | "banded"
+// laterality: "bilateral" | "unilateral"
+// PF for unilateral is automatically doubled (user enters per-side reps)
 const EXERCISE_LIST = [
-  // Warm-up
-  { name: "Banded Clamshell",           muscleGroup: "Warm-up",    type: "banded",     flag: null,                                          defaultSets: "2", defaultReps: "15", superset: null },
-  { name: "Glute Bridge",               muscleGroup: "Warm-up",    type: "bodyweight", flag: null,                                          defaultSets: "2", defaultReps: "15", superset: null },
-  // Chest + Back supersets
-  { name: "Incline Dumbbell Press",     muscleGroup: "Chest",      type: "weighted",   flag: null,                                          defaultSets: "4", defaultReps: "10", superset: "Dumbbell Row" },
-  { name: "Dumbbell Row",               muscleGroup: "Back",       type: "weighted",   flag: null,                                          defaultSets: "4", defaultReps: "10", superset: "Incline Dumbbell Press" },
-  { name: "Flat Dumbbell Press",        muscleGroup: "Chest",      type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "10", superset: "Pull-up / Chin-up" },
-  { name: "Pull-up / Chin-up",          muscleGroup: "Back",       type: "bodyweight", flag: null,                                          defaultSets: "3", defaultReps: "5",  superset: "Flat Dumbbell Press" },
-  { name: "Dumbbell Fly",               muscleGroup: "Chest",      type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: null },
-  { name: "Dips",                       muscleGroup: "Chest",      type: "bodyweight", flag: null,                                          defaultSets: "3", defaultReps: "10", superset: null },
-  // Posterior Chain
-  { name: "Hip Thrust",                 muscleGroup: "Glutes",     type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: null },
-  { name: "Single-Leg Hip Thrust",      muscleGroup: "Glutes",     type: "bodyweight", flag: "⚠️ Optional — add week 4+",                   defaultSets: "3", defaultReps: "8",  superset: null },
-  { name: "Dumbbell RDL",               muscleGroup: "Hamstrings", type: "weighted",   flag: "⚠️ Neutral spine — no rounding",              defaultSets: "3", defaultReps: "10", superset: null },
-  { name: "Prone Dumbbell Hamstring Curl", muscleGroup: "Hamstrings", type: "weighted", flag: null,                                         defaultSets: "3", defaultReps: "12", superset: null },
-  { name: "Single-Leg Dumbbell RDL",    muscleGroup: "Hamstrings", type: "weighted",   flag: "⚠️ Each side — slow descent",                 defaultSets: "3", defaultReps: "8",  superset: null },
-  { name: "Bulgarian Split Squat",      muscleGroup: "Legs",       type: "weighted",   flag: "⚠️ Heel elevation if foot pain",              defaultSets: "3", defaultReps: "10", superset: null },
-  // Shoulders
-  { name: "Seated Overhead Press",      muscleGroup: "Shoulders",  type: "weighted",   flag: "⚠️ Seated only — protects low back",          defaultSets: "3", defaultReps: "10", superset: null },
-  // Arms superset
-  { name: "Bicep Curl",                 muscleGroup: "Arms",       type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: "Tricep Extension" },
-  { name: "Tricep Extension",           muscleGroup: "Arms",       type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "12", superset: "Bicep Curl" },
-  // Abs
-  { name: "Leg Raise",                  muscleGroup: "Core",       type: "bodyweight", flag: null,                                          defaultSets: "3", defaultReps: "15", superset: null },
-  { name: "Core Rotation",              muscleGroup: "Core",       type: "weighted",   flag: null,                                          defaultSets: "3", defaultReps: "15", superset: null },
-  { name: "Dead Bug",                   muscleGroup: "Core",       type: "bodyweight", flag: "⚠️ Keep lower back flat on floor",            defaultSets: "3", defaultReps: "10", superset: null },
+  { name: "Banded Clamshell",           muscleGroup: "Warm-up",    type: "banded",     laterality: "unilateral", defaultSets: "2",  defaultReps: "15", superset: null,                   flag: null },
+  { name: "Glute Bridge",               muscleGroup: "Warm-up",    type: "bodyweight", laterality: "bilateral",  defaultSets: "2",  defaultReps: "15", superset: null,                   flag: null },
+  { name: "Incline Dumbbell Press",     muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "4",  defaultReps: "10", superset: "Dumbbell Row",         flag: null },
+  { name: "Dumbbell Row",               muscleGroup: "Back",       type: "weighted",   laterality: "unilateral", defaultSets: "4",  defaultReps: "10", superset: "Incline Dumbbell Press",flag: null },
+  { name: "Flat Dumbbell Press",        muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: "Pull-up / Chin-up",    flag: null },
+  { name: "Pull-up / Chin-up",          muscleGroup: "Back",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "5",  superset: "Flat Dumbbell Press",  flag: null },
+  { name: "Dumbbell Fly",               muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: null,                   flag: null },
+  { name: "Dips",                       muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: null },
+  { name: "Hip Thrust",                 muscleGroup: "Glutes",     type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: null,                   flag: null },
+  { name: "Single-Leg Hip Thrust",      muscleGroup: "Glutes",     type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  superset: null,                   flag: "⚠️ Add week 4+" },
+  { name: "Dumbbell RDL",               muscleGroup: "Hamstrings", type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Neutral spine" },
+  { name: "Prone Dumbbell Hamstring Curl",muscleGroup:"Hamstrings", type: "weighted",  laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: null,                   flag: null },
+  { name: "Single-Leg Dumbbell RDL",    muscleGroup: "Hamstrings", type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  superset: null,                   flag: "⚠️ Each side" },
+  { name: "Bulgarian Split Squat",      muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Heel elevation if needed" },
+  { name: "Seated Overhead Press",      muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Seated only" },
+  { name: "Bicep Curl",                 muscleGroup: "Arms",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", superset: "Tricep Extension",     flag: null },
+  { name: "Tricep Extension",           muscleGroup: "Arms",       type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: "Bicep Curl",           flag: null },
+  { name: "Leg Raise",                  muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", superset: null,                   flag: null },
+  { name: "Core Rotation",              muscleGroup: "Core",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "15", superset: null,                   flag: null },
+  { name: "Dead Bug",                   muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Keep lower back flat" },
 ];
 
-const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({
-  id: i + 1, name: e.name, active: true, muscleGroup: e.muscleGroup,
-  type: e.type, flag: e.flag, defaultSets: e.defaultSets, defaultReps: e.defaultReps,
-  superset: e.superset,
-}));
+const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({ id: i + 1, ...e, active: true }));
 
+// ─── PRIME FACTOR ─────────────────────────────────────────────────────────────
+function calcPF(sets, reps, weight, type, laterality) {
+  const mult = laterality === "unilateral" ? 2 : 1;
+  if (type === "bodyweight") return sets * reps * 10 * mult;
+  if (type === "banded")     return sets * reps * mult;
+  return sets * reps * (weight || 0) * mult;
+}
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const MUSCLE_COLORS = {
-  "Warm-up":   "#4B5563",
-  "Chest":     "#4A90D9",
-  "Back":      "#7B68EE",
-  "Legs":      "#E8A838",
-  "Glutes":    "#E87D38",
-  "Hamstrings":"#D9844A",
-  "Shoulders": "#4AD9A0",
-  "Arms":      "#D94A7A",
-  "Core":      "#4AD9D9",
+  "Warm-up": "#4B5563", "Chest": "#4A90D9", "Back": "#7B68EE",
+  "Legs": "#E8A838", "Glutes": "#E87D38", "Hamstrings": "#D9844A",
+  "Shoulders": "#4AD9A0", "Arms": "#D94A7A", "Core": "#4AD9D9",
 };
 
 const NAV = [
-  { id: "workout", label: "Workout", icon: "💪" },
-  { id: "progress", label: "Progress", icon: "📈" },
-  { id: "body", label: "Body", icon: "⚖️" },
-  { id: "nutrition", label: "Nutrition", icon: "🥩" },
-  { id: "phase", label: "Phase Tracker", icon: "🗓️" },
+  { id: "workout",  label: "Workout",      icon: "💪" },
+  { id: "progress", label: "Progress",     icon: "📈" },
+  { id: "body",     label: "Body",         icon: "⚖️" },
+  { id: "nutrition",label: "Nutrition",    icon: "🥩" },
+  { id: "phase",    label: "Phase Tracker",icon: "🗓️" },
 ];
 
-const DAILY_SCHEDULE = [
-  { time: "6:30 am", label: "Pre-Workout", tag: "🏋️ Fuel", tagColor: "#E8A838", calories: 200, protein: 25, purpose: "Light fuel — easy to digest before training", foods: ["3 whole eggs scrambled"], note: "Skip toast & yogurt. Just eggs. You don't wake up hungry — don't force it." },
-  { time: "7:00 – 8:00 am", label: "Workout", tag: "💪 Train", tagColor: "#4AD99A", calories: null, protein: null, purpose: "Full body · 3×/week · Progressive overload", foods: [], note: null, isWorkout: true },
-  { time: "8:00 – 8:30 am", label: "Post-Workout Breakfast", tag: "⚡ Recovery", tagColor: "#4AD99A", calories: 450, protein: 30, purpose: "Most important meal — muscles primed to absorb nutrients", foods: ["2 slices sourdough toast", "1 tbsp butter", "1 cup Greek yogurt", "Berries"], note: "Carbs replenish glycogen. Protein drives synthesis. Don't skip this window." },
-  { time: "10:00 am", label: "Mid-Morning Snack", tag: "🥤 Extend", tagColor: "#7B68EE", calories: 350, protein: 30, purpose: "Extends post-workout recovery window", foods: ["Protein shake", "1 banana", "1 tbsp peanut butter"], note: "Secondary recovery hit. Banana + PB adds clean carbs and healthy fat." },
-  { time: "1:00 pm", label: "Lunch", tag: "🍗 Refuel", tagColor: "#4A90D9", calories: 600, protein: 50, purpose: "Midday refuel — largest meal of the day", foods: ["6 oz chicken breast", "1 cup rice", "Roasted zucchini / peppers / mushrooms", "Side salad with dressing"], note: "Olive oil on the vegetables adds quality fat. Rice is your primary carb anchor." },
-  { time: "4:00 pm", label: "Afternoon Snack", tag: "🧀 Bridge", tagColor: "#E87D38", calories: 250, protein: 25, purpose: "Bridges lunch to dinner — keeps protein synthesis elevated", foods: ["Cottage cheese", "Apple slices", "1 Chomps stick"], note: "High protein, moderate carb. Keeps you out of a caloric valley before dinner." },
-  { time: "6:30 – 7:00 pm", label: "Dinner", tag: "🐟 Build", tagColor: "#D94A7A", calories: 550, protein: 40, purpose: "Evening build — protein + complex carbs before overnight fast", foods: ["6 oz salmon or sea bass", "Medium baked potato with butter", "Large vegetable side"], note: "Fish gives omega-3s which reduce inflammation and support recovery." },
-  { time: "9:00 pm", label: "Bed Snack", tag: "🌙 Overnight", tagColor: "#4AD9D9", calories: 200, protein: 20, purpose: "Slow-digesting casein feeds muscles during sleep", foods: ["Greek yogurt or cottage cheese", "Small handful of berries"], note: "Casein protein digests over 6–8 hours. This is muscle building while you sleep." },
-];
+const PHASE_CONFIG = {
+  gain: { label: "Gain Phase", color: "#4AD99A", bg: "#4AD99A22", icon: "📈", weeks: 12, calories: 2650, description: "Caloric surplus · Build muscle · Progressive overload" },
+  cut:  { label: "Cut Phase",  color: "#4A90D9", bg: "#4A90D922", icon: "🔥", weeks: 4,  calories: 1600, description: "Caloric deficit · Preserve muscle · Shed fat" },
+};
+
+const NUTRITION_TARGETS = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const sf = (sets, reps, weight, type) => {
-  if (type === "bodyweight") return sets * reps * 10;
-  if (type === "banded")     return sets * reps;
-  return sets * reps * (weight || 0);
-};
-const fmtDate = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const fmtDate     = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const fmtDateLong = (d) => new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
-// ─── SHARED COMPONENTS ────────────────────────────────────────────────────────
+// ─── LOCAL STORAGE BUFFER ─────────────────────────────────────────────────────
+const LS_KEYS = {
+  workout:   "pp_workout_logs",
+  body:      "pp_body_logs",
+  nutrition: "pp_nutrition_logs",
+};
+
+function lsGet(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; }
+}
+function lsSet(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
+
+const sbHeaders = (token) => ({
+  "apikey": SUPABASE_ANON_KEY,
+  "Authorization": `Bearer ${token}`,
+  "Content-Type": "application/json",
+});
+
+async function sbGet(path, token) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders(token) });
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch { return null; }
+}
+
+async function sbPost(path, body, token) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      method: "POST",
+      headers: { ...sbHeaders(token), "Prefer": "return=representation" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch { return null; }
+}
+
+async function sbPatch(path, body, token) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      method: "PATCH",
+      headers: { ...sbHeaders(token), "Prefer": "return=minimal" },
+      body: JSON.stringify(body),
+    });
+    return true;
+  } catch { return false; }
+}
+
+async function sbDelete(path, token) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      method: "DELETE",
+      headers: { ...sbHeaders(token), "Prefer": "return=minimal" },
+    });
+    return true;
+  } catch { return false; }
+}
+
+// ─── SHARED UI ────────────────────────────────────────────────────────────────
+const inputStyle = {
+  background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8,
+  color: "#E8EAF0", padding: "10px 14px", fontSize: 14,
+  width: "100%", boxSizing: "border-box", outline: "none", fontFamily: "inherit",
+};
+
+function Card({ children, style = {} }) {
+  return <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 20, ...style }}>{children}</div>;
+}
+
+function SectionLabel({ children }) {
+  return <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>{children}</div>;
+}
+
+function Pill({ label, color }) {
+  return <span style={{ background: color + "22", color, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{label}</span>;
+}
+
+function Modal({ title, onClose, children, width = 480 }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "#1A1D26", borderRadius: 14, padding: 32, width, maxHeight: "85vh", overflowY: "auto", border: "1px solid #2A2D3A", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#E8EAF0" }}>{title}</h2>
+          <button onClick={onClose} style={{ background: "#2A2D3A", border: "none", color: "#8B92A5", fontSize: 18, cursor: "pointer", width: 32, height: 32, borderRadius: 6 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SaveStatus({ status }) {
+  if (!status) return null;
+  const cfg = {
+    saving:  { color: "#E8A838", text: "Saving..." },
+    saved:   { color: "#4AD99A", text: "✓ Saved" },
+    error:   { color: "#D94A4A", text: "⚠ Save failed — data kept locally" },
+  }[status];
+  return <span style={{ color: cfg.color, fontSize: 12, fontWeight: 600 }}>{cfg.text}</span>;
+}
+
 function Sparkline({ data, width = 120, height = 40 }) {
   if (!data || data.length < 2) return <span style={{ color: "#3A3D4A", fontSize: 11 }}>No history</span>;
   const vals = data.map(d => d.value);
@@ -148,31 +233,6 @@ function Sparkline({ data, width = 120, height = 40 }) {
   );
 }
 
-function BarChart({ data, height = 140 }) {
-  if (!data.length) return <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 13 }}>No sessions logged yet</div>;
-  const maxV = Math.max(...data.map(d => d.value));
-  const last = data[data.length - 1];
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height }}>
-      {data.map((d, i) => {
-        const h = Math.max(6, (d.value / maxV) * (height - 30));
-        const isLast = i === data.length - 1;
-        return (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <div style={{ fontSize: 10, color: isLast ? "#E8A838" : "#3A3D4A", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-              {isLast ? d.value.toLocaleString() : ""}
-            </div>
-            <div style={{ width: "100%", height: h, background: isLast ? "#E8A838" : "#4A90D9", borderRadius: "4px 4px 0 0", opacity: isLast ? 1 : 0.5 }} />
-            <div style={{ fontSize: 9, color: "#3A3D4A", whiteSpace: "nowrap", transform: "rotate(-30deg)", transformOrigin: "top center", marginTop: 4 }}>
-              {fmtDate(d.date)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function MacroRing({ pct, color, label, val, target, unit }) {
   const r = 36, circ = 2 * Math.PI * r;
   const dash = Math.min(pct / 100, 1) * circ;
@@ -181,10 +241,10 @@ function MacroRing({ pct, color, label, val, target, unit }) {
       <svg width={90} height={90} style={{ transform: "rotate(-90deg)" }}>
         <circle cx={45} cy={45} r={r} fill="none" stroke="#1A1D26" strokeWidth={8} />
         <circle cx={45} cy={45} r={r} fill="none" stroke={color} strokeWidth={8}
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" style={{ transition: "stroke-dasharray 0.4s" }} />
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
       </svg>
       <div style={{ textAlign: "center", marginTop: -8 }}>
-        <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{val}</div>
+        <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{val}</div>
         <div style={{ color: "#8B92A5", fontSize: 10 }}>{unit} / {target}</div>
         <div style={{ color, fontSize: 11, fontWeight: 600, marginTop: 2 }}>{label}</div>
       </div>
@@ -192,86 +252,66 @@ function MacroRing({ pct, color, label, val, target, unit }) {
   );
 }
 
-function Modal({ title, onClose, children, width = 480 }) {
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#1A1D26", borderRadius: 14, padding: 32, width, maxHeight: "85vh", overflowY: "auto", border: "1px solid #2A2D3A", boxShadow: "0 24px 80px rgba(0,0,0,0.6)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#E8EAF0" }}>{title}</h2>
-          <button onClick={onClose} style={{ background: "#2A2D3A", border: "none", color: "#8B92A5", fontSize: 18, cursor: "pointer", width: 32, height: 32, borderRadius: 6, lineHeight: 1 }}>×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-const inputStyle = {
-  background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, color: "#E8EAF0",
-  padding: "10px 14px", fontSize: 14, width: "100%", boxSizing: "border-box", outline: "none",
-  fontFamily: "inherit",
-};
-
-function Pill({ label, color }) {
-  return (
-    <span style={{ background: color + "22", color, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{label}</span>
-  );
-}
-
-function Card({ children, style = {} }) {
-  return (
-    <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 20, ...style }}>
-      {children}
-    </div>
-  );
-}
-
-function SectionLabel({ children }) {
-  return <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>{children}</div>;
-}
-
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
-function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
+function WorkoutTab({ exercises, workoutLogs, onLogExercise }) {
   const [formGuide, setFormGuide] = useState(null);
   const [logging, setLogging] = useState(null);
-  const [logSets, setLogSets] = useState("3");
-  const [logReps, setLogReps] = useState("8");
-  const [logWeight, setLogWeight] = useState("");
+  const [logSets, setLogSets]   = useState("3");
+  const [logReps, setLogReps]   = useState("10");
+  const [logWeight, setLogWeight] = useState("0");
   const [logNotes, setLogNotes] = useState("");
+  const [saveStatus, setSaveStatus] = useState(null);
 
-  const active = exercises.filter(e => e.active);
-  const lastEntry = (id) => { const l = workoutLogs.filter(x => x.exerciseId === id); return l.length ? l[l.length - 1] : null; };
-  const sfHistory = (id) => {
-    const ex = exercises.find(e => e.id === id);
-    return workoutLogs.filter(x => x.exerciseId === id).map(x => ({ value: sf(x.sets, x.reps, x.weight, ex?.type), date: x.date }));
-  };
   const todaySets = workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString()).length;
 
-  const previewSF = logSets && logReps ? sf(+logSets, +logReps, +logWeight, logging?.type) : null;
-
-  const saveSet = () => {
-    onLogSet(logging.id, { sets: +logSets, reps: +logReps, weight: logging.type === "weighted" ? +logWeight : 0, notes: logNotes, date: new Date().toISOString() });
-    setLogging(null); setLogWeight(""); setLogNotes("");
+  const lastEntry = (id) => {
+    const logs = workoutLogs.filter(x => x.exerciseId === id);
+    return logs.length ? logs[logs.length - 1] : null;
   };
 
-  // Group order
+  const pfHistory = (id) => workoutLogs.filter(x => x.exerciseId === id).map(x => {
+    const ex = exercises.find(e => e.id === id);
+    return { value: calcPF(x.sets, x.reps, x.weight, ex?.type, ex?.laterality), date: x.date };
+  });
+
+  const previewPF = logSets && logReps && logging
+    ? calcPF(+logSets, +logReps, +logWeight, logging.type, logging.laterality) : null;
+
+  const openLog = (ex) => {
+    const last = lastEntry(ex.id);
+    setLogging(ex);
+    setLogSets(last?.sets?.toString() || ex.defaultSets || "3");
+    setLogReps(last?.reps?.toString() || ex.defaultReps || "10");
+    setLogWeight(last?.weight?.toString() || "0");
+    setLogNotes("");
+  };
+
+  const saveExercise = async () => {
+    setSaveStatus("saving");
+    const entry = { sets: +logSets, reps: +logReps, weight: +logWeight, notes: logNotes, date: new Date().toISOString() };
+    const ok = await onLogExercise(logging.id, entry);
+    setSaveStatus(ok ? "saved" : "error");
+    setTimeout(() => setSaveStatus(null), 3000);
+    setLogging(null);
+  };
+
   const GROUP_ORDER = ["Warm-up", "Chest", "Back", "Glutes", "Hamstrings", "Legs", "Shoulders", "Arms", "Core"];
   const byGroup = {};
   GROUP_ORDER.forEach(g => { byGroup[g] = []; });
-  active.forEach(e => { if (byGroup[e.muscleGroup]) byGroup[e.muscleGroup].push(e); else { byGroup[e.muscleGroup] = [e]; } });
+  exercises.filter(e => e.active).forEach(e => { (byGroup[e.muscleGroup] || (byGroup[e.muscleGroup] = [])).push(e); });
 
   return (
-    <div style={{ display: "flex", gap: 24, height: "100%" }}>
-      {/* Left: exercise list */}
+    <div style={{ display: "flex", gap: 24 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
-            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · {todaySets} sets logged today</div>
+            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · {todaySets} exercises logged today</div>
           </div>
+          <SaveStatus status={saveStatus} />
         </div>
 
-        {GROUP_ORDER.filter(g => byGroup[g] && byGroup[g].length > 0).map((group) => (
+        {GROUP_ORDER.filter(g => byGroup[g]?.length > 0).map(group => (
           <div key={group} style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 3, height: 16, background: MUSCLE_COLORS[group] || "#4B5563", borderRadius: 2 }} />
@@ -281,41 +321,38 @@ function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {byGroup[group].map(ex => {
                 const last = lastEntry(ex.id);
-                const hist = sfHistory(ex.id);
-                const latestSF = hist.length ? hist[hist.length - 1].value : null;
+                const hist = pfHistory(ex.id);
+                const latestPF = hist.length ? hist[hist.length - 1].value : null;
                 return (
                   <Card key={ex.id} style={{ padding: "14px 20px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 600, color: "#E8EAF0", fontSize: 15 }}>{ex.name}</span>
-                          {ex.superset && (
-                            <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
-                              ⚡ SUPERSET w/ {ex.superset}
-                            </span>
-                          )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                          <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 15 }}>{ex.name}</span>
+                          {ex.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>UNILATERAL</span>}
+                          {ex.superset && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>⚡ SS w/ {ex.superset}</span>}
                           {ex.flag && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{ex.flag}</span>}
                         </div>
                         {last ? (
-                          <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
-                            Last: {last.sets}×{last.reps} @ {last.weight} lbs — {fmtDate(last.date)}
+                          <div style={{ color: "#8B92A5", fontSize: 12 }}>
+                            Last: {last.sets}×{last.reps}{last.weight ? ` @ ${last.weight} lbs` : ""} — PF {calcPF(last.sets, last.reps, last.weight, ex.type, ex.laterality).toLocaleString()} — {fmtDate(last.date)}
                           </div>
                         ) : (
-                          <div style={{ color: "#3A3D4A", fontSize: 12, marginTop: 2 }}>No previous sessions</div>
+                          <div style={{ color: "#3A3D4A", fontSize: 12 }}>No previous sessions</div>
                         )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                         <div style={{ textAlign: "right" }}>
                           <Sparkline data={hist} width={100} height={36} />
-                          {latestSF && <div style={{ color: "#E8A838", fontSize: 11, fontWeight: 700, marginTop: 2 }}>SF {latestSF.toLocaleString()}</div>}
+                          {latestPF && <div style={{ color: "#E8A838", fontSize: 11, fontWeight: 700, marginTop: 2 }}>PF {latestPF.toLocaleString()}</div>}
                         </div>
                         <button onClick={() => setFormGuide(ex)}
-                          style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "7px 12px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                          style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "10px 14px", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", height: 44 }}>
                           Form Guide
                         </button>
-                        <button onClick={() => { setLogging(ex); setLogSets(ex.defaultSets || "3"); setLogReps(ex.defaultReps || "10"); setLogWeight(""); setLogNotes(""); }}
-                          style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 7, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                          + Log Set
+                        <button onClick={() => openLog(ex)}
+                          style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 7, padding: "10px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", height: 44 }}>
+                          + Log Exercise
                         </button>
                       </div>
                     </div>
@@ -326,42 +363,31 @@ function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
           </div>
         ))}
 
-        {/* Alfredson Protocol */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <div style={{ width: 3, height: 16, background: "#4AD9D9", borderRadius: 2 }} />
-            <span style={{ color: "#4AD9D9", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Daily Protocol</span>
-            <span style={{ color: "#4B5563", fontSize: 11 }}>— every day, not just workout days</span>
-          </div>
-          <Card style={{ border: "1px solid #4AD9D933", padding: "16px 20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 15 }}>Alfredson Eccentric Calf Protocol</span>
-                  <span style={{ background: "#4AD9D922", color: "#4AD9D9", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>Plantar Fasciitis Rx</span>
-                </div>
-                <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 10 }}>3×15 each leg · Straight knee + Bent knee · Twice per day · 12-week commitment</div>
-                <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#8B92A5", lineHeight: 1.6 }}>
-                  <strong style={{ color: "#C8CDD8" }}>How:</strong> Stand on a step, heel hanging off edge. Rise on both feet. Lower slowly on affected foot only — 3 seconds down. That eccentric is the medicine.
-                  <br /><span style={{ color: "#E8A838", fontWeight: 600 }}>⚠️ Pain during this protocol is expected and acceptable. Push through — research shows better outcomes for those who do.</span>
-                </div>
+        {/* Alfredson reminder */}
+        <Card style={{ border: "1px solid #4AD9D933", marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ color: "#4AD9D9", fontWeight: 700, fontSize: 14 }}>Alfredson Eccentric Calf Protocol</span>
+                <span style={{ background: "#4AD9D922", color: "#4AD9D9", padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>DAILY</span>
               </div>
-              <div style={{ textAlign: "right", marginLeft: 20, flexShrink: 0 }}>
-                <div style={{ color: "#4AD9D9", fontSize: 26, fontWeight: 800 }}>2×</div>
-                <div style={{ color: "#4B5563", fontSize: 11 }}>per day</div>
-                <div style={{ color: "#4AD9D9", fontSize: 14, fontWeight: 700, marginTop: 4 }}>12 wks</div>
-              </div>
+              <div style={{ color: "#8B92A5", fontSize: 12 }}>3×15 each leg · Straight + Bent knee · Twice per day · 12-week commitment</div>
+              <div style={{ color: "#E8A838", fontSize: 11, marginTop: 4 }}>⚠️ Pain during this protocol is expected and acceptable — push through.</div>
             </div>
-          </Card>
-        </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ color: "#4AD9D9", fontSize: 26, fontWeight: 800 }}>2×</div>
+              <div style={{ color: "#4B5563", fontSize: 11 }}>per day</div>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Right: today's log */}
+      {/* Today's log sidebar */}
       <div style={{ width: 280, flexShrink: 0 }}>
         <Card style={{ position: "sticky", top: 0 }}>
           <SectionLabel>Today's Log</SectionLabel>
           {workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString()).length === 0 ? (
-            <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sets logged yet today</div>
+            <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No exercises logged yet today</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[...workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString())].reverse().map((l, i) => {
@@ -370,12 +396,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
                   <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "#C8CDD8", fontSize: 13, fontWeight: 600 }}>{ex?.name}</span>
-                      <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>{sf(l.sets, l.reps, l.weight, ex?.type).toLocaleString()}</span>
+                      <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>PF {calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality).toLocaleString()}</span>
                     </div>
                     <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
-                      {ex?.type === "weighted" ? `${l.sets} sets × ${l.reps} reps @ ${l.weight} lbs` : `${l.sets} sets × ${l.reps} reps`}
+                      {l.sets}×{l.reps}{l.weight ? ` @ ${l.weight} lbs` : ""}
+                      {ex?.laterality === "unilateral" && <span style={{ color: "#7B68EE", marginLeft: 6, fontSize: 11 }}>×2 sides</span>}
                     </div>
-                    {l.notes && <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3, fontStyle: "italic" }}>{l.notes}</div>}
                   </div>
                 );
               })}
@@ -386,49 +412,57 @@ function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
 
       {formGuide && (
         <Modal title={formGuide.name} onClose={() => setFormGuide(null)}>
-          <Pill label={formGuide.muscleGroup} color={MUSCLE_COLORS[formGuide.muscleGroup] || "#4B5563"} />
-
-          <p style={{ color: "#C8CDD8", fontSize: 15, lineHeight: 1.8, margin: "16px 0 0" }}>{FORM_GUIDES[formGuide.name]}</p>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <Pill label={formGuide.muscleGroup} color={MUSCLE_COLORS[formGuide.muscleGroup] || "#4B5563"} />
+            <Pill label={formGuide.laterality === "unilateral" ? "Unilateral" : "Bilateral"} color="#7B68EE" />
+          </div>
+          <p style={{ color: "#C8CDD8", fontSize: 15, lineHeight: 1.8, margin: 0 }}>{FORM_GUIDES[formGuide.name]}</p>
         </Modal>
       )}
 
       {logging && (
-        <Modal title={`Log Set — ${logging.name}`} onClose={() => setLogging(null)}>
-          <div style={{ display: "grid", gridTemplateColumns: logging.type === "weighted" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
-            {[["Sets", logSets, setLogSets], ["Reps", logReps, setLogReps]].map(([lbl, val, set]) => (
-              <div key={lbl}>
-                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>{lbl}</label>
-                <input type="number" value={val} onChange={e => set(e.target.value)} style={inputStyle} />
+        <Modal title={`Log Exercise — ${logging.name}`} onClose={() => setLogging(null)}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+            <Pill label={logging.muscleGroup} color={MUSCLE_COLORS[logging.muscleGroup] || "#4B5563"} />
+            {logging.laterality === "unilateral" && <Pill label="Enter reps per side — PF auto-doubled" color="#7B68EE" />}
+          </div>
+
+          {/* +/- controls */}
+          <div style={{ display: "grid", gridTemplateColumns: logging.type === "weighted" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 16, marginBottom: 20 }}>
+            {[
+              ["Sets", logSets, setLogSets, 1, 10, 1],
+              ["Reps" + (logging.laterality === "unilateral" ? " (per side)" : ""), logReps, setLogReps, 1, 50, 1],
+              ...(logging.type === "weighted" ? [["Weight (lbs)", logWeight, setLogWeight, 0, 200, 5]] : []),
+            ].map(([label, val, setter, min, max, step]) => (
+              <div key={label}>
+                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 8, textAlign: "center" }}>{label}</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => setter(v => String(Math.max(min, +v - step)))}
+                    style={{ background: "#2A2D3A", color: "#E8EAF0", border: "none", borderRadius: 8, width: 48, height: 52, fontSize: 22, cursor: "pointer", flexShrink: 0 }}>−</button>
+                  <div style={{ flex: 1, textAlign: "center", fontSize: 26, fontWeight: 800, color: "#E8EAF0", fontVariantNumeric: "tabular-nums" }}>{val}</div>
+                  <button onClick={() => setter(v => String(Math.min(max, +v + step)))}
+                    style={{ background: "#2A2D3A", color: "#E8EAF0", border: "none", borderRadius: 8, width: 48, height: 52, fontSize: 22, cursor: "pointer", flexShrink: 0 }}>+</button>
+                </div>
               </div>
             ))}
-            {logging.type === "weighted" && (
-              <div>
-                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Weight (lbs)</label>
-                <input type="number" value={logWeight} onChange={e => setLogWeight(e.target.value)} style={inputStyle} placeholder="0" />
-              </div>
-            )}
           </div>
-          {logging.type !== "weighted" && (
-            <div style={{ background: "#0F1117", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 12, color: "#8B92A5" }}>
-              {logging.type === "bodyweight"
-                ? "💪 Bodyweight exercise — SF calculated as sets × reps × 10"
-                : "🎗️ Banded exercise — SF calculated as sets × reps"}
-            </div>
-          )}
-          {previewSF !== null && (
+
+          {previewPF !== null && (
             <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 16px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: "#8B92A5", fontSize: 13 }}>Strength Factor Preview</span>
-              <span style={{ color: "#E8A838", fontSize: 26, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{previewSF.toLocaleString()}</span>
+              <span style={{ color: "#8B92A5", fontSize: 13 }}>Prime Factor</span>
+              <span style={{ color: "#E8A838", fontSize: 28, fontWeight: 800 }}>{previewPF.toLocaleString()}</span>
             </div>
           )}
-          <div style={{ marginBottom: 18 }}>
+
+          <div style={{ marginBottom: 20 }}>
             <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Notes (optional)</label>
             <textarea value={logNotes} onChange={e => setLogNotes(e.target.value)} rows={2}
-              style={{ ...inputStyle, resize: "vertical" }} placeholder="How it felt..." />
+              style={{ ...inputStyle, resize: "none" }} placeholder="How it felt..." />
           </div>
-          <button onClick={saveSet}
-            style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 9, padding: "13px 0", width: "100%", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
-            Save Set
+
+          <button onClick={saveExercise}
+            style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, padding: "16px 0", width: "100%", fontSize: 18, fontWeight: 800, cursor: "pointer" }}>
+            SAVE EXERCISE
           </button>
         </Modal>
       )}
@@ -439,28 +473,22 @@ function WorkoutTab({ exercises, workoutLogs, onLogSet }) {
 // ─── PROGRESS TAB ─────────────────────────────────────────────────────────────
 function ProgressTab({ exercises, workoutLogs }) {
   const [selected, setSelected] = useState(null);
-  const [view, setView] = useState("dashboard"); // "dashboard" | "detail"
+  const [view, setView] = useState("dashboard");
 
-  // ── Per-exercise stats ──────────────────────────────────────────────────────
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => l.exerciseId === ex.id);
-    const sfSeries = logs.map(l => ({ value: sf(l.sets, l.reps, l.weight, ex.type), date: l.date }));
-    const first = sfSeries[0]?.value;
-    const last  = sfSeries[sfSeries.length - 1]?.value;
-    const prev  = sfSeries[sfSeries.length - 2]?.value;
-    const totalGain  = first && last  ? ((last  - first) / first * 100) : null;
-    const sessionGain = last && prev  ? ((last  - prev)  / prev  * 100) : null;
-    const peak = sfSeries.length ? Math.max(...sfSeries.map(d => d.value)) : null;
-    return { ex, logs, sfSeries, first, last, prev, totalGain, sessionGain, peak };
+    const pfSeries = logs.map(l => ({ value: calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality), date: l.date }));
+    const first = pfSeries[0]?.value, last = pfSeries[pfSeries.length - 1]?.value;
+    const prev  = pfSeries[pfSeries.length - 2]?.value;
+    const totalGain   = first && last  ? ((last  - first) / first * 100) : null;
+    const sessionGain = last  && prev  ? ((last  - prev)  / prev  * 100) : null;
+    const peak = pfSeries.length ? Math.max(...pfSeries.map(d => d.value)) : null;
+    return { ex, logs, pfSeries, first, last, prev, totalGain, sessionGain, peak };
   });
 
-  // ── Overall Progress Score (avg of all exercises with ≥2 sessions) ──────────
   const scored = exStats.filter(s => s.totalGain !== null);
-  const overallScore = scored.length
-    ? scored.reduce((a, s) => a + s.totalGain, 0) / scored.length
-    : null;
+  const overallScore = scored.length ? scored.reduce((a, s) => a + s.totalGain, 0) / scored.length : null;
 
-  // ── Group scores ────────────────────────────────────────────────────────────
   const groupScores = {};
   scored.forEach(s => {
     const g = s.ex.muscleGroup;
@@ -471,21 +499,15 @@ function ProgressTab({ exercises, workoutLogs }) {
     group: g, avg: vals.reduce((a, v) => a + v, 0) / vals.length,
   })).sort((a, b) => b.avg - a.avg);
 
-  // ── Detail view data ────────────────────────────────────────────────────────
   const selStats = selected ? exStats.find(s => s.ex.id === selected) : null;
-
-  const openDetail = (id) => { setSelected(id); setView("detail"); };
-
-  // ── Trend direction for overall ─────────────────────────────────────────────
   const trendColor = overallScore === null ? "#4B5563" : overallScore >= 0 ? "#4AD99A" : "#D94A4A";
 
   return (
     <div>
-      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Progress Dashboard</h2>
-          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Normalized across all exercises</div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Prime Factor Dashboard</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Normalized progress across all exercises</div>
         </div>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
           {[["dashboard", "Dashboard"], ["detail", "Exercise Detail"]].map(([id, label]) => (
@@ -500,31 +522,27 @@ function ProgressTab({ exercises, workoutLogs }) {
 
       {view === "dashboard" && (
         <div>
-          {/* Top row: Overall score + group scores */}
           <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 20, marginBottom: 20 }}>
-
-            {/* Overall Progress Score */}
             <Card style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, border: `1px solid ${trendColor}44` }}>
-              <div style={{ color: "#8B92A5", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Overall Progress Score</div>
+              <div style={{ color: "#8B92A5", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Overall Prime Factor Score</div>
               {overallScore !== null ? (
                 <>
-                  <div style={{ color: trendColor, fontSize: 56, fontWeight: 800, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ color: trendColor, fontSize: 52, fontWeight: 800, lineHeight: 1 }}>
                     {overallScore >= 0 ? "+" : ""}{overallScore.toFixed(1)}%
                   </div>
                   <div style={{ color: "#4B5563", fontSize: 12, marginTop: 8, textAlign: "center" }}>
-                    avg gain from first → latest session<br />across {scored.length} exercise{scored.length !== 1 ? "s" : ""}
+                    avg gain across {scored.length} exercise{scored.length !== 1 ? "s" : ""}
                   </div>
                 </>
               ) : (
-                <div style={{ color: "#3A3D4A", fontSize: 14, textAlign: "center" }}>Log at least 2 sessions per exercise to see your score</div>
+                <div style={{ color: "#3A3D4A", fontSize: 14, textAlign: "center" }}>Log at least 2 sessions to see your score</div>
               )}
             </Card>
 
-            {/* Group scores */}
             <Card>
-              <SectionLabel>Progress by Muscle Group</SectionLabel>
+              <SectionLabel>Prime Factor by Muscle Group</SectionLabel>
               {groupAvgs.length === 0 ? (
-                <div style={{ color: "#3A3D4A", fontSize: 13 }}>No data yet — log some sessions first</div>
+                <div style={{ color: "#3A3D4A", fontSize: 13 }}>No data yet</div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {groupAvgs.map(({ group, avg }) => {
@@ -539,7 +557,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                           </span>
                         </div>
                         <div style={{ background: "#0F1117", borderRadius: 4, height: 6 }}>
-                          <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4, transition: "width 0.4s" }} />
+                          <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 4 }} />
                         </div>
                       </div>
                     );
@@ -549,17 +567,14 @@ function ProgressTab({ exercises, workoutLogs }) {
             </Card>
           </div>
 
-          {/* Exercise grid */}
           <SectionLabel>All Exercises — Click to Drill Down</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {exStats.map(({ ex, sfSeries, totalGain, sessionGain, last }) => {
+            {exStats.map(({ ex, pfSeries, totalGain, sessionGain }) => {
               const color = MUSCLE_COLORS[ex.muscleGroup] || "#4B5563";
-              const hasData = sfSeries.length > 0;
               const gainColor = totalGain === null ? "#4B5563" : totalGain >= 0 ? "#4AD99A" : "#D94A4A";
               return (
-                <div key={ex.id} onClick={() => openDetail(ex.id)}
-                  style={{ background: "#1A1D26", border: `1px solid #2A2D3A`, borderRadius: 10, padding: "14px 16px", cursor: "pointer",
-                    transition: "border-color 0.15s" }}
+                <div key={ex.id} onClick={() => { setSelected(ex.id); setView("detail"); }}
+                  style={{ background: "#1A1D26", border: "1px solid #2A2D3A", borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = color}
                   onMouseLeave={e => e.currentTarget.style.borderColor = "#2A2D3A"}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -570,9 +585,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                     <div style={{ textAlign: "right" }}>
                       {totalGain !== null ? (
                         <>
-                          <div style={{ color: gainColor, fontSize: 18, fontWeight: 800 }}>
-                            {totalGain >= 0 ? "+" : ""}{totalGain.toFixed(1)}%
-                          </div>
+                          <div style={{ color: gainColor, fontSize: 18, fontWeight: 800 }}>{totalGain >= 0 ? "+" : ""}{totalGain.toFixed(1)}%</div>
                           <div style={{ color: "#4B5563", fontSize: 10 }}>total gain</div>
                         </>
                       ) : (
@@ -582,14 +595,12 @@ function ProgressTab({ exercises, workoutLogs }) {
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                     <div>
-                      <Sparkline data={sfSeries} width={90} height={32} />
-                      <div style={{ color: "#4B5563", fontSize: 10, marginTop: 2 }}>{sfSeries.length} session{sfSeries.length !== 1 ? "s" : ""}</div>
+                      <Sparkline data={pfSeries} width={90} height={32} />
+                      <div style={{ color: "#4B5563", fontSize: 10, marginTop: 2 }}>{pfSeries.length} session{pfSeries.length !== 1 ? "s" : ""}</div>
                     </div>
                     {sessionGain !== null && (
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ color: sessionGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 12, fontWeight: 700 }}>
-                          {sessionGain >= 0 ? "+" : ""}{sessionGain.toFixed(1)}%
-                        </div>
+                        <div style={{ color: sessionGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 12, fontWeight: 700 }}>{sessionGain >= 0 ? "+" : ""}{sessionGain.toFixed(1)}%</div>
                         <div style={{ color: "#4B5563", fontSize: 10 }}>last session</div>
                       </div>
                     )}
@@ -603,15 +614,13 @@ function ProgressTab({ exercises, workoutLogs }) {
 
       {view === "detail" && (
         <div>
-          {/* Exercise selector */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
             {exercises.filter(e => e.active).map(e => (
               <button key={e.id} onClick={() => setSelected(e.id)}
                 style={{ background: selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#1A1D26",
                   color: selected === e.id ? "#fff" : "#8B92A5",
                   border: `1px solid ${selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#2A2D3A"}`,
-                  borderRadius: 20, padding: "7px 16px", fontSize: 13, cursor: "pointer",
-                  fontWeight: selected === e.id ? 700 : 400 }}>
+                  borderRadius: 20, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontWeight: selected === e.id ? 700 : 400 }}>
                 {e.name}
               </button>
             ))}
@@ -624,7 +633,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                   <div>
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#E8EAF0" }}>{selStats.ex.name}</div>
                     <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
-                      {selStats.ex.type === "weighted" ? "SF = sets × reps × weight" : selStats.ex.type === "bodyweight" ? "SF = sets × reps × 10" : "SF = sets × reps"}
+                      {selStats.ex.laterality === "unilateral" ? "Unilateral — PF = sets × reps × weight × 2" : "Bilateral — PF = sets × reps × weight"}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 16 }}>
@@ -636,52 +645,57 @@ function ProgressTab({ exercises, workoutLogs }) {
                         <div style={{ color: "#4B5563", fontSize: 11 }}>total gain</div>
                       </div>
                     )}
-                    {selStats.sessionGain !== null && (
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ color: selStats.sessionGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 22, fontWeight: 800 }}>
-                          {selStats.sessionGain >= 0 ? "+" : ""}{selStats.sessionGain.toFixed(1)}%
-                        </div>
-                        <div style={{ color: "#4B5563", fontSize: 11 }}>vs last session</div>
-                      </div>
-                    )}
                     {selStats.peak && (
                       <div style={{ textAlign: "right" }}>
                         <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{selStats.peak.toLocaleString()}</div>
-                        <div style={{ color: "#4B5563", fontSize: 11 }}>peak SF</div>
+                        <div style={{ color: "#4B5563", fontSize: 11 }}>peak PF</div>
                       </div>
                     )}
                   </div>
                 </div>
-                <BarChart data={selStats.sfSeries.slice(-12)} height={160} />
+                {/* Bar chart */}
+                {selStats.pfSeries.length === 0 ? (
+                  <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 13 }}>No sessions logged yet</div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 140 }}>
+                    {selStats.pfSeries.slice(-12).map((d, i, arr) => {
+                      const maxV = Math.max(...arr.map(x => x.value));
+                      const h = Math.max(6, (d.value / maxV) * 120);
+                      const isLast = i === arr.length - 1;
+                      return (
+                        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                          {isLast && <div style={{ fontSize: 10, color: "#E8A838", fontWeight: 700 }}>{d.value.toLocaleString()}</div>}
+                          <div style={{ width: "100%", height: h, background: isLast ? "#E8A838" : "#4A90D9", borderRadius: "4px 4px 0 0", opacity: isLast ? 1 : 0.5 }} />
+                          <div style={{ fontSize: 8, color: "#3A3D4A", transform: "rotate(-30deg)", transformOrigin: "top center", marginTop: 4 }}>{fmtDate(d.date)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </Card>
 
               <Card>
                 <SectionLabel>Session History</SectionLabel>
-                {selStats.logs.length === 0 ? (
-                  <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
-                    {[...selStats.logs].reverse().map((l, i) => (
-                      <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
-                          <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{sf(l.sets, l.reps, l.weight, selStats.ex.type).toLocaleString()}</span>
-                        </div>
-                        <div style={{ color: "#C8CDD8", fontSize: 13, marginTop: 2 }}>
-                          {selStats.ex.type === "weighted" ? `${l.sets}×${l.reps} @ ${l.weight} lbs` : `${l.sets}×${l.reps}`}
-                        </div>
-                        {l.notes && <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2, fontStyle: "italic" }}>{l.notes}</div>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
+                  {selStats.logs.length === 0 ? (
+                    <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
+                  ) : [...selStats.logs].reverse().map((l, i) => (
+                    <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
+                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>PF {calcPF(l.sets, l.reps, l.weight, selStats.ex.type, selStats.ex.laterality).toLocaleString()}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div style={{ color: "#C8CDD8", fontSize: 13, marginTop: 2 }}>
+                        {l.sets}×{l.reps}{l.weight ? ` @ ${l.weight} lbs` : ""}
+                        {selStats.ex.laterality === "unilateral" && <span style={{ color: "#7B68EE", marginLeft: 6, fontSize: 11 }}>×2 sides</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </Card>
             </div>
           )}
-
-          {!selected && (
-            <div style={{ color: "#3A3D4A", textAlign: "center", padding: "60px 0", fontSize: 14 }}>Select an exercise above to see its detail</div>
-          )}
+          {!selected && <div style={{ color: "#3A3D4A", textAlign: "center", padding: "60px 0", fontSize: 14 }}>Select an exercise above to see detail</div>}
         </div>
       )}
     </div>
@@ -692,11 +706,14 @@ function ProgressTab({ exercises, workoutLogs }) {
 function BodyTab({ bodyLogs, onSave }) {
   const [showForm, setShowForm] = useState(false);
   const [fields, setFields] = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
-
+  const [saveStatus, setSaveStatus] = useState(null);
   const setF = (k) => (e) => setFields(f => ({ ...f, [k]: e.target.value }));
 
-  const handleSave = () => {
-    onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, Number(v) || 0])) });
+  const handleSave = async () => {
+    setSaveStatus("saving");
+    const ok = await onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, Number(v) || 0])) });
+    setSaveStatus(ok ? "saved" : "error");
+    setTimeout(() => setSaveStatus(null), 3000);
     setShowForm(false);
     setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
   };
@@ -704,30 +721,28 @@ function BodyTab({ bodyLogs, onSave }) {
   const recent = [...bodyLogs].reverse().slice(0, 10);
   const weightData = bodyLogs.filter(l => l.weight).map(l => ({ value: l.weight, date: l.date }));
   const latestWeight = weightData.length ? weightData[weightData.length - 1].value : null;
-  const startWeight = weightData.length ? weightData[0].value : null;
-
-  const MEASURES = [
-    { key: "chest", label: "Chest" }, { key: "waist", label: "Waist" },
-    { key: "hips", label: "Hips" }, { key: "glutes", label: "Glutes" },
-    { key: "thighs", label: "Thighs" }, { key: "arms", label: "Arms" },
-  ];
+  const startWeight  = weightData.length ? weightData[0].value : null;
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Body Tracking</h2>
-        <button onClick={() => setShowForm(true)}
-          style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-          + Log Today
-        </button>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Body Tracking</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Log every 3 days</div>
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <SaveStatus status={saveStatus} />
+          <button onClick={() => setShowForm(true)}
+            style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            + Log Today
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
         <Card>
           <SectionLabel>Current Weight</SectionLabel>
-          <div style={{ fontSize: 40, fontWeight: 800, color: "#E8EAF0", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-            {latestWeight ? `${latestWeight}` : "—"}
-          </div>
+          <div style={{ fontSize: 40, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{latestWeight ? `${latestWeight}` : "—"}</div>
           <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 4 }}>lbs</div>
           {startWeight && latestWeight && startWeight !== latestWeight && (
             <div style={{ color: latestWeight < startWeight ? "#4AD99A" : "#D94A4A", fontSize: 14, fontWeight: 700, marginTop: 8 }}>
@@ -740,43 +755,38 @@ function BodyTab({ bodyLogs, onSave }) {
           {weightData.length < 2 ? (
             <div style={{ color: "#3A3D4A", fontSize: 13 }}>Log at least 2 entries to see trend</div>
           ) : (
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 80 }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 70 }}>
               {weightData.slice(-20).map((d, i) => {
                 const vals = weightData.slice(-20).map(x => x.value);
                 const min = Math.min(...vals), max = Math.max(...vals);
-                const h = Math.max(4, ((d.value - min) / (max - min + 0.1)) * 60 + 12);
+                const h = Math.max(4, ((d.value - min) / (max - min + 0.1)) * 60 + 10);
                 const isLast = i === Math.min(weightData.length, 20) - 1;
-                return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    {isLast && <div style={{ color: "#4A90D9", fontSize: 10, marginBottom: 2 }}>{d.value}</div>}
-                    <div style={{ width: "100%", height: h, background: isLast ? "#4A90D9" : "#2A2D3A", borderRadius: "3px 3px 0 0" }} />
-                  </div>
-                );
+                return <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {isLast && <div style={{ color: "#4A90D9", fontSize: 10, marginBottom: 2 }}>{d.value}</div>}
+                  <div style={{ width: "100%", height: h, background: isLast ? "#4A90D9" : "#2A2D3A", borderRadius: "2px 2px 0 0" }} />
+                </div>;
               })}
             </div>
           )}
         </Card>
       </div>
 
-      {/* History table */}
       {recent.length > 0 && (
         <Card>
           <SectionLabel>Measurement History</SectionLabel>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr>
-                  {["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms"].map(h => (
-                    <th key={h} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
-                  ))}
-                </tr>
+                <tr>{["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms"].map(h => (
+                  <th key={h} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
+                ))}</tr>
               </thead>
               <tbody>
                 {recent.map((l, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid #1A1D26" }}>
                     <td style={{ color: "#8B92A5", padding: "8px 12px" }}>{fmtDateLong(l.date)}</td>
                     {["weight", "chest", "waist", "hips", "glutes", "thighs", "arms"].map(k => (
-                      <td key={k} style={{ color: "#C8CDD8", padding: "8px 12px", fontVariantNumeric: "tabular-nums" }}>
+                      <td key={k} style={{ color: k === "glutes" ? "#E87D38" : "#C8CDD8", padding: "8px 12px", fontWeight: k === "glutes" ? 700 : 400 }}>
                         {l[k] ? `${l[k]}${k === "weight" ? " lbs" : '"'}` : "—"}
                       </td>
                     ))}
@@ -791,14 +801,10 @@ function BodyTab({ bodyLogs, onSave }) {
       {showForm && (
         <Modal title="Log Body Measurements" onClose={() => setShowForm(false)} width={520}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
-            <div>
-              <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>Weight (lbs)</label>
-              <input type="number" value={fields.weight} onChange={setF("weight")} style={inputStyle} placeholder="191" />
-            </div>
-            {MEASURES.map(({ key, label }) => (
-              <div key={key}>
-                <label style={{ color: "#8B92A5", fontSize: 11, display: "block", marginBottom: 6 }}>{label} (in)</label>
-                <input type="number" value={fields[key]} onChange={setF(key)} style={inputStyle} />
+            {[["Weight (lbs)", "weight"], ["Chest (in)", "chest"], ["Waist (in)", "waist"], ["Hips (in)", "hips"], ["Glutes (in)", "glutes"], ["Thighs (in)", "thighs"], ["Arms (in)", "arms"]].map(([label, k]) => (
+              <div key={k}>
+                <label style={{ color: k === "glutes" ? "#E87D38" : "#8B92A5", fontSize: 11, display: "block", marginBottom: 6, fontWeight: k === "glutes" ? 700 : 400 }}>{label}{k === "glutes" ? " ★" : ""}</label>
+                <input type="number" value={fields[k]} onChange={setF(k)} style={inputStyle} />
               </div>
             ))}
           </div>
@@ -812,286 +818,190 @@ function BodyTab({ bodyLogs, onSave }) {
   );
 }
 
-// ─── LOG VIEW (edit/delete/date nav) ─────────────────────────────────────────
-function LogView({ nutritionLogs, onSave, onDelete, onEdit, totals, TARGETS }) {
+// ─── NUTRITION TAB ────────────────────────────────────────────────────────────
+function NutritionTab({ nutritionLogs, onSave, onEdit, onDelete }) {
+  const [showAdd, setShowAdd] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toDateString());
   const [editingIdx, setEditingIdx] = useState(null);
   const [editFields, setEditFields] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [addFields, setAddFields] = useState({ calories: "", protein: "", carbs: "", fat: "", notes: "" });
+  const [saveStatus, setSaveStatus] = useState(null);
 
-  const allDates = [...new Set([
-    new Date().toDateString(),
-    ...nutritionLogs.map(l => new Date(l.date).toDateString())
-  ])].sort((a, b) => new Date(b) - new Date(a)).slice(0, 30);
+  const T = NUTRITION_TARGETS;
 
-  const dayLogs = nutritionLogs
-    .map((l, globalIdx) => ({ ...l, globalIdx }))
-    .filter(l => new Date(l.date).toDateString() === selectedDate)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  const dayTotals = dayLogs.reduce((a, l) => ({
+  const today = nutritionLogs.filter(l => new Date(l.date).toDateString() === new Date().toDateString());
+  const todayTotals = today.reduce((a, l) => ({
     calories: a.calories + (l.calories || 0), protein: a.protein + (l.protein || 0),
     carbs: a.carbs + (l.carbs || 0), fat: a.fat + (l.fat || 0),
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
-  const fmtDayLabel = (ds) => {
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    if (ds === today) return "Today";
-    if (ds === yesterday) return "Yesterday";
+  const allDates = [...new Set([new Date().toDateString(), ...nutritionLogs.map(l => new Date(l.date).toDateString())])].sort((a, b) => new Date(b) - new Date(a)).slice(0, 30);
+  const dayLogs = nutritionLogs.map((l, i) => ({ ...l, globalIdx: i })).filter(l => new Date(l.date).toDateString() === selectedDate).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const dayTotals = dayLogs.reduce((a, l) => ({ calories: a.calories + (l.calories || 0), protein: a.protein + (l.protein || 0), carbs: a.carbs + (l.carbs || 0), fat: a.fat + (l.fat || 0) }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+  const fmtDay = (ds) => {
+    const today = new Date().toDateString(), yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (ds === today) return "Today"; if (ds === yesterday) return "Yesterday";
     return new Date(ds).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
-  const startEdit = (entry) => {
-    setEditingIdx(entry.globalIdx);
-    setEditFields({ calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes || "" });
+  const handleAdd = async () => {
+    setSaveStatus("saving");
+    const ok = await onSave({ date: new Date().toISOString(), calories: +addFields.calories, protein: +addFields.protein, carbs: +addFields.carbs, fat: +addFields.fat, notes: addFields.notes });
+    setSaveStatus(ok ? "saved" : "error");
+    setTimeout(() => setSaveStatus(null), 3000);
+    setAddFields({ calories: "", protein: "", carbs: "", fat: "", notes: "" });
+    setShowAdd(false);
   };
 
-  const saveEdit = () => {
-    onEdit(editingIdx, { calories: +editFields.calories, protein: +editFields.protein, carbs: +editFields.carbs, fat: +editFields.fat, notes: editFields.notes });
+  const saveEdit = async () => {
+    await onEdit(editingIdx, { calories: +editFields.calories, protein: +editFields.protein, carbs: +editFields.carbs, fat: +editFields.fat, notes: editFields.notes });
     setEditingIdx(null);
   };
 
-  const handleAdd = () => {
-    onSave({ date: new Date().toISOString(), calories: +addFields.calories, protein: +addFields.protein, carbs: +addFields.carbs, fat: +addFields.fat, notes: addFields.notes });
-    setAddFields({ calories: "", protein: "", carbs: "", fat: "", notes: "" });
-    setShowAddForm(false);
-  };
-
   return (
-    <div style={{ overflowY: "auto", flex: 1 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Nutrition Log</h2>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <SaveStatus status={saveStatus} />
+            <button onClick={() => setShowAdd(true)}
+              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              + Add Meal
+            </button>
+          </div>
+        </div>
+
+        {/* Date nav */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {allDates.map(ds => (
             <button key={ds} onClick={() => { setSelectedDate(ds); setEditingIdx(null); }}
               style={{ background: selectedDate === ds ? "#4A90D9" : "#1A1D26", color: selectedDate === ds ? "#fff" : "#8B92A5",
                 border: `1px solid ${selectedDate === ds ? "#4A90D9" : "#2A2D3A"}`, borderRadius: 20,
                 padding: "5px 14px", fontSize: 12, cursor: "pointer", fontWeight: selectedDate === ds ? 700 : 400 }}>
-              {fmtDayLabel(ds)}
+              {fmtDay(ds)}
             </button>
           ))}
         </div>
-        <button onClick={() => setShowAddForm(true)}
-          style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-          + Add Entry
-        </button>
-      </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{fmtDayLabel(selectedDate)}</div>
-          <div style={{ color: "#8B92A5", fontSize: 12 }}>{dayLogs.length} meal{dayLogs.length !== 1 ? "s" : ""} logged</div>
-        </div>
-        <div style={{ display: "flex", gap: 20 }}>
-          {[
-            { label: "Calories", val: dayTotals.calories, target: TARGETS.calories, color: "#E8A838", unit: "kcal" },
-            { label: "Protein",  val: dayTotals.protein,  target: TARGETS.protein,  color: "#4A90D9", unit: "g" },
-            { label: "Carbs",    val: dayTotals.carbs,    target: TARGETS.carbs,    color: "#7B68EE", unit: "g" },
-            { label: "Fat",      val: dayTotals.fat,      target: TARGETS.fat,      color: "#4AD9A0", unit: "g" },
-          ].map(({ label, val, target, color, unit }) => {
-            const pct = Math.min(100, (val / target) * 100);
-            return (
+        {/* Day summary */}
+        <Card style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ color: "#E8EAF0", fontWeight: 700 }}>{fmtDay(selectedDate)}</div>
+            <div style={{ color: "#8B92A5", fontSize: 12 }}>{dayLogs.length} meal{dayLogs.length !== 1 ? "s" : ""}</div>
+          </div>
+          <div style={{ display: "flex", gap: 16 }}>
+            {[["Calories", dayTotals.calories, T.calories, "#E8A838", "kcal"],
+              ["Protein",  dayTotals.protein,  T.protein,  "#4A90D9", "g"],
+              ["Carbs",    dayTotals.carbs,    T.carbs,    "#7B68EE", "g"],
+              ["Fat",      dayTotals.fat,      T.fat,      "#4AD9A0", "g"]].map(([label, val, target, color, unit]) => (
               <div key={label} style={{ flex: 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                   <span style={{ color: "#8B92A5", fontSize: 11 }}>{label}</span>
                   <span style={{ color, fontSize: 11, fontWeight: 700 }}>{val}<span style={{ color: "#4B5563" }}>/{target}{unit}</span></span>
                 </div>
                 <div style={{ background: "#0F1117", borderRadius: 3, height: 4 }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3 }} />
+                  <div style={{ width: `${Math.min(100, (val/target)*100)}%`, height: "100%", background: color, borderRadius: 3 }} />
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {showAddForm && (
-        <Card style={{ marginBottom: 16, border: "1px solid #4A90D944" }}>
-          <SectionLabel>Add Meal Entry</SectionLabel>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-            {[["Calories", "calories"], ["Protein (g)", "protein"], ["Carbs (g)", "carbs"], ["Fat (g)", "fat"]].map(([lbl, k]) => (
-              <div key={k}>
-                <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
-                <input type="number" value={addFields[k]} onChange={e => setAddFields(f => ({ ...f, [k]: e.target.value }))} style={inputStyle} />
-              </div>
             ))}
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>Meal Name</label>
-            <input value={addFields.notes} onChange={e => setAddFields(f => ({ ...f, notes: e.target.value }))} style={inputStyle} placeholder="e.g. Breakfast — eggs + sourdough" />
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleAdd} style={{ flex: 1, background: "#4A90D9", color: "#fff", border: "none", borderRadius: 7, padding: "9px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
-            <button onClick={() => setShowAddForm(false)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
         </Card>
-      )}
 
-      {dayLogs.length === 0 ? (
-        <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 14 }}>No meals logged for this day — use + Add Entry above.</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {dayLogs.map((entry, i) => (
-            <Card key={i} style={{ padding: "14px 16px" }}>
-              {editingIdx === entry.globalIdx ? (
-                <div>
-                  <div style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Editing: {entry.notes || "Meal"}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    {[["Calories", "calories"], ["Protein (g)", "protein"], ["Carbs (g)", "carbs"], ["Fat (g)", "fat"]].map(([lbl, k]) => (
-                      <div key={k}>
-                        <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
-                        <input type="number" value={editFields[k]} onChange={e => setEditFields(f => ({ ...f, [k]: e.target.value }))} style={inputStyle} />
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>Meal Name</label>
-                    <input value={editFields.notes} onChange={e => setEditFields(f => ({ ...f, notes: e.target.value }))} style={inputStyle} />
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={saveEdit} style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save Changes</button>
-                    <button onClick={() => setEditingIdx(null)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                  </div>
+        {showAdd && (
+          <Card style={{ marginBottom: 16, border: "1px solid #4A90D944" }}>
+            <SectionLabel>Add Meal Entry</SectionLabel>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {[["Calories", "calories"], ["Protein (g)", "protein"], ["Carbs (g)", "carbs"], ["Fat (g)", "fat"]].map(([lbl, k]) => (
+                <div key={k}>
+                  <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
+                  <input type="number" value={addFields[k]} onChange={e => setAddFields(f => ({ ...f, [k]: e.target.value }))} style={inputStyle} />
                 </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                      <span style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 14 }}>{entry.notes || "Meal"}</span>
-                      <span style={{ color: "#4B5563", fontSize: 11 }}>{new Date(entry.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 16 }}>
-                      <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{entry.calories} kcal</span>
-                      <span style={{ color: "#4A90D9", fontSize: 13 }}>{entry.protein}g protein</span>
-                      <span style={{ color: "#7B68EE", fontSize: 13 }}>{entry.carbs}g carbs</span>
-                      <span style={{ color: "#4AD9A0", fontSize: 13 }}>{entry.fat}g fat</span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => startEdit(entry)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>✏️ Edit</button>
-                    {confirmDelete === entry.globalIdx ? (
-                      <>
-                        <button onClick={() => { onDelete(entry.globalIdx); setConfirmDelete(null); }} style={{ background: "#D94A4A", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>Confirm</button>
-                        <button onClick={() => setConfirmDelete(null)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>✕</button>
-                      </>
-                    ) : (
-                      <button onClick={() => setConfirmDelete(entry.globalIdx)} style={{ background: "#2A2D3A", color: "#4B5563", border: "none", borderRadius: 6, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>🗑️</button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── NUTRITION TAB ────────────────────────────────────────────────────────────
-function NutritionTab({ nutritionLogs, onSave, onEdit, onDelete }) {
-  const [view, setView] = useState("log");
-  const TARGETS = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
-  const today = nutritionLogs.filter(l => new Date(l.date).toDateString() === new Date().toDateString());
-  const totals = today.reduce((a, l) => ({
-    calories: a.calories + l.calories, protein: a.protein + l.protein,
-    carbs: a.carbs + l.carbs, fat: a.fat + l.fat,
-  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
-  const totalScheduleCalories = DAILY_SCHEDULE.filter(m => m.calories).reduce((a, m) => a + m.calories, 0);
-  const totalScheduleProtein = DAILY_SCHEDULE.filter(m => m.protein).reduce((a, m) => a + m.protein, 0);
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 20, height: "calc(100vh - 130px)" }}>
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexShrink: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Nutrition</h2>
-          <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-            {[["log", "📊 Daily Log"], ["schedule", "📋 Schedule"], ["macros", "🍩 Macros"]].map(([id, label]) => (
-              <button key={id} onClick={() => setView(id)}
-                style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
-                  border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {view === "log" && (
-          <LogView nutritionLogs={nutritionLogs} onSave={onSave} onDelete={onDelete} onEdit={onEdit} totals={totals} TARGETS={TARGETS} />
+              ))}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>Meal Name</label>
+              <input value={addFields.notes} onChange={e => setAddFields(f => ({ ...f, notes: e.target.value }))} style={inputStyle} placeholder="e.g. Breakfast — eggs + sourdough" />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleAdd} style={{ flex: 1, background: "#4A90D9", color: "#fff", border: "none", borderRadius: 7, padding: "10px 0", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Save</button>
+              <button onClick={() => setShowAdd(false)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "10px 16px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            </div>
+          </Card>
         )}
 
-        {view === "schedule" && (
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {DAILY_SCHEDULE.map((meal, i) => (
-              <div key={i} style={{ display: "flex", gap: 0 }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 32, flexShrink: 0 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: meal.isWorkout ? "#4AD99A" : meal.tagColor, marginTop: 20, flexShrink: 0 }} />
-                  {i < DAILY_SCHEDULE.length - 1 && <div style={{ width: 2, flex: 1, background: "#2A2D3A", minHeight: 16 }} />}
-                </div>
-                <div style={{ flex: 1, marginBottom: 10, marginLeft: 8 }}>
-                  {meal.isWorkout ? (
-                    <div style={{ background: "#4AD99A11", border: "1px dashed #4AD99A44", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 20 }}>💪</span>
-                      <div>
-                        <div style={{ color: "#4AD99A", fontWeight: 700, fontSize: 14 }}>Workout — {meal.time}</div>
-                        <div style={{ color: "#8B92A5", fontSize: 12 }}>{meal.purpose}</div>
+        {dayLogs.length === 0 ? (
+          <div style={{ color: "#3A3D4A", textAlign: "center", padding: "40px 0", fontSize: 14 }}>No meals logged — use + Add Meal above.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {dayLogs.map((entry, i) => (
+              <Card key={i} style={{ padding: "14px 16px" }}>
+                {editingIdx === entry.globalIdx ? (
+                  <div>
+                    <div style={{ color: "#E8EAF0", fontWeight: 600, marginBottom: 12 }}>Editing: {entry.notes || "Meal"}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                      {[["Calories", "calories"], ["Protein", "protein"], ["Carbs", "carbs"], ["Fat", "fat"]].map(([lbl, k]) => (
+                        <div key={k}>
+                          <label style={{ color: "#8B92A5", fontSize: 10, display: "block", marginBottom: 4 }}>{lbl}</label>
+                          <input type="number" value={editFields[k]} onChange={e => setEditFields(f => ({ ...f, [k]: e.target.value }))} style={inputStyle} />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <input value={editFields.notes} onChange={e => setEditFields(f => ({ ...f, notes: e.target.value }))} style={inputStyle} placeholder="Meal name" />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={saveEdit} style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
+                      <button onClick={() => setEditingIdx(null)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span style={{ color: "#E8EAF0", fontWeight: 600, fontSize: 14 }}>{entry.notes || "Meal"}</span>
+                        <span style={{ color: "#4B5563", fontSize: 11 }}>{new Date(entry.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 16 }}>
+                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{entry.calories} kcal</span>
+                        <span style={{ color: "#4A90D9", fontSize: 13 }}>{entry.protein}g protein</span>
+                        <span style={{ color: "#7B68EE", fontSize: 13 }}>{entry.carbs}g carbs</span>
+                        <span style={{ color: "#4AD9A0", fontSize: 13 }}>{entry.fat}g fat</span>
                       </div>
                     </div>
-                  ) : (
-                    <div style={{ background: "#1A1D26", border: "1px solid #2A2D3A", borderRadius: 10, padding: "14px 16px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                            <span style={{ color: "#8B92A5", fontSize: 11 }}>{meal.time}</span>
-                            <span style={{ background: meal.tagColor + "22", color: meal.tagColor, padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>{meal.tag}</span>
-                          </div>
-                          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{meal.label}</div>
-                          <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{meal.purpose}</div>
-                        </div>
-                        <div style={{ display: "flex", gap: 12, textAlign: "right", flexShrink: 0 }}>
-                          <div><div style={{ color: "#E8A838", fontSize: 16, fontWeight: 800 }}>{meal.calories}</div><div style={{ color: "#4B5563", fontSize: 10 }}>kcal</div></div>
-                          <div><div style={{ color: "#4A90D9", fontSize: 16, fontWeight: 800 }}>{meal.protein}g</div><div style={{ color: "#4B5563", fontSize: 10 }}>protein</div></div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: meal.note ? 8 : 0 }}>
-                        {meal.foods.map((f, fi) => <span key={fi} style={{ background: "#0F1117", color: "#C8CDD8", padding: "3px 8px", borderRadius: 4, fontSize: 12 }}>{f}</span>)}
-                      </div>
-                      {meal.note && <div style={{ color: "#4B5563", fontSize: 11, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 8, marginTop: 4 }}>💡 {meal.note}</div>}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => { setEditingIdx(entry.globalIdx); setEditFields({ calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes || "" }); }}
+                        style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "8px 12px", fontSize: 12, cursor: "pointer", height: 44 }}>✏️ Edit</button>
+                      {confirmDelete === entry.globalIdx ? (
+                        <>
+                          <button onClick={() => { onDelete(entry.globalIdx); setConfirmDelete(null); }}
+                            style={{ background: "#D94A4A", color: "#fff", border: "none", borderRadius: 6, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 700, height: 44 }}>Confirm</button>
+                          <button onClick={() => setConfirmDelete(null)}
+                            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "8px 10px", fontSize: 12, cursor: "pointer", height: 44 }}>✕</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDelete(entry.globalIdx)}
+                          style={{ background: "#2A2D3A", color: "#4B5563", border: "none", borderRadius: 6, padding: "8px 10px", fontSize: 12, cursor: "pointer", height: 44 }}>🗑️</button>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                )}
+              </Card>
             ))}
-          </div>
-        )}
-
-        {view === "macros" && (
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            <Card style={{ marginBottom: 20 }}>
-              <SectionLabel>Today's Macros</SectionLabel>
-              <div style={{ display: "flex", gap: 40, justifyContent: "center", padding: "10px 0" }}>
-                <MacroRing label="Calories" val={totals.calories} target={TARGETS.calories} unit="kcal" pct={totals.calories / TARGETS.calories * 100} color="#E8A838" />
-                <MacroRing label="Protein" val={totals.protein} target={TARGETS.protein} unit="g" pct={totals.protein / TARGETS.protein * 100} color="#4A90D9" />
-                <MacroRing label="Carbs" val={totals.carbs} target={TARGETS.carbs} unit="g" pct={totals.carbs / TARGETS.carbs * 100} color="#7B68EE" />
-                <MacroRing label="Fat" val={totals.fat} target={TARGETS.fat} unit="g" pct={totals.fat / TARGETS.fat * 100} color="#4AD9A0" />
-              </div>
-            </Card>
           </div>
         )}
       </div>
 
-      {/* Right sidebar */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+      {/* Right sidebar — macro targets reference */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Card>
           <SectionLabel>Today's Progress</SectionLabel>
-          {[
-            { label: "Calories", val: totals.calories, target: TARGETS.calories, color: "#E8A838", unit: "kcal" },
-            { label: "Protein",  val: totals.protein,  target: TARGETS.protein,  color: "#4A90D9", unit: "g" },
-            { label: "Carbs",    val: totals.carbs,    target: TARGETS.carbs,    color: "#7B68EE", unit: "g" },
-            { label: "Fat",      val: totals.fat,      target: TARGETS.fat,      color: "#4AD9A0", unit: "g" },
-          ].map(({ label, val, target, color, unit }) => {
+          {[["Calories", todayTotals.calories, T.calories, "#E8A838", "kcal"],
+            ["Protein",  todayTotals.protein,  T.protein,  "#4A90D9", "g"],
+            ["Carbs",    todayTotals.carbs,    T.carbs,    "#7B68EE", "g"],
+            ["Fat",      todayTotals.fat,      T.fat,      "#4AD9A0", "g"]].map(([label, val, target, color, unit]) => {
             const pct = Math.min(100, (val / target) * 100);
             return (
               <div key={label} style={{ marginBottom: 14 }}>
@@ -1109,13 +1019,13 @@ function NutritionTab({ nutritionLogs, onSave, onEdit, onDelete }) {
         </Card>
 
         <Card>
-          <SectionLabel>Plan Targets</SectionLabel>
+          <SectionLabel>Gain Phase Targets</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[
-              { label: "Daily Calories", val: `${totalScheduleCalories}`, unit: "kcal", color: "#E8A838" },
-              { label: "Protein Target", val: `${totalScheduleProtein}g`, unit: "goal 191g", color: "#4A90D9" },
-              { label: "Surplus", val: `+${totalScheduleCalories - 2400}`, unit: "vs maintenance", color: "#4AD99A" },
-            ].map(({ label, val, unit, color }) => (
+            {[["Calories", "2,650", "kcal/day", "#E8A838"],
+              ["Protein",  "191g",  "per day",  "#4A90D9"],
+              ["Carbs",    "220g",  "per day",  "#7B68EE"],
+              ["Fat",      "65g",   "per day",  "#4AD9A0"],
+              ["Surplus",  "+250",  "vs 2,400 maint.", "#4AD99A"]].map(([label, val, unit, color]) => (
               <div key={label} style={{ background: "#0F1117", borderRadius: 7, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
                 <div style={{ textAlign: "right" }}>
@@ -1126,36 +1036,12 @@ function NutritionTab({ nutritionLogs, onSave, onEdit, onDelete }) {
             ))}
           </div>
         </Card>
-
-        <Card>
-          <SectionLabel>Today's Meals ({today.length})</SectionLabel>
-          {today.length === 0 ? (
-            <div style={{ color: "#3A3D4A", fontSize: 12, textAlign: "center", padding: "12px 0" }}>Nothing logged yet</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[...today].reverse().map((l, i) => (
-                <div key={i} style={{ background: "#0F1117", borderRadius: 6, padding: "7px 10px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "#C8CDD8", fontSize: 12, fontWeight: 600 }}>{l.notes || "Meal"}</span>
-                    <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>{l.calories} kcal</span>
-                  </div>
-                  <div style={{ color: "#4B5563", fontSize: 11, marginTop: 1 }}>{l.protein}g pro · {l.carbs}g carbs · {l.fat}g fat</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
       </div>
     </div>
   );
 }
 
-// ─── PHASE TRACKER ───────────────────────────────────────────────────────────
-const PHASE_CONFIG = {
-  gain: { label: "Gain Phase", color: "#4AD99A", bg: "#4AD99A22", icon: "📈", weeks: 12, calories: 2200, description: "Caloric surplus · Build muscle · Progressive overload" },
-  cut:  { label: "Cut Phase",  color: "#4A90D9", bg: "#4A90D922", icon: "🔥", weeks: 4,  calories: 1600, description: "Caloric deficit · Preserve muscle · Shed fat" },
-};
-
+// ─── PHASE TRACKER ────────────────────────────────────────────────────────────
 function PhaseTracker({ phase, setPhase }) {
   const [showSetup, setShowSetup] = useState(!phase);
   const [setupType, setSetupType] = useState("gain");
@@ -1176,15 +1062,12 @@ function PhaseTracker({ phase, setPhase }) {
     const history = [...(phase.history || []), { type: phase.type, startDate: phase.startDate, endDate: new Date().toISOString() }];
     setPhase({ ...phase, history });
     setShowSetup(true);
-    // pre-select the opposite phase
     setSetupType(phase.type === "gain" ? "cut" : "gain");
   };
 
   const getDayInfo = () => {
     if (!phase) return null;
-    const start = new Date(phase.startDate);
-    const end = new Date(phase.endDate);
-    const now = new Date();
+    const start = new Date(phase.startDate), end = new Date(phase.endDate), now = new Date();
     const totalDays = Math.round((end - start) / 86400000);
     const elapsed = Math.max(0, Math.round((now - start) / 86400000));
     const remaining = Math.max(0, totalDays - elapsed);
@@ -1194,8 +1077,6 @@ function PhaseTracker({ phase, setPhase }) {
   };
 
   const info = phase ? getDayInfo() : null;
-
-  // Cycle history summary
   const history = phase?.history || [];
 
   return (
@@ -1213,12 +1094,10 @@ function PhaseTracker({ phase, setPhase }) {
         )}
       </div>
 
-      {/* No phase set */}
       {!phase && !showSetup && (
         <Card style={{ textAlign: "center", padding: 48 }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>🗓️</div>
           <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No active phase</div>
-          <div style={{ color: "#8B92A5", fontSize: 14, marginBottom: 24 }}>Set up your first gain or cut phase to start tracking your cycle.</div>
           <button onClick={() => setShowSetup(true)}
             style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 9, padding: "12px 28px", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
             Set Up Phase
@@ -1226,10 +1105,8 @@ function PhaseTracker({ phase, setPhase }) {
         </Card>
       )}
 
-      {/* Active phase */}
       {phase && info && (
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20, marginBottom: 20 }}>
-          {/* Main phase card */}
           <Card style={{ border: `1px solid ${cfg.color}44` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
               <div>
@@ -1245,14 +1122,13 @@ function PhaseTracker({ phase, setPhase }) {
               </div>
             </div>
 
-            {/* Progress bar */}
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <span style={{ color: "#8B92A5", fontSize: 12 }}>Week {Math.min(info.week, info.totalWeeks)} of {info.totalWeeks}</span>
                 <span style={{ color: cfg.color, fontSize: 12, fontWeight: 700 }}>{Math.round(info.pct)}% complete</span>
               </div>
-              <div style={{ background: "#0F1117", borderRadius: 6, height: 10, overflow: "hidden" }}>
-                <div style={{ width: `${info.pct}%`, height: "100%", background: cfg.color, borderRadius: 6, transition: "width 0.4s" }} />
+              <div style={{ background: "#0F1117", borderRadius: 6, height: 10 }}>
+                <div style={{ width: `${info.pct}%`, height: "100%", background: cfg.color, borderRadius: 6 }} />
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
                 <span style={{ color: "#4B5563", fontSize: 11 }}>{fmtDate(phase.startDate)}</span>
@@ -1260,14 +1136,13 @@ function PhaseTracker({ phase, setPhase }) {
               </div>
             </div>
 
-            {/* Week timeline */}
             <div style={{ display: "flex", gap: 3, marginBottom: 20 }}>
               {Array.from({ length: info.totalWeeks }).map((_, i) => {
-                const done = i < info.week - 1;
-                const current = i === info.week - 1;
+                const done = i < info.week - 1, current = i === info.week - 1;
                 return (
                   <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                    <div style={{ width: "100%", height: 28, borderRadius: 4, background: done ? cfg.color : current ? cfg.color + "66" : "#1A1D26",
+                    <div style={{ width: "100%", height: 28, borderRadius: 4,
+                      background: done ? cfg.color : current ? cfg.color + "66" : "#1A1D26",
                       border: current ? `1px solid ${cfg.color}` : "1px solid #2A2D3A",
                       display: "flex", alignItems: "center", justifyContent: "center" }}>
                       {done && <span style={{ fontSize: 12 }}>✓</span>}
@@ -1285,16 +1160,14 @@ function PhaseTracker({ phase, setPhase }) {
             </button>
           </Card>
 
-          {/* Right column: targets + stats */}
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <Card>
               <SectionLabel>Daily Targets</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
-                  { label: "Calories", val: cfg.calories.toLocaleString(), unit: "kcal", color: "#E8A838" },
-                  { label: "Protein", val: "191", unit: "g", color: "#4A90D9" },
-                  { label: "Training", val: "3×", unit: "/ week", color: "#4AD9A0" },
-                  { label: "Surplus/Deficit", val: phase.type === "gain" ? "+500" : "-600", unit: "kcal", color: cfg.color },
+                  { label: "Calories", val: phase.type === "gain" ? "2,650" : "1,600", unit: "kcal", color: "#E8A838" },
+                  { label: "Protein",  val: "191g", unit: "per day", color: "#4A90D9" },
+                  { label: "Training", val: "3×",   unit: "/ week",  color: "#4AD9A0" },
                 ].map(({ label, val, unit, color }) => (
                   <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1117", borderRadius: 7, padding: "8px 12px" }}>
                     <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
@@ -1303,33 +1176,21 @@ function PhaseTracker({ phase, setPhase }) {
                 ))}
               </div>
             </Card>
-
             <Card>
               <SectionLabel>Phase Stats</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Day</span>
-                  <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 700 }}>{info.elapsed + 1} of {info.totalDays}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Started</span>
-                  <span style={{ color: "#E8EAF0", fontSize: 13 }}>{fmtDate(phase.startDate)}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Ends</span>
-                  <span style={{ color: "#E8EAF0", fontSize: 13 }}>{fmtDate(phase.endDate)}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#8B92A5", fontSize: 13 }}>Cycles completed</span>
-                  <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{history.length}</span>
-                </div>
+                {[["Day", `${info.elapsed + 1} of ${info.totalDays}`], ["Started", fmtDate(phase.startDate)], ["Ends", fmtDate(phase.endDate)], ["Cycles completed", history.length]].map(([label, val]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                    <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 700 }}>{val}</span>
+                  </div>
+                ))}
               </div>
             </Card>
           </div>
         </div>
       )}
 
-      {/* Cycle history */}
       {history.length > 0 && (
         <Card>
           <SectionLabel>Cycle History</SectionLabel>
@@ -1349,22 +1210,19 @@ function PhaseTracker({ phase, setPhase }) {
         </Card>
       )}
 
-      {/* Setup modal */}
       {showSetup && (
         <Modal title="Set Up Phase" onClose={() => phase && setShowSetup(false)} width={480}>
           <div style={{ marginBottom: 20 }}>
             <SectionLabel>Phase Type</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {(["gain", "cut"]).map(type => {
+              {["gain", "cut"].map(type => {
                 const c = PHASE_CONFIG[type];
                 return (
                   <button key={type} onClick={() => setSetupType(type)}
-                    style={{ background: setupType === type ? c.bg : "#0F1117", border: `2px solid ${setupType === type ? c.color : "#2A2D3A"}`,
-                      borderRadius: 10, padding: "16px 12px", cursor: "pointer", textAlign: "left" }}>
+                    style={{ background: setupType === type ? c.bg : "#0F1117", border: `2px solid ${setupType === type ? c.color : "#2A2D3A"}`, borderRadius: 10, padding: "16px 12px", cursor: "pointer", textAlign: "left" }}>
                     <div style={{ fontSize: 22, marginBottom: 6 }}>{c.icon}</div>
                     <div style={{ color: setupType === type ? c.color : "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{c.label}</div>
                     <div style={{ color: "#8B92A5", fontSize: 11, marginTop: 4 }}>{c.weeks} weeks · {c.calories} kcal/day</div>
-                    <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{c.description}</div>
                   </button>
                 );
               })}
@@ -1390,69 +1248,6 @@ function PhaseTracker({ phase, setPhase }) {
   );
 }
 
-// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
-
-// Auth helpers
-const sbAuth = async (path, body) => {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
-    method: "POST",
-    headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return res.json();
-};
-
-const sbGet = async (path, token) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-  return res.json();
-};
-
-const sbPost = async (path, body, token) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: "POST",
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=representation",
-    },
-    body: JSON.stringify(body),
-  });
-  return res.json();
-};
-
-const sbPatch = async (path, body, token) => {
-  await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: "PATCH",
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=minimal",
-    },
-    body: JSON.stringify(body),
-  });
-};
-
-const sbDelete = async (path, token) => {
-  await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: "DELETE",
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Prefer": "return=minimal",
-    },
-  });
-};
-
 // ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState("jdurham@outlook.com");
@@ -1461,7 +1256,7 @@ function LoginScreen({ onLogin }) {
   const [error, setError] = useState("");
 
   const signIn = async () => {
-    if (!email.trim() || !password.trim()) return;
+    if (!password.trim()) return;
     setLoading(true); setError("");
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: "POST",
@@ -1487,23 +1282,17 @@ function LoginScreen({ onLogin }) {
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && signIn()}
-            style={{ ...inputStyle, fontSize: 15 }} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && signIn()} style={{ ...inputStyle, fontSize: 15 }} />
         </div>
         <div style={{ marginBottom: 20 }}>
           <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && signIn()}
-            placeholder="Enter your password"
-            style={{ ...inputStyle, fontSize: 15 }} />
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && signIn()} placeholder="Enter your password" style={{ ...inputStyle, fontSize: 15 }} />
         </div>
         {error && <div style={{ color: "#D94A4A", fontSize: 12, marginBottom: 14 }}>{error}</div>}
         <button onClick={signIn} disabled={loading || !password.trim()}
           style={{ width: "100%", background: loading || !password.trim() ? "#2A2D3A" : "#4A90D9",
             color: loading || !password.trim() ? "#4B5563" : "#fff",
-            border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700,
-            cursor: loading || !password.trim() ? "default" : "pointer" }}>
+            border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: loading || !password.trim() ? "default" : "pointer" }}>
           {loading ? "Signing in..." : "Sign In"}
         </button>
       </div>
@@ -1511,55 +1300,38 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SUPABASE_URL      = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
+
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 function App() {
-  const [tab, setTab] = useState("workout");
-  const [exercises] = useState(INITIAL_EXERCISES);
-  const [workoutLogs, setWorkoutLogs] = useState([]);
-  const [bodyLogs, setBodyLogs] = useState([]);
+  const [tab, setTab]               = useState("workout");
+  const [exercises]                 = useState(INITIAL_EXERCISES);
+  const [workoutLogs, setWorkoutLogs]     = useState([]);
+  const [bodyLogs, setBodyLogs]           = useState([]);
   const [nutritionLogs, setNutritionLogs] = useState([]);
-  const [phase, setPhase] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [dbError, setDbError] = useState(false);
-  const [session, setSession] = useState(null);
-  const [userId, setUserId] = useState(null);
+  const [phase, setPhase]           = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [dbError, setDbError]       = useState(false);
+  const [session, setSession]       = useState(null);
+  const [userId, setUserId]         = useState(null);
 
-  // ── Check for magic link token on load ────────────────────────────────────
-  useState(() => {
-    const hash = window.location.hash;
-    if (hash.includes("access_token")) {
-      const params = new URLSearchParams(hash.replace("#", ""));
-      const token = params.get("access_token");
-      const uid = params.get("user_id") || null;
-      if (token) {
-        // Verify token and get user
-        fetch(`${SUPABASE_URL}/auth/v1/user`, {
-          headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${token}` }
-        }).then(r => r.json()).then(user => {
-          if (user.id) {
-            setSession(token);
-            setUserId(user.id);
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-        });
-      }
+  // ── Session restore ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const stored = localStorage.getItem("pp_session") || sessionStorage.getItem("pp_session");
+    if (stored) {
+      try {
+        const { token, uid } = JSON.parse(stored);
+        setSession(token); setUserId(uid);
+      } catch { setLoading(false); }
     } else {
-      // Check localStorage for existing session
-      const stored = localStorage.getItem("pp_session") || sessionStorage.getItem("pp_session");
-      if (stored) {
-        try {
-          const { token, uid } = JSON.parse(stored);
-          setSession(token);
-          setUserId(uid);
-        } catch(e) { setLoading(false); }
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, []);
 
-  // ── Load data when session is ready ───────────────────────────────────────
-  useState(() => {
+  // ── Load data when session ready ───────────────────────────────────────────
+  useEffect(() => {
     if (session && userId) {
       const data = JSON.stringify({ token: session, uid: userId });
       localStorage.setItem("pp_session", data);
@@ -1568,62 +1340,111 @@ function App() {
     }
   }, [session, userId]);
 
-  async function loadAll() {
-    setLoading(true);
+  const loadAll = useCallback(async () => {
+    setLoading(true); setDbError(false);
     try {
       const [wData, bData, nData, pData] = await Promise.all([
-        sbGet(`workout_logs?user_id=eq.${userId}&order=date.asc&limit=2000`, session),
+        sbGet(`workout_logs?user_id=eq.${userId}&order=date.asc&limit=5000`, session),
         sbGet(`body_logs?user_id=eq.${userId}&order=date.asc&limit=500`, session),
         sbGet(`nutrition_logs?user_id=eq.${userId}&order=date.asc&limit=5000`, session),
         sbGet(`phase_data?user_id=eq.${userId}&order=created_at.desc&limit=1`, session),
       ]);
-      setWorkoutLogs((wData || []).map(r => ({ id: r.id, exerciseId: r.exercise_id, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date })));
-      setBodyLogs((bData || []).map(r => ({ id: r.id, weight: r.weight, chest: r.chest, waist: r.waist, hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date })));
-      setNutritionLogs((nData || []).map(r => ({ id: r.id, calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat, notes: r.notes, date: r.date })));
-      if (pData && pData.length > 0) {
+
+      // Merge with localStorage buffer
+      const lsWorkout   = lsGet(LS_KEYS.workout);
+      const lsBody      = lsGet(LS_KEYS.body);
+      const lsNutrition = lsGet(LS_KEYS.nutrition);
+
+      const merged = (remote, local) => {
+        if (!remote) return local;
+        const remoteIds = new Set(remote.map(r => r.id).filter(Boolean));
+        const pending = local.filter(l => !l.id || !remoteIds.has(l.id));
+        return [...remote, ...pending];
+      };
+
+      const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date }));
+      const bLogs = merged(bData, lsBody).map(r => ({ id: r.id, weight: r.weight, chest: r.chest, waist: r.waist, hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date }));
+      const nLogs = merged(nData, lsNutrition).map(r => ({ id: r.id, calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat, notes: r.notes, date: r.date }));
+
+      setWorkoutLogs(wLogs);
+      setBodyLogs(bLogs);
+      setNutritionLogs(nLogs);
+      lsSet(LS_KEYS.workout, wLogs);
+      lsSet(LS_KEYS.body, bLogs);
+      lsSet(LS_KEYS.nutrition, nLogs);
+
+      if (pData?.[0]) {
         setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [] });
       }
-    } catch(e) { setDbError(true); }
+    } catch { setDbError(true); }
     setLoading(false);
-  }
+  }, [session, userId]);
 
   const signOut = () => {
-    localStorage.removeItem("pp_session");
-    sessionStorage.removeItem("pp_session");
+    localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
     setSession(null); setUserId(null);
     setWorkoutLogs([]); setBodyLogs([]); setNutritionLogs([]); setPhase(null);
   };
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Workout handlers ───────────────────────────────────────────────────────
   const addWorkoutLog = async (exerciseId, entry) => {
+    const localEntry = { exerciseId, ...entry, _pending: true };
+    const updated = [...workoutLogs, localEntry];
+    setWorkoutLogs(updated);
+    lsSet(LS_KEYS.workout, updated);
+
     const rows = await sbPost("workout_logs", { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId }, session);
-    if (rows?.[0]) setWorkoutLogs(p => [...p, { id: rows[0].id, exerciseId, ...entry }]);
+    if (rows?.[0]) {
+      const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id, exerciseId } : l);
+      setWorkoutLogs(synced); lsSet(LS_KEYS.workout, synced);
+      return true;
+    }
+    return false;
   };
 
+  // ── Body handlers ──────────────────────────────────────────────────────────
   const addBodyLog = async (entry) => {
+    const localEntry = { ...entry, _pending: true };
+    const updated = [...bodyLogs, localEntry];
+    setBodyLogs(updated); lsSet(LS_KEYS.body, updated);
     const rows = await sbPost("body_logs", { ...entry, user_id: userId }, session);
-    if (rows?.[0]) setBodyLogs(p => [...p, { ...entry, id: rows[0].id }]);
+    if (rows?.[0]) {
+      const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id } : l);
+      setBodyLogs(synced); lsSet(LS_KEYS.body, synced);
+      return true;
+    }
+    return false;
   };
 
+  // ── Nutrition handlers ─────────────────────────────────────────────────────
   const addNutritionLog = async (entry) => {
+    const localEntry = { ...entry, _pending: true };
+    const updated = [...nutritionLogs, localEntry];
+    setNutritionLogs(updated); lsSet(LS_KEYS.nutrition, updated);
     const rows = await sbPost("nutrition_logs", { calories: entry.calories, protein: entry.protein, carbs: entry.carbs, fat: entry.fat, notes: entry.notes, date: entry.date, user_id: userId }, session);
-    if (rows?.[0]) setNutritionLogs(p => [...p, { ...entry, id: rows[0].id }]);
+    if (rows?.[0]) {
+      const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id } : l);
+      setNutritionLogs(synced); lsSet(LS_KEYS.nutrition, synced);
+      return true;
+    }
+    return false;
   };
 
   const editNutritionLog = async (idx, updated) => {
     const entry = nutritionLogs[idx];
-    if (!entry?.id) return;
-    await sbPatch(`nutrition_logs?id=eq.${entry.id}`, { calories: updated.calories, protein: updated.protein, carbs: updated.carbs, fat: updated.fat, notes: updated.notes }, session);
-    setNutritionLogs(p => p.map((l, i) => i === idx ? { ...l, ...updated } : l));
+    const newLogs = nutritionLogs.map((l, i) => i === idx ? { ...l, ...updated } : l);
+    setNutritionLogs(newLogs); lsSet(LS_KEYS.nutrition, newLogs);
+    if (entry?.id) await sbPatch(`nutrition_logs?id=eq.${entry.id}`, updated, session);
   };
 
   const deleteNutritionLog = async (idx) => {
     const entry = nutritionLogs[idx];
-    if (!entry?.id) return;
-    await sbDelete(`nutrition_logs?id=eq.${entry.id}`, session);
-    setNutritionLogs(p => p.filter((_, i) => i !== idx));
+    const newLogs = nutritionLogs.filter((_, i) => i !== idx);
+    setNutritionLogs(newLogs); lsSet(LS_KEYS.nutrition, newLogs);
+    if (entry?.id) await sbDelete(`nutrition_logs?id=eq.${entry.id}`, session);
   };
 
+  // ── Phase handlers ─────────────────────────────────────────────────────────
   const savePhase = async (newPhase) => {
     if (newPhase?.id) {
       await sbPatch(`phase_data?id=eq.${newPhase.id}`, { type: newPhase.type, start_date: newPhase.startDate, end_date: newPhase.endDate, history: newPhase.history }, session);
@@ -1634,18 +1455,19 @@ function App() {
     setPhase(newPhase);
   };
 
-  const totalSets = workoutLogs.length;
-  const phaseCfg = phase ? PHASE_CONFIG[phase.type] : null;
+  // ── Derived state ──────────────────────────────────────────────────────────
+  const totalExercises = workoutLogs.length;
+  const phaseCfg  = phase ? PHASE_CONFIG[phase.type] : null;
   const phaseInfo = phase && phaseCfg ? (() => {
     const start = new Date(phase.startDate), end = new Date(phase.endDate), now = new Date();
     const totalDays = Math.round((end - start) / 86400000);
-    const elapsed = Math.max(0, Math.round((now - start) / 86400000));
+    const elapsed   = Math.max(0, Math.round((now - start) / 86400000));
     const remaining = Math.max(0, totalDays - elapsed);
     const week = Math.floor(elapsed / 7) + 1;
     return { remaining, week, totalWeeks: phaseCfg.weeks };
   })() : null;
 
-  // ── Screens ───────────────────────────────────────────────────────────────
+  // ── Screens ────────────────────────────────────────────────────────────────
   if (!session) return <LoginScreen onLogin={(token, uid) => { setSession(token); setUserId(uid); }} />;
 
   if (loading) return (
@@ -1659,7 +1481,7 @@ function App() {
   if (dbError) return (
     <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, padding: 32 }}>
       <div style={{ fontSize: 32, fontWeight: 800, color: "#E8EAF0" }}>PROJECT PRIME</div>
-      <div style={{ color: "#D94A4A", fontSize: 15, textAlign: "center" }}>Could not load data. Check your connection.</div>
+      <div style={{ color: "#D94A4A", fontSize: 15, textAlign: "center" }}>Could not connect. Your locally saved data is safe — check your connection and retry.</div>
       <button onClick={loadAll} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "10px 24px", fontSize: 14, cursor: "pointer" }}>Retry</button>
     </div>
   );
@@ -1694,21 +1516,22 @@ function App() {
             </div>
           )}
           <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
-            <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Total Sets Logged</div>
-            <div style={{ color: "#4A90D9", fontSize: 24, fontWeight: 800, marginTop: 2 }}>{totalSets}</div>
+            <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Exercises Logged</div>
+            <div style={{ color: "#4A90D9", fontSize: 24, fontWeight: 800, marginTop: 2 }}>{totalExercises}</div>
           </div>
           <button onClick={signOut} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 12, cursor: "pointer", width: "100%" }}>
             Sign Out
           </button>
         </div>
       </div>
+
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 32 }}>
-        {tab === "workout" && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogSet={addWorkoutLog} />}
+        {tab === "workout"  && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} />}
         {tab === "progress" && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
-        {tab === "body" && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
-        {tab === "nutrition" && <NutritionTab nutritionLogs={nutritionLogs} onSave={addNutritionLog} onEdit={editNutritionLog} onDelete={deleteNutritionLog} />}
-        {tab === "phase" && <PhaseTracker phase={phase} setPhase={savePhase} />}
+        {tab === "body"     && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
+        {tab === "nutrition"&& <NutritionTab nutritionLogs={nutritionLogs} onSave={addNutritionLog} onEdit={editNutritionLog} onDelete={deleteNutritionLog} />}
+        {tab === "phase"    && <PhaseTracker phase={phase} setPhase={savePhase} />}
       </div>
     </div>
   );
