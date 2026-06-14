@@ -1015,11 +1015,13 @@ function BodyTab({ bodyLogs, onSave }) {
 
   const handleSave = async () => {
     setSaveStatus("saving");
-    const ok = await onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, Number(v) || 0])) });
+    const ok = await onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v ? Number(v) : null])) });
     setSaveStatus(ok ? "saved" : "error");
     setTimeout(() => setSaveStatus(null), 3000);
-    setShowForm(false);
-    setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
+    if (ok) {
+      setShowForm(false);
+      setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
+    }
   };
 
   const recent = [...bodyLogs].reverse().slice(0, 10);
