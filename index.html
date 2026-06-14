@@ -1370,17 +1370,21 @@ Return ONLY this JSON:
 }`;
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "gpt-4o",
           max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }]
+          messages: [
+            { role: "system", content: "You are an elite Project Prime fitness coach. Return only valid JSON, no markdown, no explanation." },
+            { role: "user", content: prompt }
+          ]
         })
       });
       const data = await res.json();
-      const text = data.content?.[0]?.text?.trim() || "";
+      if (data.error) throw new Error(data.error.message);
+      const text = data.choices?.[0]?.message?.content?.trim() || "";
       const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
       const parsed = JSON.parse(clean);
       const reviewObj = {
