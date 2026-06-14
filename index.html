@@ -1527,261 +1527,557 @@ Rules:
 }
 
 // ─── RECOVERY TAB ────────────────────────────────────────────────────────────
-function RecoveryTab({ recoveryLogs, onSave }) {
-  const today = new Date().toISOString().split("T")[0];
-  const todayLog = recoveryLogs.find(r => r.date === today);
-  const [editing, setEditing] = useState(!todayLog);
-  const [fields, setFields] = useState({
-    sleep_quality: todayLog?.sleep_quality || 3,
-    energy: todayLog?.energy || 3,
-    muscle_soreness: todayLog?.muscle_soreness || 3,
-    heel_pain: todayLog?.heel_pain || 0,
-    low_back_pain: todayLog?.low_back_pain || 0,
-    alfredson_morning_straight: todayLog?.alfredson_morning_straight || false,
-    alfredson_morning_bent: todayLog?.alfredson_morning_bent || false,
-    alfredson_evening_straight: todayLog?.alfredson_evening_straight || false,
-    alfredson_evening_bent: todayLog?.alfredson_evening_bent || false,
-    notes: todayLog?.notes || "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null);
 
-  const setF = (k, v) => setFields(f => ({ ...f, [k]: v }));
+const RECOVERY_CUES = {
+  "Alfredson straight-knee eccentric calf raise": "3×15 each leg. Rise with both feet, lower slowly on one leg with knee straight.",
+  "Alfredson bent-knee eccentric calf raise": "3×15 each leg. Same protocol with knee slightly bent to bias soleus.",
+  "Modified McGill curl-up": "Brace core, one knee bent, lift head and shoulders slightly without flexing the low back.",
+  "Bird dog": "Extend opposite arm and leg while keeping hips square and spine neutral.",
+  "Side plank": "Hold neutral spine. Stop before form breaks.",
+  "Banded clamshell": "Keep feet stacked. Rotate top knee upward without rolling hips backward.",
+  "Glute bridge": "Drive through heels. Squeeze glutes. Do not arch low back.",
+  "Hip flexor stretch": "Posterior pelvic tilt first. Stretch front of hip, not low back.",
+  "Figure-4 stretch": "Gentle glute stretch. No aggressive pulling.",
+  "Open books": "Rotate through upper back, not low back. Move slowly.",
+  "Cat-cow": "Alternate between arching and rounding the spine slowly and rhythmically.",
+  "Thoracic rotations": "Controlled rotation. Keep hips stable.",
+  "Wall slides": "Back against wall. Slide arms overhead while keeping ribs down.",
+  "Band pull-aparts": "Light band tension. Pull shoulder blades back and down.",
+};
 
-  const handleSave = async () => {
-    setSaving(true);
-    const ok = await onSave({ ...fields, date: today });
-    setSaveStatus(ok ? "saved" : "error");
-    setTimeout(() => setSaveStatus(null), 3000);
-    setEditing(false);
-    setSaving(false);
-  };
+const RECOVERY_TEMPLATES = [
+  {
+    name: "Daily Maintenance",
+    duration: "10 min",
+    purpose: "Light daily tissue maintenance.",
+    items: ["Alfredson straight-knee eccentric calf raise", "Alfredson bent-knee eccentric calf raise", "Banded clamshell", "Glute bridge", "Hip flexor stretch"],
+    color: "#4A90D9",
+    icon: "🌅",
+  },
+  {
+    name: "Post-Lift Reset",
+    duration: "15 min",
+    purpose: "Downshift after a strength session.",
+    items: ["Modified McGill curl-up", "Bird dog", "Side plank", "Figure-4 stretch", "Hip flexor stretch", "Open books"],
+    color: "#4AD99A",
+    icon: "💪",
+  },
+  {
+    name: "Post-Golf Recovery",
+    duration: "20–30 min",
+    purpose: "Recover feet, hips, low back, and thoracic spine after golf.",
+    items: ["Alfredson straight-knee eccentric calf raise", "Alfredson bent-knee eccentric calf raise", "Cat-cow", "Bird dog", "Hip flexor stretch", "Figure-4 stretch", "Open books", "Thoracic rotations", "Wall slides"],
+    color: "#E8A838",
+    icon: "⛳",
+  },
+  {
+    name: "Full Body Recovery",
+    duration: "30 min",
+    purpose: "Complete recovery and mobility session.",
+    items: ["Alfredson straight-knee eccentric calf raise", "Alfredson bent-knee eccentric calf raise", "Modified McGill curl-up", "Bird dog", "Side plank", "Banded clamshell", "Glute bridge", "Hip flexor stretch", "Figure-4 stretch", "Open books", "Thoracic rotations", "Wall slides", "Band pull-aparts"],
+    color: "#7B68EE",
+    icon: "🔄",
+  },
+];
 
-  const alfredsonComplete = [fields.alfredson_morning_straight, fields.alfredson_morning_bent, fields.alfredson_evening_straight, fields.alfredson_evening_bent].filter(Boolean).length;
-
-  // Weekly Alfredson compliance
-  const last7 = recoveryLogs.filter(r => {
-    const d = new Date(r.date);
-    const now = new Date();
-    return (now - d) / 86400000 <= 7;
-  });
-  const weeklyCompliance = last7.length ? Math.round(last7.reduce((sum, r) => {
-    const done = [r.alfredson_morning_straight, r.alfredson_morning_bent, r.alfredson_evening_straight, r.alfredson_evening_bent].filter(Boolean).length;
-    return sum + (done / 4);
-  }, 0) / last7.length * 100) : null;
-
-  const StarRating = ({ label, value, onChange, max = 5, color = "#4A90D9" }) => (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ color: "#8B92A5", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>{label}</div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {Array.from({ length: max }).map((_, i) => (
-          <button key={i} onClick={() => onChange(i + 1)}
-            style={{ width: 52, height: 52, borderRadius: 8, border: `2px solid ${i < value ? color : "#2A2D3A"}`,
-              background: i < value ? color + "22" : "#0F1117", color: i < value ? color : "#4B5563",
-              fontSize: 18, fontWeight: 800, cursor: "pointer" }}>
-            {i + 1}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  const PainSlider = ({ label, value, onChange, color }) => (
+function MetricSelector({ label, value, onChange, max, color }) {
+  return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        <span style={{ color: "#8B92A5", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-        <span style={{ color: value === 0 ? "#4AD99A" : value <= 3 ? "#E8A838" : "#D94A4A", fontSize: 18, fontWeight: 800 }}>{value}/10</span>
+        <span style={{ color: "#8B92A5", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
+        <span style={{ color, fontSize: 20, fontWeight: 800 }}>{value}<span style={{ color: "#4B5563", fontSize: 13 }}>/{max}</span></span>
       </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        {Array.from({ length: 11 }).map((_, i) => (
+      <div style={{ display: "flex", gap: 8 }}>
+        {Array.from({ length: max + 1 }).map((_, i) => (
           <button key={i} onClick={() => onChange(i)}
-            style={{ flex: 1, height: 44, borderRadius: 6, border: "none",
-              background: i === value ? (i === 0 ? "#4AD99A" : i <= 3 ? "#E8A838" : "#D94A4A") : "#2A2D3A",
-              color: i === value ? "#0F1117" : "#4B5563", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            style={{ flex: 1, height: 52, borderRadius: 8, border: "none", fontWeight: 800, fontSize: 15, cursor: "pointer",
+              background: i === value ? color : "#1A1D26",
+              color: i === value ? (color === "#E8A838" || color === "#4AD99A" ? "#0F1117" : "#fff") : "#4B5563",
+              border: `1px solid ${i === value ? color : "#2A2D3A"}` }}>
             {i}
           </button>
         ))}
       </div>
     </div>
   );
+}
 
-  const AlfredsonCheck = ({ label, checked, onChange }) => (
-    <button onClick={() => onChange(!checked)}
-      style={{ display: "flex", alignItems: "center", gap: 12, background: checked ? "#4AD99A22" : "#0F1117",
-        border: `1px solid ${checked ? "#4AD99A44" : "#2A2D3A"}`, borderRadius: 8, padding: "12px 16px",
-        cursor: "pointer", width: "100%", textAlign: "left" }}>
-      <div style={{ width: 24, height: 24, borderRadius: 6, background: checked ? "#4AD99A" : "#2A2D3A",
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
-        {checked ? "✓" : ""}
+function RecoveryTab({ recoverySessions, onSaveSession }) {
+  const [view, setView] = useState("today");
+  const [sessionStep, setSessionStep] = useState(null); // null | "template" | "before" | "checklist" | "after" | "summary"
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [checklist, setChecklist] = useState([]);
+  const [beforeMetrics, setBeforeMetrics] = useState({ energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
+  const [afterMetrics, setAfterMetrics] = useState({ energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
+  const [resultRating, setResultRating] = useState(null);
+  const [sessionStart, setSessionStart] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [lastSession, setLastSession] = useState(null);
+
+  const today = new Date().toISOString().split("T")[0];
+  const todaySession = recoverySessions.find(s => s.date === today);
+  const recentSessions = [...recoverySessions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 14);
+
+  const startSession = (template) => {
+    setSelectedTemplate(template);
+    setChecklist(template.items.map((name, i) => ({ name, cue: RECOVERY_CUES[name] || "", completed: false, sort_order: i })));
+    setBeforeMetrics({ energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
+    setAfterMetrics({ energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
+    setResultRating(null);
+    setSessionStart(new Date());
+    setSessionStep("before");
+  };
+
+  const toggleItem = (idx) => {
+    setChecklist(prev => prev.map((item, i) => i === idx ? { ...item, completed: !item.completed } : item));
+  };
+
+  const completedCount = checklist.filter(i => i.completed).length;
+
+  const saveSession = async () => {
+    setSaving(true);
+    const duration = sessionStart ? Math.round((new Date() - sessionStart) / 60000) : 0;
+    const sessionData = {
+      date: today,
+      template_name: selectedTemplate.name,
+      duration_minutes: duration,
+      completed_count: completedCount,
+      total_count: checklist.length,
+      before_energy: beforeMetrics.energy,
+      after_energy: afterMetrics.energy,
+      before_soreness: beforeMetrics.soreness,
+      after_soreness: afterMetrics.soreness,
+      before_heel_pain: beforeMetrics.heel_pain,
+      after_heel_pain: afterMetrics.heel_pain,
+      before_low_back_tightness: beforeMetrics.low_back,
+      after_low_back_tightness: afterMetrics.low_back,
+      result_rating: resultRating,
+      items: checklist,
+    };
+    const saved = await onSaveSession(sessionData);
+    if (saved) {
+      setLastSession({ ...sessionData, duration });
+      setSessionStep("summary");
+    }
+    setSaving(false);
+  };
+
+  const endSession = () => {
+    setSessionStep(null);
+    setSelectedTemplate(null);
+    setView("today");
+  };
+
+  const DeltaBadge = ({ before, after, label, lowerIsBetter = false }) => {
+    const improved = lowerIsBetter ? after < before : after > before;
+    const same = after === before;
+    const color = same ? "#4B5563" : improved ? "#4AD99A" : "#D94A4A";
+    return (
+      <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px" }}>
+        <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 4 }}>{label}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700 }}>{before}</span>
+          <span style={{ color, fontSize: 14 }}>→</span>
+          <span style={{ color, fontSize: 20, fontWeight: 800 }}>{after}</span>
+          {!same && <span style={{ color, fontSize: 11, fontWeight: 700 }}>{improved ? "▲ Better" : "▼ Worse"}</span>}
+          {same && <span style={{ color: "#4B5563", fontSize: 11 }}>No change</span>}
+        </div>
       </div>
-      <span style={{ color: checked ? "#4AD99A" : "#8B92A5", fontSize: 14, fontWeight: checked ? 700 : 400 }}>{label}</span>
-    </button>
-  );
+    );
+  };
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Recovery & Durability</h2>
-            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())}</div>
+  // ── ACTIVE SESSION ─────────────────────────────────────────────────────────
+  if (sessionStep === "before" || sessionStep === "checklist" || sessionStep === "after") {
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "calc(100vh - 130px)" }}>
+        <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 24, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+          {/* Session header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexShrink: 0 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                <span style={{ fontSize: 24 }}>{selectedTemplate.icon}</span>
+                <span style={{ color: selectedTemplate.color, fontSize: 20, fontWeight: 800 }}>{selectedTemplate.name}</span>
+                <span style={{ background: selectedTemplate.color + "22", color: selectedTemplate.color, padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700 }}>{selectedTemplate.duration}</span>
+              </div>
+              <div style={{ color: "#8B92A5", fontSize: 13 }}>{selectedTemplate.purpose}</div>
+            </div>
+            <button onClick={() => { if (window.confirm("End session without saving?")) endSession(); }}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer" }}>
+              Cancel
+            </button>
           </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <SaveStatus status={saveStatus} />
-            {!editing && <button onClick={() => setEditing(true)}
-              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
-              Edit Today
-            </button>}
+
+          {/* Step tabs */}
+          <div style={{ display: "flex", background: "#0F1117", borderRadius: 8, padding: 3, marginBottom: 24, flexShrink: 0 }}>
+            {[["before", "📊 Before"], ["checklist", "✅ Checklist"], ["after", "📈 After"]].map(([step, label]) => (
+              <button key={step} onClick={() => setSessionStep(step)}
+                style={{ flex: 1, background: sessionStep === step ? selectedTemplate.color : "none",
+                  color: sessionStep === step ? "#0F1117" : "#4B5563",
+                  border: "none", borderRadius: 6, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {/* BEFORE METRICS */}
+            {sessionStep === "before" && (
+              <div>
+                <div style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700, marginBottom: 20 }}>How are you feeling right now?</div>
+                <MetricSelector label="Energy" value={beforeMetrics.energy} onChange={v => setBeforeMetrics(m => ({ ...m, energy: v }))} max={5} color="#4AD99A" />
+                <MetricSelector label="Muscle Soreness" value={beforeMetrics.soreness} onChange={v => setBeforeMetrics(m => ({ ...m, soreness: v }))} max={5} color="#E8A838" />
+                <MetricSelector label="Heel Pain" value={beforeMetrics.heel_pain} onChange={v => setBeforeMetrics(m => ({ ...m, heel_pain: v }))} max={10} color="#D94A4A" />
+                <MetricSelector label="Low Back Tightness" value={beforeMetrics.low_back} onChange={v => setBeforeMetrics(m => ({ ...m, low_back: v }))} max={10} color="#D94A4A" />
+                <button onClick={() => setSessionStep("checklist")}
+                  style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, height: 56, width: "100%", fontSize: 17, fontWeight: 800, cursor: "pointer", marginTop: 8 }}>
+                  Start Checklist →
+                </button>
+              </div>
+            )}
+
+            {/* CHECKLIST */}
+            {sessionStep === "checklist" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700 }}>Complete each item</div>
+                  <div style={{ color: selectedTemplate.color, fontSize: 14, fontWeight: 700 }}>{completedCount}/{checklist.length}</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+                  {checklist.map((item, i) => (
+                    <button key={i} onClick={() => toggleItem(i)}
+                      style={{ background: item.completed ? selectedTemplate.color + "22" : "#0F1117",
+                        border: `1px solid ${item.completed ? selectedTemplate.color + "44" : "#2A2D3A"}`,
+                        borderRadius: 10, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 2,
+                          background: item.completed ? selectedTemplate.color : "#2A2D3A",
+                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+                          {item.completed ? "✓" : ""}
+                        </div>
+                        <div>
+                          <div style={{ color: item.completed ? selectedTemplate.color : "#E8EAF0", fontWeight: 700, fontSize: 15, marginBottom: 3 }}>{item.name}</div>
+                          {item.cue && <div style={{ color: "#8B92A5", fontSize: 12, lineHeight: 1.5 }}>{item.cue}</div>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setSessionStep("after")}
+                  style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, height: 56, width: "100%", fontSize: 17, fontWeight: 800, cursor: "pointer" }}>
+                  Record After Metrics →
+                </button>
+              </div>
+            )}
+
+            {/* AFTER METRICS */}
+            {sessionStep === "after" && (
+              <div>
+                <div style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700, marginBottom: 20 }}>How do you feel now?</div>
+                <MetricSelector label="Energy" value={afterMetrics.energy} onChange={v => setAfterMetrics(m => ({ ...m, energy: v }))} max={5} color="#4AD99A" />
+                <MetricSelector label="Muscle Soreness" value={afterMetrics.soreness} onChange={v => setAfterMetrics(m => ({ ...m, soreness: v }))} max={5} color="#E8A838" />
+                <MetricSelector label="Heel Pain" value={afterMetrics.heel_pain} onChange={v => setAfterMetrics(m => ({ ...m, heel_pain: v }))} max={10} color="#D94A4A" />
+                <MetricSelector label="Low Back Tightness" value={afterMetrics.low_back} onChange={v => setAfterMetrics(m => ({ ...m, low_back: v }))} max={10} color="#D94A4A" />
+
+                <div style={{ marginBottom: 20, marginTop: 8 }}>
+                  <div style={{ color: "#8B92A5", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Did you leave better than you arrived?</div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    {[["better", "✅ Yes", "#4AD99A"], ["neutral", "➡️ Neutral", "#E8A838"], ["worse", "❌ No", "#D94A4A"]].map(([val, label, color]) => (
+                      <button key={val} onClick={() => setResultRating(val)}
+                        style={{ flex: 1, height: 52, borderRadius: 10, border: `2px solid ${resultRating === val ? color : "#2A2D3A"}`,
+                          background: resultRating === val ? color + "22" : "#0F1117",
+                          color: resultRating === val ? color : "#4B5563", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button onClick={saveSession} disabled={saving || !resultRating}
+                  style={{ background: saving || !resultRating ? "#2A2D3A" : "#4AD99A",
+                    color: saving || !resultRating ? "#4B5563" : "#0F1117",
+                    border: "none", borderRadius: 10, height: 60, width: "100%", fontSize: 18, fontWeight: 800, cursor: saving || !resultRating ? "default" : "pointer" }}>
+                  {saving ? "Saving..." : "Save Recovery Session"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {editing ? (
-          <div>
-            <Card style={{ marginBottom: 16 }}>
-              <SectionLabel>Recovery Metrics</SectionLabel>
-              <StarRating label="Sleep Quality" value={fields.sleep_quality} onChange={v => setF("sleep_quality", v)} color="#7B68EE" />
-              <StarRating label="Energy Level" value={fields.energy} onChange={v => setF("energy", v)} color="#4AD99A" />
-              <StarRating label="Muscle Soreness" value={fields.muscle_soreness} onChange={v => setF("muscle_soreness", v)} color="#E8A838" />
-            </Card>
-
-            <Card style={{ marginBottom: 16 }}>
-              <SectionLabel>Pain Tracking</SectionLabel>
-              <PainSlider label="Heel Pain" value={fields.heel_pain} onChange={v => setF("heel_pain", v)} />
-              <PainSlider label="Low Back Pain" value={fields.low_back_pain} onChange={v => setF("low_back_pain", v)} />
-            </Card>
-
-            <Card style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <SectionLabel>Alfredson Protocol</SectionLabel>
-                <span style={{ color: alfredsonComplete === 4 ? "#4AD99A" : "#E8A838", fontSize: 13, fontWeight: 700 }}>{alfredsonComplete}/4 complete</span>
+        {/* Right sidebar — progress */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto" }}>
+          <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16 }}>
+            <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Session Progress</div>
+            <div style={{ background: "#0F1117", borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
+              <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 6 }}>Checklist</div>
+              <div style={{ color: selectedTemplate.color, fontSize: 28, fontWeight: 800 }}>{completedCount}<span style={{ color: "#4B5563", fontSize: 16 }}>/{checklist.length}</span></div>
+              <div style={{ background: "#1A1D26", borderRadius: 4, height: 6, marginTop: 8 }}>
+                <div style={{ width: `${checklist.length > 0 ? (completedCount/checklist.length)*100 : 0}%`, height: "100%", background: selectedTemplate.color, borderRadius: 4, transition: "width 0.3s" }} />
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Morning</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <AlfredsonCheck label="Straight-knee eccentric calf raises (3×15)" checked={fields.alfredson_morning_straight} onChange={v => setF("alfredson_morning_straight", v)} />
-                  <AlfredsonCheck label="Bent-knee eccentric calf raises (3×15)" checked={fields.alfredson_morning_bent} onChange={v => setF("alfredson_morning_bent", v)} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {checklist.map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}>
+                  <div style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                    background: item.completed ? selectedTemplate.color : "#2A2D3A",
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>
+                    {item.completed ? "✓" : ""}
+                  </div>
+                  <span style={{ color: item.completed ? "#E8EAF0" : "#4B5563", fontSize: 12, textDecoration: item.completed ? "none" : "none" }}>{item.name}</span>
                 </div>
-              </div>
-              <div>
-                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Evening</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <AlfredsonCheck label="Straight-knee eccentric calf raises (3×15)" checked={fields.alfredson_evening_straight} onChange={v => setF("alfredson_evening_straight", v)} />
-                  <AlfredsonCheck label="Bent-knee eccentric calf raises (3×15)" checked={fields.alfredson_evening_bent} onChange={v => setF("alfredson_evening_bent", v)} />
-                </div>
-              </div>
-            </Card>
-
-            <Card style={{ marginBottom: 20 }}>
-              <SectionLabel>Notes</SectionLabel>
-              <textarea value={fields.notes} onChange={e => setF("notes", e.target.value)} rows={3}
-                placeholder="How are you feeling? Any observations..."
-                style={{ ...inputStyle, resize: "none" }} />
-            </Card>
-
-            <button onClick={handleSave} disabled={saving}
-              style={{ background: saving ? "#2A2D3A" : "#4AD99A", color: saving ? "#4B5563" : "#0F1117",
-                border: "none", borderRadius: 10, height: 56, width: "100%", fontSize: 17, fontWeight: 800, cursor: saving ? "default" : "pointer" }}>
-              {saving ? "Saving..." : "Save Recovery Check-in"}
-            </button>
+              ))}
+            </div>
           </div>
-        ) : todayLog ? (
-          <div>
-            <Card style={{ marginBottom: 16 }}>
-              <SectionLabel>Today's Check-in</SectionLabel>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 20 }}>
-                {[["Sleep", todayLog.sleep_quality, 5, "#7B68EE"],
-                  ["Energy", todayLog.energy, 5, "#4AD99A"],
-                  ["Soreness", todayLog.muscle_soreness, 5, "#E8A838"]].map(([label, val, max, color]) => (
-                  <div key={label} style={{ background: "#0F1117", borderRadius: 10, padding: "16px", textAlign: "center" }}>
-                    <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
-                    <div style={{ fontSize: 32, fontWeight: 800, color }}>{val}<span style={{ color: "#4B5563", fontSize: 16 }}>/{max}</span></div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                {[["Heel Pain", todayLog.heel_pain], ["Low Back Pain", todayLog.low_back_pain]].map(([label, val]) => (
-                  <div key={label} style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
-                    <span style={{ color: val === 0 ? "#4AD99A" : val <= 3 ? "#E8A838" : "#D94A4A", fontSize: 22, fontWeight: 800 }}>{val}/10</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
 
+          {sessionStep !== "before" && (
+            <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16 }}>
+              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Before Metrics</div>
+              {[["Energy", beforeMetrics.energy, 5, "#4AD99A"], ["Soreness", beforeMetrics.soreness, 5, "#E8A838"], ["Heel Pain", beforeMetrics.heel_pain, 10, "#D94A4A"], ["Low Back", beforeMetrics.low_back, 10, "#D94A4A"]].map(([label, val, max, color]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #2A2D3A" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
+                  <span style={{ color, fontSize: 13, fontWeight: 700 }}>{val}/{max}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── SESSION SUMMARY ────────────────────────────────────────────────────────
+  if (sessionStep === "summary" && lastSession) {
+    const ratingConfig = { better: { color: "#4AD99A", label: "✅ Better", icon: "🎉" }, neutral: { color: "#E8A838", label: "➡️ Neutral", icon: "😐" }, worse: { color: "#D94A4A", label: "❌ Worse", icon: "😔" } };
+    const rc = ratingConfig[lastSession.result_rating] || ratingConfig.neutral;
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #4AD99A44", padding: 40, maxWidth: 560, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 44, marginBottom: 12 }}>{rc.icon}</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: "#4AD99A", marginBottom: 4 }}>Recovery Session Complete</div>
+          <div style={{ color: "#8B92A5", fontSize: 14, marginBottom: 28 }}>{lastSession.template_name} · {lastSession.duration} min · {lastSession.completed_count}/{lastSession.total_count} items</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24, textAlign: "left" }}>
+            <DeltaBadge label="Energy" before={lastSession.before_energy} after={lastSession.after_energy} color="#4AD99A" />
+            <DeltaBadge label="Muscle Soreness" before={lastSession.before_soreness} after={lastSession.after_soreness} lowerIsBetter />
+            <DeltaBadge label="Heel Pain" before={lastSession.before_heel_pain} after={lastSession.after_heel_pain} lowerIsBetter />
+            <DeltaBadge label="Low Back" before={lastSession.before_low_back_tightness} after={lastSession.after_low_back_tightness} lowerIsBetter />
+          </div>
+
+          <div style={{ background: rc.color + "22", border: `1px solid ${rc.color}44`, borderRadius: 10, padding: "12px 20px", marginBottom: 24 }}>
+            <div style={{ color: rc.color, fontSize: 18, fontWeight: 800 }}>Did you leave better than you arrived? {rc.label}</div>
+          </div>
+
+          <button onClick={endSession}
+            style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, height: 52, width: "100%", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MAIN VIEWS ─────────────────────────────────────────────────────────────
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Recovery</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Maintain the machine so training can continue for decades.</div>
+        </div>
+        <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
+          {[["today", "Today"], ["history", "History"], ["templates", "Templates"]].map(([id, label]) => (
+            <button key={id} onClick={() => setView(id)}
+              style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
+                border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* TODAY VIEW */}
+      {view === "today" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div>
+            {todaySession ? (
+              <Card style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div>
+                    <div style={{ color: "#4AD99A", fontWeight: 700, fontSize: 16, marginBottom: 3 }}>✓ Session Complete Today</div>
+                    <div style={{ color: "#8B92A5", fontSize: 13 }}>{todaySession.template_name} · {todaySession.duration_minutes} min</div>
+                    <div style={{ color: "#8B92A5", fontSize: 13 }}>{todaySession.completed_count}/{todaySession.total_count} items completed</div>
+                  </div>
+                  {todaySession.result_rating && (
+                    <div style={{ background: todaySession.result_rating === "better" ? "#4AD99A22" : todaySession.result_rating === "neutral" ? "#E8A83822" : "#D94A4A22",
+                      color: todaySession.result_rating === "better" ? "#4AD99A" : todaySession.result_rating === "neutral" ? "#E8A838" : "#D94A4A",
+                      padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
+                      {todaySession.result_rating === "better" ? "✅ Better" : todaySession.result_rating === "neutral" ? "➡️ Neutral" : "❌ Worse"}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {[["Energy", todaySession.before_energy, todaySession.after_energy, "#4AD99A", false],
+                    ["Soreness", todaySession.before_soreness, todaySession.after_soreness, "#E8A838", true],
+                    ["Heel Pain", todaySession.before_heel_pain, todaySession.after_heel_pain, "#D94A4A", true],
+                    ["Low Back", todaySession.before_low_back_tightness, todaySession.after_low_back_tightness, "#D94A4A", true]].map(([label, before, after, color, lowerIsBetter]) => {
+                    const improved = lowerIsBetter ? after < before : after > before;
+                    const same = after === before;
+                    const dc = same ? "#4B5563" : improved ? "#4AD99A" : "#D94A4A";
+                    return (
+                      <div key={label} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                        <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 4 }}>{label}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{before}</span>
+                          <span style={{ color: dc }}>→</span>
+                          <span style={{ color: dc, fontSize: 18, fontWeight: 800 }}>{after}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            ) : (
+              <Card style={{ marginBottom: 16, textAlign: "center", padding: 32 }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🩺</div>
+                <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 700, marginBottom: 8 }}>No recovery session today</div>
+                <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 20 }}>Choose a template below to get started.</div>
+              </Card>
+            )}
+
+            <SectionLabel>Start a Session</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {RECOVERY_TEMPLATES.map((t, i) => (
+                <button key={i} onClick={() => startSession(t)}
+                  style={{ background: "#1A1D26", border: `1px solid ${t.color}44`, borderRadius: 10, padding: "14px 18px", cursor: "pointer", textAlign: "left", width: "100%" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 24 }}>{t.icon}</span>
+                      <div>
+                        <div style={{ color: t.color, fontWeight: 700, fontSize: 15 }}>{t.name}</div>
+                        <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{t.duration} · {t.items.length} exercises</div>
+                      </div>
+                    </div>
+                    <div style={{ color: t.color, fontSize: 20, fontWeight: 800 }}>→</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <Card>
-              <SectionLabel>Alfredson Protocol</SectionLabel>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {[["Morning Straight", todayLog.alfredson_morning_straight],
-                  ["Morning Bent", todayLog.alfredson_morning_bent],
-                  ["Evening Straight", todayLog.alfredson_evening_straight],
-                  ["Evening Bent", todayLog.alfredson_evening_bent]].map(([label, done]) => (
-                  <div key={label} style={{ background: done ? "#4AD99A22" : "#0F1117", border: `1px solid ${done ? "#4AD99A44" : "#2A2D3A"}`, borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 16 }}>{done ? "✓" : "○"}</span>
-                    <span style={{ color: done ? "#4AD99A" : "#4B5563", fontSize: 13, fontWeight: done ? 700 : 400 }}>{label}</span>
+              <SectionLabel>Recent Sessions</SectionLabel>
+              {recentSessions.length === 0 ? (
+                <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {recentSessions.slice(0, 5).map((s, i) => {
+                    const rc = { better: "#4AD99A", neutral: "#E8A838", worse: "#D94A4A" }[s.result_rating] || "#4B5563";
+                    return (
+                      <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 600 }}>{new Date(s.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
+                          <span style={{ color: rc, fontSize: 12, fontWeight: 700 }}>{s.result_rating === "better" ? "✅" : s.result_rating === "neutral" ? "➡️" : "❌"}</span>
+                        </div>
+                        <div style={{ color: "#8B92A5", fontSize: 12 }}>{s.template_name} · {s.completed_count}/{s.total_count} items · {s.duration_minutes} min</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY VIEW */}
+      {view === "history" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {recentSessions.length === 0 ? (
+            <Card style={{ textAlign: "center", padding: 40 }}>
+              <div style={{ color: "#3A3D4A", fontSize: 14 }}>No recovery sessions yet. Start one from the Today tab.</div>
+            </Card>
+          ) : recentSessions.map((s, i) => (
+            <RecoverySessionCard key={i} s={s} />
+          ))}
+        </div>
+      )}
+
+      {/* TEMPLATES VIEW */}
+      {view === "templates" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {RECOVERY_TEMPLATES.map((t, i) => (
+            <Card key={i} style={{ border: `1px solid ${t.color}33` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: 28 }}>{t.icon}</span>
+                <div>
+                  <div style={{ color: t.color, fontWeight: 800, fontSize: 16 }}>{t.name}</div>
+                  <div style={{ color: "#8B92A5", fontSize: 12 }}>{t.duration} · {t.items.length} exercises</div>
+                </div>
+              </div>
+              <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 14, fontStyle: "italic" }}>{t.purpose}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+                {t.items.map((item, ii) => (
+                  <div key={ii} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+                    <span style={{ color: "#C8CDD8", fontSize: 12 }}>{item}</span>
                   </div>
                 ))}
               </div>
+              <button onClick={() => { startSession(t); setView("today"); }}
+                style={{ background: t.color, color: "#0F1117", border: "none", borderRadius: 9, height: 48, width: "100%", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                Start Session
+              </button>
             </Card>
-          </div>
-        ) : (
-          <Card style={{ textAlign: "center", padding: 48 }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>🩺</div>
-            <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No check-in yet today</div>
-            <button onClick={() => setEditing(true)}
-              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>
-              Start Check-in
-            </button>
-          </Card>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* Right sidebar */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Card>
-          <SectionLabel>7-Day Alfredson Compliance</SectionLabel>
-          {weeklyCompliance !== null ? (
-            <div>
-              <div style={{ fontSize: 48, fontWeight: 800, color: weeklyCompliance >= 80 ? "#4AD99A" : weeklyCompliance >= 50 ? "#E8A838" : "#D94A4A", marginBottom: 4 }}>
-                {weeklyCompliance}%
-              </div>
-              <div style={{ background: "#0F1117", borderRadius: 6, height: 8, marginBottom: 8 }}>
-                <div style={{ width: `${weeklyCompliance}%`, height: "100%", background: weeklyCompliance >= 80 ? "#4AD99A" : weeklyCompliance >= 50 ? "#E8A838" : "#D94A4A", borderRadius: 6 }} />
-              </div>
-              <div style={{ color: "#4B5563", fontSize: 12 }}>{last7.length} days logged this week</div>
-            </div>
-          ) : (
-            <div style={{ color: "#3A3D4A", fontSize: 13 }}>No data yet</div>
-          )}
-        </Card>
-
-        <Card>
-          <SectionLabel>Recent Check-ins</SectionLabel>
-          {recoveryLogs.length === 0 ? (
-            <div style={{ color: "#3A3D4A", fontSize: 13 }}>No logs yet</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[...recoveryLogs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 7).map((r, i) => {
-                const alfDone = [r.alfredson_morning_straight, r.alfredson_morning_bent, r.alfredson_evening_straight, r.alfredson_evening_bent].filter(Boolean).length;
-                return (
-                  <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(r.date + "T12:00:00")}</span>
-                      <span style={{ color: alfDone === 4 ? "#4AD99A" : "#E8A838", fontSize: 12, fontWeight: 700 }}>Alf {alfDone}/4</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <span style={{ color: "#7B68EE", fontSize: 12 }}>💤 {r.sleep_quality}</span>
-                      <span style={{ color: "#4AD99A", fontSize: 12 }}>⚡ {r.energy}</span>
-                      <span style={{ color: "#E8A838", fontSize: 12 }}>💪 {r.muscle_soreness}</span>
-                      {r.heel_pain > 0 && <span style={{ color: "#D94A4A", fontSize: 12 }}>🦶 {r.heel_pain}</span>}
-                      {r.low_back_pain > 0 && <span style={{ color: "#D94A4A", fontSize: 12 }}>⬇️ {r.low_back_pain}</span>}
-                    </div>
+function RecoverySessionCard({ s }) {
+  const [expanded, setExpanded] = useState(false);
+  const rc = { better: "#4AD99A", neutral: "#E8A838", worse: "#D94A4A" }[s.result_rating] || "#4B5563";
+  return (
+    <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${expanded ? rc + "44" : "#2A2D3A"}`, overflow: "hidden" }}>
+      <button onClick={() => setExpanded(e => !e)}
+        style={{ width: "100%", background: "none", border: "none", padding: "16px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left" }}>
+        <div>
+          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{new Date(s.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
+          <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{s.template_name} · {s.duration_minutes} min · {s.completed_count}/{s.total_count} items</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ color: rc, fontSize: 14, fontWeight: 700 }}>{s.result_rating === "better" ? "✅ Better" : s.result_rating === "neutral" ? "➡️ Neutral" : "❌ Worse"}</div>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", color: "#4A90D9", fontSize: 13, fontWeight: 700 }}>{expanded ? "▲" : "▼"}</div>
+        </div>
+      </button>
+      {expanded && (
+        <div style={{ padding: "0 20px 16px", borderTop: "1px solid #2A2D3A" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "16px 0" }}>
+            {[["Energy", s.before_energy, s.after_energy, false],
+              ["Soreness", s.before_soreness, s.after_soreness, true],
+              ["Heel Pain", s.before_heel_pain, s.after_heel_pain, true],
+              ["Low Back", s.before_low_back_tightness, s.after_low_back_tightness, true]].map(([label, before, after, lib]) => {
+              const improved = lib ? after < before : after > before;
+              const same = after === before;
+              const dc = same ? "#4B5563" : improved ? "#4AD99A" : "#D94A4A";
+              return (
+                <div key={label} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 4 }}>{label}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: "#E8EAF0", fontSize: 14, fontWeight: 700 }}>{before}</span>
+                    <span style={{ color: dc }}>→</span>
+                    <span style={{ color: dc, fontSize: 18, fontWeight: 800 }}>{after}</span>
+                    {!same && <span style={{ color: dc, fontSize: 10 }}>{improved ? "▲" : "▼"}</span>}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </div>
+                </div>
+              );
+            })}
+          </div>
+          {s.notes && <div style={{ color: "#8B92A5", fontSize: 12, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 10 }}>{s.notes}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -2054,6 +2350,7 @@ function App() {
   const [bodyLogs, setBodyLogs]           = useState([]);
   const [nutritionDays, setNutritionDays] = useState([]);
   const [recoveryLogs, setRecoveryLogs]   = useState([]);
+  const [recoverySessions, setRecoverySessions] = useState([]);
   const [phase, setPhase]           = useState(null);
   const [loading, setLoading]       = useState(true);
   const [dbError, setDbError]       = useState(false);
@@ -2112,11 +2409,12 @@ function App() {
   const loadAll = useCallback(async (token, uid) => {
     setLoading(true); setDbError(false);
     try {
-      const [wData, bData, ndData, rlData, pData] = await Promise.all([
+      const [wData, bData, ndData, rlData, rsData, pData] = await Promise.all([
         sbGet(`workout_logs?user_id=eq.${uid}&order=date.asc&limit=5000`, token),
         sbGet(`body_logs?user_id=eq.${uid}&order=date.asc&limit=500`, token),
         sbGet(`nutrition_days?user_id=eq.${uid}&order=date.desc&limit=100`, token),
         sbGet(`recovery_logs?user_id=eq.${uid}&order=date.desc&limit=100`, token),
+        sbGet(`recovery_sessions?user_id=eq.${uid}&order=date.desc&limit=100`, token),
         sbGet(`phase_data?user_id=eq.${uid}&order=created_at.desc&limit=1`, token),
       ]);
 
@@ -2148,6 +2446,7 @@ function App() {
       setBodyLogs(bLogs);
       setNutritionDays(nDays);
       setRecoveryLogs(rlData || []);
+      setRecoverySessions(rsData || []);
       lsSet(LS_KEYS.workout, wLogs);
       lsSet(LS_KEYS.body, bLogs);
 
@@ -2161,7 +2460,7 @@ function App() {
   const signOut = () => {
     localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
     setSession(null); setUserId(null);
-    setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]); setRecoveryLogs([]); setPhase(null);
+    setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]); setRecoveryLogs([]); setRecoverySessions([]); setPhase(null);
   };
 
   // ── Workout handlers ───────────────────────────────────────────────────────
@@ -2268,6 +2567,47 @@ function App() {
       setRecoveryLogs(prev => [rows[0], ...prev.filter(r => r.date !== entry.date)]);
       return true;
     } catch { return false; }
+  };
+
+  const saveRecoverySession = async (sessionData) => {
+    try {
+      const payload = {
+        user_id: userId,
+        date: sessionData.date,
+        template_name: sessionData.template_name,
+        duration_minutes: sessionData.duration_minutes,
+        completed_count: sessionData.completed_count,
+        total_count: sessionData.total_count,
+        before_energy: sessionData.before_energy,
+        after_energy: sessionData.after_energy,
+        before_soreness: sessionData.before_soreness,
+        after_soreness: sessionData.after_soreness,
+        before_heel_pain: sessionData.before_heel_pain,
+        after_heel_pain: sessionData.after_heel_pain,
+        before_low_back_tightness: sessionData.before_low_back_tightness,
+        after_low_back_tightness: sessionData.after_low_back_tightness,
+        result_rating: sessionData.result_rating,
+      };
+      const rows = await sbPost("recovery_sessions", payload, session);
+      if (!rows?.[0]?.id) return false;
+      const sessionId = rows[0].id;
+      // Save checklist items
+      for (const item of (sessionData.items || [])) {
+        await sbPost("recovery_session_items", {
+          user_id: userId,
+          recovery_session_id: sessionId,
+          item_name: item.name,
+          cue: item.cue || null,
+          completed: item.completed,
+          sort_order: item.sort_order,
+        }, session);
+      }
+      setRecoverySessions(prev => [rows[0], ...prev.filter(s => s.date !== sessionData.date)]);
+      return true;
+    } catch (e) {
+      console.error("saveRecoverySession error:", e);
+      return false;
+    }
   };
 
   // ── Workout summary handler ────────────────────────────────────────────────
@@ -2378,7 +2718,7 @@ function App() {
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
         {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} />}
-        {tab === "recovery"  && <RecoveryTab recoveryLogs={recoveryLogs} onSave={saveRecoveryLog} />}
+        {tab === "recovery"  && <RecoveryTab recoverySessions={recoverySessions} onSaveSession={saveRecoverySession} />}
       </div>
 
       {/* Bottom tab bar */}
