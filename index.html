@@ -483,7 +483,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
                 const last = lastEntry(ex.id);
                 const logged = todayLogs.some(l => l.exerciseId === ex.id);
                 return (
-                  <div key={ex.id} style={{ background: "#1A1D26", borderRadius: 10, border: `1px solid ${logged ? "#4AD99A44" : "#2A2D3A"}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
+                  <div key={ex.id} style={{ background: "#1A1D26", borderRadius: 10, border: logged ? "1px solid #4AD99A44" : "1px solid #2A2D3A", padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
                     <div style={{ width: 28, height: 28, borderRadius: "50%", background: logged ? "#4AD99A" : "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14 }}>
                       {logged ? "✓" : ""}
                     </div>
@@ -602,9 +602,9 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
         </div>
 
         {/* PF preview with PR/progress indicator */}
-        <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 18px", border: `1px solid ${
-          previewPF > 0 && lastPF && previewPF > lastPF * 1.05 ? "#FFD70044" :
-          pfDiff !== null && pfDiff >= 0 ? "#4AD99A44" : "#2A2D3A"}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 18px",
+          border: (previewPF > 0 && lastPF && previewPF > lastPF * 1.05) ? "1px solid #FFD70044" : (pfDiff !== null && pfDiff >= 0) ? "1px solid #4AD99A44" : "1px solid #2A2D3A",
+          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: "#8B92A5", fontSize: 14 }}>Prime Factor</div>
           <div style={{ fontSize: 32, fontWeight: 800, color: "#E8A838", fontVariantNumeric: "tabular-nums" }}>{previewPF.toLocaleString()}</div>
           {pfDiff !== null && (
@@ -864,7 +864,7 @@ function ProgressTab({ exercises, workoutLogs }) {
               <button key={e.id} onClick={() => setSelected(e.id)}
                 style={{ background: selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#1A1D26",
                   color: selected === e.id ? "#fff" : "#8B92A5",
-                  border: `1px solid ${selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#2A2D3A"}`,
+                  border: selected === e.id ? "1px solid " + MUSCLE_COLORS[e.muscleGroup] : "1px solid #2A2D3A",
                   borderRadius: 20, padding: "7px 16px", fontSize: 13, cursor: "pointer", fontWeight: selected === e.id ? 700 : 400 }}>
                 {e.name}
               </button>
@@ -1126,7 +1126,7 @@ function BodyTab({ bodyLogs, onSave }) {
 function NutritionDayCard({ d }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${expanded ? "#4A90D944" : "#2A2D3A"}`, overflow: "hidden" }}>
+    <div style={{ background: "#1A1D26", borderRadius: 12, border: expanded ? "1px solid #4A90D944" : "1px solid #2A2D3A", overflow: "hidden" }}>
       <button
         onClick={() => setExpanded(e => !e)}
         style={{ width: "100%", background: "none", border: "none", padding: "16px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left" }}>
@@ -1270,7 +1270,8 @@ Rules:
       if (data.error) throw new Error(data.error.message);
       const text = data.choices?.[0]?.message?.content?.trim();
       if (!text) throw new Error("Empty response");
-      const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const fence = String.fromCharCode(96);
+      const cleaned = text.replace(new RegExp("^" + fence + fence + fence + "json\\s*", "i"), "").replace(new RegExp("^" + fence + fence + fence + "\\s*", "i"), "").replace(new RegExp(fence + fence + fence + "\\s*$", "i"), "").trim();
       const parsed = JSON.parse(cleaned);
       // Ensure required fields exist
       if (!parsed.totals) parsed.totals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
@@ -1591,10 +1592,10 @@ function MetricSelector({ label, value, onChange, max, color }) {
       <div style={{ display: "flex", gap: 8 }}>
         {Array.from({ length: max + 1 }).map((_, i) => (
           <button key={i} onClick={() => onChange(i)}
-            style={{ flex: 1, height: 52, borderRadius: 8, border: "none", fontWeight: 800, fontSize: 15, cursor: "pointer",
+            style={{ flex: 1, height: 52, borderRadius: 8, fontWeight: 800, fontSize: 15, cursor: "pointer",
               background: i === value ? color : "#1A1D26",
               color: i === value ? (color === "#E8A838" || color === "#4AD99A" ? "#0F1117" : "#fff") : "#4B5563",
-              border: `1px solid ${i === value ? color : "#2A2D3A"}` }}>
+              border: i === value ? "1px solid " + color : "1px solid #2A2D3A" }}>
             {i}
           </button>
         ))}
@@ -1604,9 +1605,8 @@ function MetricSelector({ label, value, onChange, max, color }) {
 }
 
 function RecoveryTab({ recoverySessions, onSaveSession }) {
-  if (!recoverySessions) return <div style={{ color: "#8B92A5", padding: 40, textAlign: "center" }}>Loading recovery data...</div>;
   const [view, setView] = useState("today");
-  const [sessionStep, setSessionStep] = useState(null); // null | "template" | "before" | "checklist" | "after" | "summary"
+  const [sessionStep, setSessionStep] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [checklist, setChecklist] = useState([]);
   const [beforeMetrics, setBeforeMetrics] = useState({ energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
@@ -1614,11 +1614,13 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   const [resultRating, setResultRating] = useState(null);
   const [sessionStart, setSessionStart] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [lastSession, setLastSession] = useState(null);
 
+  const safeSessions = recoverySessions || [];
   const today = new Date().toISOString().split("T")[0];
-  const todaySession = recoverySessions.find(s => s.date === today);
-  const recentSessions = [...recoverySessions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 14);
+  const todaySession = safeSessions.find(s => s.date === today);
+  const recentSessions = [...safeSessions].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 14);
 
   const startSession = (template) => {
     setSelectedTemplate(template);
@@ -1690,9 +1692,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   };
 
   // ── ACTIVE SESSION ─────────────────────────────────────────────────────────
-  if (!selectedTemplate) return null;
-
-  if (sessionStep === "before" || sessionStep === "checklist" || sessionStep === "after") {
+  if (selectedTemplate && ["before", "checklist", "after"].includes(sessionStep)) {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "calc(100vh - 130px)" }}>
         <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 24, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -1707,9 +1707,9 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
               </div>
               <div style={{ color: "#8B92A5", fontSize: 13 }}>{selectedTemplate.purpose}</div>
             </div>
-            <button onClick={() => { if (window.confirm("End session without saving?")) endSession(); }}
+            <button onClick={() => endSession()}
               style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer" }}>
-              Cancel
+              Cancel Session
             </button>
           </div>
 
@@ -1752,7 +1752,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
                   {checklist.map((item, i) => (
                     <button key={i} onClick={() => toggleItem(i)}
                       style={{ background: item.completed ? selectedTemplate.color + "22" : "#0F1117",
-                        border: `1px solid ${item.completed ? selectedTemplate.color + "44" : "#2A2D3A"}`,
+                        border: item.completed ? "1px solid " + selectedTemplate.color + "44" : "1px solid #2A2D3A",
                         borderRadius: 10, padding: "14px 16px", cursor: "pointer", textAlign: "left", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                         <div style={{ width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 2,
@@ -1815,7 +1815,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
                   <div style={{ display: "flex", gap: 10 }}>
                     {[["better", "✅ Yes", "#4AD99A"], ["neutral", "➡️ Neutral", "#E8A838"], ["worse", "❌ No", "#D94A4A"]].map(([val, label, color]) => (
                       <button key={val} onClick={() => setResultRating(val)}
-                        style={{ flex: 1, height: 52, borderRadius: 10, border: `2px solid ${resultRating === val ? color : "#2A2D3A"}`,
+                        style={{ flex: 1, height: 52, borderRadius: 10, border: resultRating === val ? "2px solid " + color : "2px solid #2A2D3A",
                           background: resultRating === val ? color + "22" : "#0F1117",
                           color: resultRating === val ? color : "#4B5563", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                         {label}
@@ -1878,7 +1878,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   }
 
   // ── SESSION SUMMARY ────────────────────────────────────────────────────────
-  if (sessionStep === "summary" && lastSession) {
+  if (selectedTemplate && sessionStep === "summary" && lastSession) {
     const ratingConfig = { better: { color: "#4AD99A", label: "✅ Better", icon: "🎉" }, neutral: { color: "#E8A838", label: "➡️ Neutral", icon: "😐" }, worse: { color: "#D94A4A", label: "❌ Worse", icon: "😔" } };
     const rc = ratingConfig[lastSession.result_rating] || ratingConfig.neutral;
     return (
@@ -2072,7 +2072,7 @@ function RecoverySessionCard({ s }) {
   const [expanded, setExpanded] = useState(false);
   const rc = { better: "#4AD99A", neutral: "#E8A838", worse: "#D94A4A" }[s.result_rating] || "#4B5563";
   return (
-    <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${expanded ? rc + "44" : "#2A2D3A"}`, overflow: "hidden" }}>
+    <div style={{ background: "#1A1D26", borderRadius: 12, border: expanded ? "1px solid " + rc + "44" : "1px solid #2A2D3A", overflow: "hidden" }}>
       <button onClick={() => setExpanded(e => !e)}
         style={{ width: "100%", background: "none", border: "none", padding: "16px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left" }}>
         <div>
@@ -2292,7 +2292,7 @@ function PhaseTracker({ phase, setPhase }) {
                 const c = PHASE_CONFIG[type];
                 return (
                   <button key={type} onClick={() => setSetupType(type)}
-                    style={{ background: setupType === type ? c.bg : "#0F1117", border: `2px solid ${setupType === type ? c.color : "#2A2D3A"}`, borderRadius: 10, padding: "16px 12px", cursor: "pointer", textAlign: "left" }}>
+                    style={{ background: setupType === type ? c.bg : "#0F1117", border: setupType === type ? "2px solid " + c.color : "2px solid #2A2D3A", borderRadius: 10, padding: "16px 12px", cursor: "pointer", textAlign: "left" }}>
                     <div style={{ fontSize: 22, marginBottom: 6 }}>{c.icon}</div>
                     <div style={{ color: setupType === type ? c.color : "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{c.label}</div>
                     <div style={{ color: "#8B92A5", fontSize: 11, marginTop: 4 }}>{c.weeks} weeks · {c.calories} kcal/day</div>
@@ -2743,7 +2743,7 @@ function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Phase toggle */}
           <button onClick={() => setShowPhaseModal(true)}
-            style={{ background: phaseCfg ? phaseCfg.bg : "#2A2D3A", border: `1px solid ${phaseCfg ? phaseCfg.color + "44" : "#2A2D3A"}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+            style={{ background: phaseCfg ? phaseCfg.bg : "#2A2D3A", border: phaseCfg ? "1px solid " + phaseCfg.color + "44" : "1px solid #2A2D3A", borderRadius: 8, padding: "5px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 14 }}>{phaseCfg ? phaseCfg.icon : "🗓️"}</span>
             {phase && phaseCfg && phaseInfo ? (
               <span style={{ color: phaseCfg.color, fontSize: 12, fontWeight: 700 }}>{phaseCfg.label} · {phaseInfo.remaining}d · Wk {Math.min(phaseInfo.week, phaseInfo.totalWeeks)}</span>
