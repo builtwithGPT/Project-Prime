@@ -1688,6 +1688,8 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   };
 
   // ── ACTIVE SESSION ─────────────────────────────────────────────────────────
+  if (!selectedTemplate) return null;
+
   if (sessionStep === "before" || sessionStep === "checklist" || sessionStep === "after") {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "calc(100vh - 130px)" }}>
@@ -1778,10 +1780,10 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
                 <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", marginBottom: 20, border: "1px solid #2A2D3A" }}>
                   <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Before → After</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {[["Energy", beforeMetrics.energy, afterMetrics.energy, "#4AD99A", false],
-                      ["Soreness", beforeMetrics.soreness, afterMetrics.soreness, "#E8A838", true],
-                      ["Heel Pain", beforeMetrics.heel_pain, afterMetrics.heel_pain, "#D94A4A", true],
-                      ["Low Back", beforeMetrics.low_back, afterMetrics.low_back, "#D94A4A", true]].map(([label, before, after, color, lib]) => {
+                    {[["Energy", beforeMetrics?.energy ?? 3, afterMetrics?.energy ?? 3, "#4AD99A", false],
+                      ["Soreness", beforeMetrics?.soreness ?? 3, afterMetrics?.soreness ?? 3, "#E8A838", true],
+                      ["Heel Pain", beforeMetrics?.heel_pain ?? 0, afterMetrics?.heel_pain ?? 0, "#D94A4A", true],
+                      ["Low Back", beforeMetrics?.low_back ?? 0, afterMetrics?.low_back ?? 0, "#D94A4A", true]].map(([label, before, after, color, lib]) => {
                       const improved = lib ? after < before : after > before;
                       const same = after === before;
                       const dc = same ? "#4B5563" : improved ? "#4AD99A" : "#D94A4A";
