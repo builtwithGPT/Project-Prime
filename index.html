@@ -306,6 +306,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
   const startWorkout = () => {
     setLoggedIds(new Set(todayLogs.map(l => l.exerciseId)));
     setWorkoutEnded(false);
+    setWorkoutSummary(null);
     loadExercise(0);
     setActiveMode(true);
   };
@@ -402,11 +403,11 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
           </div>
 
           <div style={{ display: "flex", gap: 12 }}>
-            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); }}
+            <button onClick={() => { setWorkoutSummary(null); }}
               style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, height: 52, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
               Done
             </button>
-            <button onClick={() => { setWorkoutSummary(null); startWorkout(); }}
+            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); startWorkout(); }}
               style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 52, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
               Continue Workout
             </button>
@@ -434,7 +435,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
             {todayLogs.length > 0 && <div style={{ color: "#E8A838", fontSize: 14, fontWeight: 700 }}>Session PF {sessionPF.toLocaleString()}</div>}
             <button onClick={startWorkout}
               style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              {todayLogs.length > 0 && !workoutEnded ? "Resume Workout" : "Start Workout"}
+              {todayLogs.length > 0 && !workoutEnded ? "Resume Workout" : workoutEnded ? "New Workout" : "Start Workout"}
             </button>
           </div>
         </div>
