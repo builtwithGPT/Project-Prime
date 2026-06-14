@@ -138,6 +138,7 @@ const sbHeaders = (token) => ({
 async function sbGet(path, token) {
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: sbHeaders(token) });
+    if (r.status === 401) return { _unauthorized: true };
     if (!r.ok) throw new Error(r.status);
     return await r.json();
   } catch { return null; }
@@ -2447,6 +2448,15 @@ function App() {
         sbGet(`recovery_sessions?user_id=eq.${uid}&order=date.desc&limit=100`, token),
         sbGet(`phase_data?user_id=eq.${uid}&order=created_at.desc&limit=1`, token),
       ]);
+
+      // If any request returns 401, session is expired — force re-login
+      if ([wData, bData, ndData, rlData, rsData, pData].some(d => d?._unauthorized)) {
+        localStorage.removeItem("pp_session");
+        sessionStorage.removeItem("pp_session");
+        setSession(null); setUserId(null);
+        setLoading(false);
+        return;
+      }
 
       const lsWorkout = lsGet(LS_KEYS.workout);
       const lsBody    = lsGet(LS_KEYS.body);
