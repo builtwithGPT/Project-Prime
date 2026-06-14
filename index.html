@@ -1004,104 +1004,701 @@ function ProgressTab({ exercises, workoutLogs }) {
   );
 }
 
-// ─── BODY TAB ─────────────────────────────────────────────────────────────────
-function BodyTab({ bodyLogs, onSave }) {
-  const [showForm, setShowForm] = useState(false);
-  const [fields, setFields] = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
+// ─── BODY TAB — PROJECT PRIME COMMAND CENTER ──────────────────────────────────
+
+// ── Mini bar chart for Body tab trend panels ────────────────────────────────
+function MiniBarChart({ data, color = "#4A90D9", height = 56 }) {
+  if (!data || data.length < 2) return <div style={{ color: "#3A3D4A", fontSize: 11 }}>Not enough data</div>;
+  const vals = data.map(d => d.value);
+  const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 0.01;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height }}>
+      {data.slice(-16).map((d, i, arr) => {
+        const h = Math.max(4, ((d.value - min) / range) * (height - 8) + 4);
+        const isLast = i === arr.length - 1;
+        return (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+            {isLast && <div style={{ fontSize: 9, color, fontWeight: 700, marginBottom: 1 }}>{d.value}</div>}
+            <div style={{ width: "100%", height: h, background: isLast ? color : color + "44", borderRadius: "2px 2px 0 0" }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── KPI Card ────────────────────────────────────────────────────────────────
+function KPICard({ title, value, unit, sub, status, statusLabel, trend, trendLabel, children, accent }) {
+  const statusColors = { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563" };
+  const sc = statusColors[status] || statusColors.gray;
+  return (
+    <div style={{ background: "#1A1D26", borderRadius: 14, border: `1px solid ${sc}33`, padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{title}</div>
+        {statusLabel && (
+          <div style={{ background: sc + "22", color: sc, padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{statusLabel}</div>
+        )}
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <div style={{ fontSize: 38, fontWeight: 800, color: "#E8EAF0", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value ?? "—"}</div>
+        {unit && <div style={{ fontSize: 14, color: "#8B92A5" }}>{unit}</div>}
+      </div>
+      {sub && <div style={{ color: sc, fontSize: 13, fontWeight: 700 }}>{sub}</div>}
+      {trend && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 16 }}>{trend}</span>
+          <span style={{ color: "#8B92A5", fontSize: 12 }}>{trendLabel}</span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ── Weekly AI Review Card ────────────────────────────────────────────────────
+function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) {
+  const statusColors = { "🟢": "#4AD99A", "🟡": "#E8A838", "🔴": "#D94A4A" };
+  const sc = review ? (Object.entries(statusColors).find(([k]) => review.overall_status?.startsWith(k))?.[1] || "#4A90D9") : "#4A90D9";
+
+  if (!review && !generating) {
+    return (
+      <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 28, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🤖</div>
+        <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Weekly AI Coaching Review</div>
+        <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 20, lineHeight: 1.6 }}>
+          {phase ? `Week ${phaseInfo?.week || 1} · Generate your coaching report for this week's performance across training, nutrition, body composition, and recovery.` : "Set a phase first to enable weekly reviews."}
+        </div>
+        <button onClick={onGenerate} disabled={!phase}
+          style={{ background: phase ? "#4A90D9" : "#2A2D3A", color: phase ? "#fff" : "#4B5563", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 15, fontWeight: 700, cursor: phase ? "pointer" : "default" }}>
+          Generate Week {phaseInfo?.week || 1} Review
+        </button>
+      </div>
+    );
+  }
+
+  if (generating) {
+    return (
+      <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #4A90D944", padding: 28, textAlign: "center" }}>
+        <div style={{ color: "#4A90D9", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>GENERATING WEEKLY REVIEW</div>
+        <div style={{ color: "#8B92A5", fontSize: 13 }}>Analyzing training, nutrition, body composition, and recovery data…</div>
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "center", gap: 6 }}>
+          {[0,1,2].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "#4A90D9", opacity: 0.4 + i * 0.3 }} />)}
+        </div>
+      </div>
+    );
+  }
+
+  const wins = Array.isArray(review.major_wins) ? review.major_wins : (review.major_wins ? [review.major_wins] : []);
+  const monitors = Array.isArray(review.areas_to_monitor) ? review.areas_to_monitor : (review.areas_to_monitor ? [review.areas_to_monitor] : []);
+  const recs = Array.isArray(review.next_week_recommendations) ? review.next_week_recommendations : (review.next_week_recommendations ? [review.next_week_recommendations] : []);
+
+  return (
+    <div style={{ background: "#1A1D26", borderRadius: 14, border: `1px solid ${sc}44`, overflow: "hidden" }}>
+      {/* Header */}
+      <div style={{ background: sc + "11", borderBottom: `1px solid ${sc}33`, padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>WEEKLY PROJECT PRIME REVIEW</div>
+          <div style={{ color: sc, fontSize: 20, fontWeight: 800, marginTop: 2 }}>{review.overall_status}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ color: "#8B92A5", fontSize: 12 }}>Week {review.phase_week} · {review.phase}</div>
+          <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>{review.review_date ? fmtDate(review.review_date) : ""}</div>
+          <button onClick={onGenerate} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, cursor: "pointer", marginTop: 6 }}>
+            Regenerate
+          </button>
+        </div>
+      </div>
+      <div style={{ padding: 24 }}>
+        {/* Executive summary */}
+        {review.executive_summary && (
+          <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 18px", marginBottom: 20, fontSize: 14, color: "#C8CDD8", lineHeight: 1.7, fontStyle: "italic" }}>
+            "{review.executive_summary}"
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+          {/* Major Wins */}
+          {wins.length > 0 && (
+            <div style={{ background: "#4AD99A11", borderRadius: 10, border: "1px solid #4AD99A33", padding: "14px 16px" }}>
+              <div style={{ color: "#4AD99A", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>🏆 Major Wins</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {wins.map((w, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ color: "#4AD99A", fontSize: 13, flexShrink: 0, marginTop: 1 }}>✓</span>
+                    <span style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.5 }}>{w}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Areas to Monitor */}
+          {monitors.length > 0 && (
+            <div style={{ background: "#E8A83811", borderRadius: 10, border: "1px solid #E8A83833", padding: "14px 16px" }}>
+              <div style={{ color: "#E8A838", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>⚠ Monitor</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {monitors.map((m, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ color: "#E8A838", fontSize: 13, flexShrink: 0, marginTop: 1 }}>•</span>
+                    <span style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.5 }}>{m}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Next Week */}
+          {recs.length > 0 && (
+            <div style={{ background: "#4A90D911", borderRadius: 10, border: "1px solid #4A90D933", padding: "14px 16px" }}>
+              <div style={{ color: "#4A90D9", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>🎯 Next 7 Days</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {recs.map((r, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ color: "#4A90D9", fontSize: 12, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>{i + 1}.</span>
+                    <span style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.5 }}>{r}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, recoverySessions, phase, phaseInfo }) {
+  const [showForm, setShowForm]     = useState(false);
+  const [fields, setFields]         = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
   const [saveStatus, setSaveStatus] = useState(null);
+  const [activeTrend, setActiveTrend] = useState("weight");
+  const [weeklyReview, setWeeklyReview] = useState(null);
+  const [generating, setGenerating]     = useState(false);
+  const [reviewSaveStatus, setReviewSaveStatus] = useState(null);
   const setF = (k) => (e) => setFields(f => ({ ...f, [k]: e.target.value }));
 
+  // ── Data derivations ───────────────────────────────────────────────────────
+  const sorted = [...bodyLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const latest = sorted[sorted.length - 1] || {};
+  const phaseStart = phase?.startDate ? new Date(phase.startDate) : null;
+
+  // Get first body log at or after phase start (baseline)
+  const baseline = phaseStart
+    ? sorted.find(l => new Date(l.date) >= phaseStart) || sorted[0]
+    : sorted[0];
+
+  const weightSeries = sorted.filter(l => l.weight).map(l => ({ value: l.weight, date: l.date }));
+  const waistSeries  = sorted.filter(l => l.waist).map(l => ({ value: l.waist,  date: l.date }));
+  const chestSeries  = sorted.filter(l => l.chest).map(l => ({ value: l.chest,  date: l.date }));
+  const armsSeries   = sorted.filter(l => l.arms).map(l =>  ({ value: l.arms,   date: l.date }));
+  const glutesSeries = sorted.filter(l => l.glutes).map(l => ({ value: l.glutes, date: l.date }));
+  const thighsSeries = sorted.filter(l => l.thighs).map(l => ({ value: l.thighs, date: l.date }));
+
+  const latestWeight = latest.weight || null;
+  const baseWeight   = baseline?.weight || null;
+  const weightChange = latestWeight && baseWeight ? +(latestWeight - baseWeight).toFixed(1) : null;
+
+  // Weekly rate of change (lbs/week) over last 4 entries
+  const wRate = (() => {
+    if (weightSeries.length < 2) return null;
+    const recent = weightSeries.slice(-4);
+    const days = (new Date(recent[recent.length-1].date) - new Date(recent[0].date)) / 86400000;
+    if (days < 1) return null;
+    return +((recent[recent.length-1].value - recent[0].value) / days * 7).toFixed(2);
+  })();
+
+  // Weight KPI status (Gain phase: ideal +0.25–0.75/wk)
+  const weightStatus = (() => {
+    if (wRate === null) return "gray";
+    const isGain = phase?.type === "gain";
+    if (isGain) {
+      if (wRate >= 0.2 && wRate <= 0.8) return "green";
+      if (wRate > 0.8) return "red";
+      return "yellow";
+    } else {
+      if (wRate <= -0.5 && wRate >= -1.5) return "green";
+      if (wRate < -1.5) return "red";
+      return "yellow";
+    }
+  })();
+
+  const weightStatusLabel = (() => {
+    if (wRate === null) return "No data";
+    const isGain = phase?.type === "gain";
+    if (isGain) {
+      if (weightStatus === "green") return "🟢 Ideal Gain Pace";
+      if (weightStatus === "red")   return "🔴 Too Fast";
+      return "🟡 Too Slow";
+    } else {
+      if (weightStatus === "green") return "🟢 Ideal Cut Pace";
+      if (weightStatus === "red")   return "🔴 Too Fast";
+      return "🟡 Too Slow";
+    }
+  })();
+
+  // Waist KPI
+  const latestWaist = latest.waist || null;
+  const baseWaist   = baseline?.waist || null;
+  const waistChange = latestWaist && baseWaist ? +(latestWaist - baseWaist).toFixed(1) : null;
+  const waistStatus = waistChange === null ? "gray" : waistChange <= 0.25 ? "green" : waistChange <= 0.75 ? "yellow" : "red";
+  const waistStatusLabel = waistStatus === "green" ? "🟢 Stable" : waistStatus === "yellow" ? "🟡 Slight Increase" : waistStatus === "red" ? "🔴 Increasing" : "No data";
+
+  // Prime Factor KPI
+  const pfSince = (exerciseIds, since) => {
+    const sinceDate = since ? new Date(since) : null;
+    const relevant = workoutLogs.filter(l => !sinceDate || new Date(l.date) >= sinceDate);
+    const byEx = {};
+    relevant.forEach(l => {
+      const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+      if (!ex) return;
+      if (exerciseIds && !exerciseIds.includes(Number(l.exerciseId))) return;
+      if (!byEx[l.exerciseId]) byEx[l.exerciseId] = [];
+      byEx[l.exerciseId].push({ pf: calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality), date: l.date });
+    });
+    return byEx;
+  };
+
+  const upperGroups = ["Chest", "Back", "Shoulders", "Arms"];
+  const lowerGroups = ["Glutes", "Hamstrings", "Legs"];
+  const upperExIds  = exercises.filter(e => upperGroups.includes(e.muscleGroup)).map(e => Number(e.id));
+  const lowerExIds  = exercises.filter(e => lowerGroups.includes(e.muscleGroup)).map(e => Number(e.id));
+
+  const calcGroupPFChange = (exIds) => {
+    const since = phase?.startDate;
+    const byEx = pfSince(exIds, null);
+    let totalFirst = 0, totalLast = 0, count = 0;
+    Object.entries(byEx).forEach(([exId, entries]) => {
+      if (exIds && !exIds.includes(Number(exId))) return;
+      if (entries.length < 2) return;
+      const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const phaseEntries = since ? sorted.filter(e => new Date(e.date) >= new Date(since)) : sorted;
+      if (phaseEntries.length < 2) return;
+      totalFirst += phaseEntries[0].pf;
+      totalLast  += phaseEntries[phaseEntries.length - 1].pf;
+      count++;
+    });
+    if (count === 0 || totalFirst === 0) return null;
+    return +((totalLast - totalFirst) / totalFirst * 100).toFixed(1);
+  };
+
+  const totalPFChange = calcGroupPFChange([...upperExIds, ...lowerExIds]);
+  const upperPFChange = calcGroupPFChange(upperExIds);
+  const lowerPFChange = calcGroupPFChange(lowerExIds);
+
+  const pfStatus = totalPFChange === null ? "gray" : totalPFChange >= 3 ? "green" : totalPFChange >= 0 ? "yellow" : "red";
+  const pfStatusLabel = pfStatus === "green" ? "🟢 Strength Increasing" : pfStatus === "yellow" ? "🟡 Plateau" : pfStatus === "red" ? "🔴 Declining" : "No data";
+
+  // Physique ratios
+  const ratios = (() => {
+    const w = latestWaist;
+    if (!w) return null;
+    const bw = baseline?.waist;
+    return [
+      { name: "Chest:Waist",  val: latest.chest  ? +(latest.chest  / w).toFixed(2) : null, base: (baseline?.chest  && bw) ? +(baseline.chest  / bw).toFixed(2) : null },
+      { name: "Arms:Waist",   val: latest.arms   ? +(latest.arms   / w).toFixed(2) : null, base: (baseline?.arms   && bw) ? +(baseline.arms   / bw).toFixed(2) : null },
+      { name: "Thighs:Waist", val: latest.thighs ? +(latest.thighs / w).toFixed(2) : null, base: (baseline?.thighs && bw) ? +(baseline.thighs / bw).toFixed(2) : null },
+      { name: "Glutes:Waist", val: latest.glutes ? +(latest.glutes / w).toFixed(2) : null, base: (baseline?.glutes && bw) ? +(baseline.glutes / bw).toFixed(2) : null },
+    ];
+  })();
+
+  // Trend chart options
+  const trendOptions = [
+    { id: "weight", label: "Weight", data: weightSeries, color: "#4A90D9", unit: "lbs" },
+    { id: "waist",  label: "Waist",  data: waistSeries,  color: "#D94A4A", unit: "in" },
+    { id: "chest",  label: "Chest",  data: chestSeries,  color: "#4A90D9", unit: "in" },
+    { id: "arms",   label: "Arms",   data: armsSeries,   color: "#D94A7A", unit: "in" },
+    { id: "glutes", label: "Glutes", data: glutesSeries, color: "#E87D38", unit: "in" },
+    { id: "thighs", label: "Thighs", data: thighsSeries, color: "#E8A838", unit: "in" },
+    { id: "pf",     label: "Prime Factor", data: (() => {
+      const byDay = {};
+      workoutLogs.forEach(l => {
+        const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+        if (!ex) return;
+        const day = l.date.split("T")[0];
+        byDay[day] = (byDay[day] || 0) + calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
+      });
+      return Object.entries(byDay).sort((a, b) => a[0].localeCompare(b[0])).map(([date, value]) => ({ date, value }));
+    })(), color: "#E8A838", unit: "PF" },
+  ];
+  const activeTrendData = trendOptions.find(t => t.id === activeTrend);
+
+  // ── Generate Weekly Review ────────────────────────────────────────────────
+  const generateReview = async () => {
+    setGenerating(true);
+    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Collect 7-day data snapshot
+    const recentWorkouts = workoutLogs.filter(l => new Date(l.date) >= sevenDaysAgo);
+    const recentNutrition = nutritionDays.filter(d => new Date(d.date + "T12:00:00") >= sevenDaysAgo);
+    const recentRecovery  = (recoverySessions || []).filter(s => new Date(s.date + "T12:00:00") >= sevenDaysAgo);
+
+    const avgCals   = recentNutrition.length ? Math.round(recentNutrition.reduce((s, d) => s + (d.total_calories || 0), 0) / recentNutrition.length) : null;
+    const avgProt   = recentNutrition.length ? Math.round(recentNutrition.reduce((s, d) => s + (d.total_protein || 0), 0) / recentNutrition.length) : null;
+    const avgEnergy = recentRecovery.length  ? +(recentRecovery.reduce((s, r) => s + (r.after_energy || 0), 0) / recentRecovery.length).toFixed(1) : null;
+    const heelTrend = recentRecovery.length  ? +(recentRecovery.reduce((s, r) => s + (r.after_heel_pain || 0), 0) / recentRecovery.length).toFixed(1) : null;
+    const backTrend = recentRecovery.length  ? +(recentRecovery.reduce((s, r) => s + (r.after_low_back_tightness || 0), 0) / recentRecovery.length).toFixed(1) : null;
+
+    const snapshot = {
+      phase: phase ? `${PHASE_CONFIG[phase.type]?.label} — Week ${phaseInfo?.week || 1}` : "No active phase",
+      phaseWeek: phaseInfo?.week || 1,
+      daysRemaining: phaseInfo?.remaining || 0,
+      weight: { current: latestWeight, baseline: baseWeight, change: weightChange, weeklyRate: wRate },
+      waist: { current: latestWaist, baseline: baseWaist, change: waistChange },
+      measurements: { chest: latest.chest, arms: latest.arms, thighs: latest.thighs, glutes: latest.glutes },
+      primeFactorChange: { total: totalPFChange, upper: upperPFChange, lower: lowerPFChange },
+      nutrition: { avgCalories: avgCals, target: NUTRITION_TARGETS.calories, avgProtein: avgProt, proteinTarget: NUTRITION_TARGETS.protein, daysLogged: recentNutrition.length },
+      recovery: { sessionsCompleted: recentRecovery.length, avgEnergy, avgHeelPain: heelTrend, avgLowBack: backTrend },
+      workoutDays: [...new Set(recentWorkouts.map(l => l.date.split("T")[0]))].length,
+    };
+
+    const prompt = `You are an elite personal coach reviewing Project Prime fitness data. Analyze this week's data and return ONLY a JSON object (no markdown, no explanation).
+
+DATA:
+${JSON.stringify(snapshot, null, 2)}
+
+Project Prime success criteria for a Gain Phase:
+- Weight increases 0.25–0.75 lbs/week
+- Waist stays stable or increases minimally (<0.5" per month)  
+- Prime Factor (PF) increases week over week
+- Protein target (~191g/day) hit consistently
+- Recovery sessions improving pain scores
+
+Return ONLY this JSON:
+{
+  "overall_status": "🟢 Excellent Progress" | "🟢 On Track" | "🟡 Monitor" | "🔴 Course Correction Needed",
+  "executive_summary": "2-3 sentence specific coaching summary referencing the actual numbers",
+  "major_wins": ["win 1", "win 2", "win 3"],
+  "areas_to_monitor": ["area 1", "area 2"],
+  "next_week_recommendations": ["action 1", "action 2", "action 3"]
+}`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text?.trim() || "";
+      const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const parsed = JSON.parse(clean);
+      const reviewObj = {
+        ...parsed,
+        phase: PHASE_CONFIG[phase?.type]?.label || "Unknown",
+        phase_week: phaseInfo?.week || 1,
+        review_date: new Date().toISOString(),
+        input_data_snapshot: snapshot,
+      };
+      setWeeklyReview(reviewObj);
+      // Persist to localStorage for this session
+      try { localStorage.setItem("pp_weekly_review", JSON.stringify(reviewObj)); } catch {}
+    } catch (e) {
+      setWeeklyReview({
+        overall_status: "🟡 Monitor",
+        executive_summary: "Could not connect to AI coach. Check your connection and try again.",
+        major_wins: ["Review generation failed — data is still available below"],
+        areas_to_monitor: [],
+        next_week_recommendations: ["Retry generating the review when connection is available"],
+        phase: PHASE_CONFIG[phase?.type]?.label || "Unknown",
+        phase_week: phaseInfo?.week || 1,
+        review_date: new Date().toISOString(),
+      });
+    }
+    setGenerating(false);
+  };
+
+  // Load cached review on mount
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("pp_weekly_review");
+      if (cached) setWeeklyReview(JSON.parse(cached));
+    } catch {}
+  }, []);
+
+  // ── Form save ────────────────────────────────────────────────────────────
   const handleSave = async () => {
     setSaveStatus("saving");
     const ok = await onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v ? Number(v) : null])) });
     setSaveStatus(ok ? "saved" : "error");
     setTimeout(() => setSaveStatus(null), 3000);
-    if (ok) {
-      setShowForm(false);
-      setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
-    }
+    if (ok) { setShowForm(false); setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" }); }
   };
 
-  const recent = [...bodyLogs].reverse().slice(0, 10);
-  const weightData = bodyLogs.filter(l => l.weight).map(l => ({ value: l.weight, date: l.date }));
-  const latestWeight = weightData.length ? weightData[weightData.length - 1].value : null;
-  const startWeight  = weightData.length ? weightData[0].value : null;
+  const recent = [...sorted].reverse().slice(0, 10);
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Body Tracking</h2>
-          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Log every 3 days</div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Project Prime Command Center</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>
+            {phase ? `${PHASE_CONFIG[phase.type]?.label} · Week ${phaseInfo?.week || 1} · ${phaseInfo?.remaining || 0} days remaining` : "No active phase · Set phase to enable full analysis"}
+          </div>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <SaveStatus status={saveStatus} />
           <button onClick={() => setShowForm(true)}
             style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-            + Log Today
+            + Log Measurements
           </button>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
-        <Card>
-          <SectionLabel>Current Weight</SectionLabel>
-          <div style={{ fontSize: 40, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{latestWeight ? `${latestWeight}` : "—"}</div>
-          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 4 }}>lbs</div>
-          {startWeight && latestWeight && startWeight !== latestWeight && (
-            <div style={{ color: latestWeight < startWeight ? "#4AD99A" : "#D94A4A", fontSize: 14, fontWeight: 700, marginTop: 8 }}>
-              {latestWeight < startWeight ? "↓" : "↑"} {Math.abs(latestWeight - startWeight).toFixed(1)} lbs from start
+      {/* ── SECTION 1: KPI SCOREBOARD ───────────────────────────────────── */}
+      <div>
+        <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>PHASE KPI SCOREBOARD</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+
+          {/* KPI 1 — Weight */}
+          <KPICard
+            title="Weight Progress"
+            value={latestWeight ?? "—"}
+            unit="lbs"
+            sub={weightChange !== null ? `${weightChange >= 0 ? "+" : ""}${weightChange} lbs from baseline` : null}
+            status={weightStatus}
+            statusLabel={weightStatusLabel}
+            trendLabel={wRate !== null ? `${wRate >= 0 ? "+" : ""}${wRate} lbs/wk` : null}
+            trend={wRate !== null ? (wRate > 0 ? "⬆" : wRate < 0 ? "⬇" : "➡") : null}
+          >
+            <MiniBarChart data={weightSeries.slice(-8)} color="#4A90D9" height={40} />
+          </KPICard>
+
+          {/* KPI 2 — Waist */}
+          <KPICard
+            title="Waist Control"
+            value={latestWaist ?? "—"}
+            unit="in"
+            sub={waistChange !== null ? `${waistChange >= 0 ? "+" : ""}${waistChange}" from baseline` : null}
+            status={waistStatus}
+            statusLabel={waistStatusLabel}
+            trendLabel={waistChange !== null ? (waistChange <= 0.1 ? "Weight gain appears lean" : "Monitor fat accumulation") : null}
+            trend={waistChange !== null ? (waistChange <= 0.1 ? "➡" : waistChange > 0.5 ? "⬆" : "↗") : null}
+          >
+            <MiniBarChart data={waistSeries.slice(-8)} color="#D94A4A" height={40} />
+          </KPICard>
+
+          {/* KPI 3 — Prime Factor */}
+          <KPICard
+            title="Prime Factor Growth"
+            value={totalPFChange !== null ? `${totalPFChange >= 0 ? "+" : ""}${totalPFChange}%` : "—"}
+            unit=""
+            status={pfStatus}
+            statusLabel={pfStatusLabel}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+              {[["Upper", upperPFChange, "#4A90D9"], ["Lower", lowerPFChange, "#E87D38"]].map(([label, val, color]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#4B5563", fontSize: 11 }}>{label}</span>
+                  <span style={{ color: val === null ? "#3A3D4A" : val >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 13, fontWeight: 700 }}>
+                    {val !== null ? `${val >= 0 ? "+" : ""}${val}%` : "—"}
+                  </span>
+                </div>
+              ))}
             </div>
-          )}
-        </Card>
-        <Card style={{ gridColumn: "span 2" }}>
-          <SectionLabel>Weight Trend</SectionLabel>
-          {weightData.length < 2 ? (
-            <div style={{ color: "#3A3D4A", fontSize: 13 }}>Log at least 2 entries to see trend</div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 70 }}>
-              {weightData.slice(-20).map((d, i) => {
-                const vals = weightData.slice(-20).map(x => x.value);
-                const min = Math.min(...vals), max = Math.max(...vals);
-                const h = Math.max(4, ((d.value - min) / (max - min + 0.1)) * 60 + 10);
-                const isLast = i === Math.min(weightData.length, 20) - 1;
-                return <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  {isLast && <div style={{ color: "#4A90D9", fontSize: 10, marginBottom: 2 }}>{d.value}</div>}
-                  <div style={{ width: "100%", height: h, background: isLast ? "#4A90D9" : "#2A2D3A", borderRadius: "2px 2px 0 0" }} />
-                </div>;
-              })}
-            </div>
-          )}
-        </Card>
+          </KPICard>
+
+          {/* KPI 4 — Physique Ratios */}
+          <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 20 }}>
+            <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Physique Ratios</div>
+            {ratios ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {ratios.map(r => {
+                  const delta = r.val && r.base ? +(r.val - r.base).toFixed(2) : null;
+                  const improving = delta !== null && delta > 0;
+                  return (
+                    <div key={r.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ color: "#8B92A5", fontSize: 11 }}>{r.name}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ color: r.val ? "#E8EAF0" : "#3A3D4A", fontSize: 13, fontWeight: 700 }}>{r.val ?? "—"}</span>
+                        {delta !== null && (
+                          <span style={{ color: improving ? "#4AD99A" : "#D94A4A", fontSize: 10 }}>{improving ? "⬆" : "⬇"}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ color: "#3A3D4A", fontSize: 12 }}>Log waist to see ratios</div>
+            )}
+          </div>
+        </div>
+
+        {/* Phase success matrix */}
+        {phase && latestWeight && (
+          <div style={{ marginTop: 12, background: "#0F1117", borderRadius: 10, padding: "12px 18px", border: "1px solid #2A2D3A", display: "flex", gap: 24, alignItems: "center" }}>
+            <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", flexShrink: 0 }}>Phase Assessment</div>
+            {[
+              { label: "Weight Gain", ok: weightStatus === "green", val: weightChange !== null ? `${weightChange >= 0 ? "+" : ""}${weightChange} lbs` : "No data" },
+              { label: "Waist Stable", ok: waistStatus === "green", val: waistChange !== null ? `${waistChange >= 0 ? "+" : ""}${waistChange}"` : "No data" },
+              { label: "Strength Up", ok: pfStatus === "green",     val: totalPFChange !== null ? `${totalPFChange >= 0 ? "+" : ""}${totalPFChange}%` : "No data" },
+            ].map(({ label, ok, val }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 16 }}>{ok ? "🟢" : "🟡"}</span>
+                <div>
+                  <div style={{ color: "#E8EAF0", fontSize: 12, fontWeight: 700 }}>{label}</div>
+                  <div style={{ color: "#8B92A5", fontSize: 11 }}>{val}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {recent.length > 0 && (
-        <Card>
-          <SectionLabel>Measurement History</SectionLabel>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr>{["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms"].map(h => (
-                  <th key={h} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
-                ))}</tr>
-              </thead>
-              <tbody>
-                {recent.map((l, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #1A1D26" }}>
-                    <td style={{ color: "#8B92A5", padding: "8px 12px" }}>{fmtDateLong(l.date)}</td>
-                    {["weight", "chest", "waist", "hips", "glutes", "thighs", "arms"].map(k => (
-                      <td key={k} style={{ color: k === "glutes" ? "#E87D38" : "#C8CDD8", padding: "8px 12px", fontWeight: k === "glutes" ? 700 : 400 }}>
-                        {l[k] ? `${l[k]}${k === "weight" ? " lbs" : '"'}` : "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* ── SECTION 2: WEEKLY AI REVIEW ─────────────────────────────────── */}
+      <div>
+        <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>WEEKLY PROJECT PRIME REVIEW</div>
+        <WeeklyReviewCard
+          review={weeklyReview}
+          onGenerate={generateReview}
+          generating={generating}
+          phase={phase}
+          phaseInfo={phaseInfo}
+        />
+      </div>
+
+      {/* ── SECTION 3: TREND CHARTS ──────────────────────────────────────── */}
+      <div>
+        <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>TREND VISUALIZATION</div>
+        <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 20 }}>
+          {/* Selector */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+            {trendOptions.map(t => (
+              <button key={t.id} onClick={() => setActiveTrend(t.id)}
+                style={{ background: activeTrend === t.id ? t.color : "#0F1117",
+                  color: activeTrend === t.id ? "#0F1117" : "#8B92A5",
+                  border: activeTrend === t.id ? `1px solid ${t.color}` : "1px solid #2A2D3A",
+                  borderRadius: 20, padding: "5px 14px", fontSize: 12, fontWeight: activeTrend === t.id ? 700 : 400, cursor: "pointer" }}>
+                {t.label}
+              </button>
+            ))}
           </div>
-        </Card>
+          {/* Chart */}
+          {activeTrendData && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
+                <div style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{activeTrendData.label}</div>
+                {activeTrendData.data.length >= 2 && (
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ color: activeTrendData.color, fontSize: 22, fontWeight: 800 }}>
+                      {activeTrendData.data[activeTrendData.data.length - 1].value}
+                    </span>
+                    <span style={{ color: "#8B92A5", fontSize: 12, marginLeft: 4 }}>{activeTrendData.unit}</span>
+                    {activeTrendData.data.length >= 2 && (() => {
+                      const first = activeTrendData.data[0].value;
+                      const last  = activeTrendData.data[activeTrendData.data.length - 1].value;
+                      const diff  = +(last - first).toFixed(1);
+                      const pct   = +((diff / first) * 100).toFixed(1);
+                      const up    = diff >= 0;
+                      return <div style={{ color: up ? "#4AD99A" : "#D94A4A", fontSize: 11, fontWeight: 700, marginTop: 2 }}>
+                        {up ? "+" : ""}{diff} {activeTrendData.unit} ({up ? "+" : ""}{pct}%) since start
+                      </div>;
+                    })()}
+                  </div>
+                )}
+              </div>
+              {activeTrendData.data.length < 2 ? (
+                <div style={{ color: "#3A3D4A", fontSize: 13, padding: "32px 0", textAlign: "center" }}>
+                  Log at least 2 entries to see trend
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
+                  {activeTrendData.data.slice(-24).map((d, i, arr) => {
+                    const vals = arr.map(x => x.value);
+                    const mn = Math.min(...vals), mx = Math.max(...vals), range = mx - mn || 0.01;
+                    const h = Math.max(6, ((d.value - mn) / range) * 100 + 8);
+                    const isLast = i === arr.length - 1;
+                    return (
+                      <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                        {isLast && <div style={{ fontSize: 9, color: activeTrendData.color, fontWeight: 700 }}>{d.value}</div>}
+                        <div style={{ width: "100%", height: h, background: isLast ? activeTrendData.color : activeTrendData.color + "44", borderRadius: "3px 3px 0 0" }} />
+                        {(i === 0 || i === arr.length - 1 || i === Math.floor(arr.length / 2)) && (
+                          <div style={{ fontSize: 8, color: "#3A3D4A", textAlign: "center" }}>{fmtDate(d.date)}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── SECTION 4: PHASE DASHBOARD CARDS ────────────────────────────── */}
+      <div>
+        <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>PHASE MEASUREMENT CARDS</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+          {[
+            { key: "weight", label: "Weight", unit: "lbs", color: "#4A90D9", series: weightSeries },
+            { key: "chest",  label: "Chest",  unit: "in",  color: "#4A90D9", series: chestSeries },
+            { key: "waist",  label: "Waist",  unit: "in",  color: "#D94A4A", series: waistSeries },
+            { key: "arms",   label: "Arms",   unit: "in",  color: "#D94A7A", series: armsSeries },
+            { key: "glutes", label: "Glutes", unit: "in",  color: "#E87D38", series: glutesSeries },
+            { key: "thighs", label: "Thighs", unit: "in",  color: "#E8A838", series: thighsSeries },
+          ].map(({ key, label, unit, color, series }) => {
+            const cur  = latest[key];
+            const base = baseline?.[key];
+            const diff = cur && base ? +(cur - base).toFixed(1) : null;
+            const up   = diff !== null && diff > 0;
+            return (
+              <div key={key} style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16 }}>
+                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{cur ?? "—"}</div>
+                    <div style={{ color: "#8B92A5", fontSize: 11, marginTop: 2 }}>{unit}</div>
+                  </div>
+                  {diff !== null && (
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ color: up ? "#4AD99A" : "#D94A4A", fontSize: 14, fontWeight: 700 }}>
+                        {up ? "+" : ""}{diff} {unit}
+                      </div>
+                      <div style={{ color: "#4B5563", fontSize: 10 }}>from baseline</div>
+                    </div>
+                  )}
+                </div>
+                <MiniBarChart data={series.slice(-10)} color={color} height={36} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── SECTION 5: RAW MEASUREMENT TABLE ────────────────────────────── */}
+      {recent.length > 0 && (
+        <div>
+          <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>MEASUREMENT LOG</div>
+          <Card>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>{["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms"].map(h => (
+                    <th key={h} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
+                  ))}</tr>
+                </thead>
+                <tbody>
+                  {recent.map((l, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #1A1D26" }}>
+                      <td style={{ color: "#8B92A5", padding: "8px 12px" }}>{fmtDateLong(l.date)}</td>
+                      {["weight", "chest", "waist", "hips", "glutes", "thighs", "arms"].map(k => (
+                        <td key={k} style={{ color: k === "glutes" ? "#E87D38" : "#C8CDD8", padding: "8px 12px", fontWeight: k === "glutes" ? 700 : 400 }}>
+                          {l[k] ? `${l[k]}${k === "weight" ? " lbs" : '"'}` : "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
+      {/* ── Log form modal ─────────────────────────────────────────────── */}
       {showForm && (
         <Modal title="Log Body Measurements" onClose={() => setShowForm(false)} width={520}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
@@ -2766,7 +3363,7 @@ function App() {
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", minHeight: 0, WebkitOverflowScrolling: "touch" }}>
         {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
-        {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
+        {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
         {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} />}
         {tab === "recovery"  && <RecoveryTab recoverySessions={recoverySessions} onSaveSession={saveRecoverySession} />}
       </div>
