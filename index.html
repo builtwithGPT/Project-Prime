@@ -1604,6 +1604,7 @@ function MetricSelector({ label, value, onChange, max, color }) {
 }
 
 function RecoveryTab({ recoverySessions, onSaveSession }) {
+  if (!recoverySessions) return <div style={{ color: "#8B92A5", padding: 40, textAlign: "center" }}>Loading recovery data...</div>;
   const [view, setView] = useState("today");
   const [sessionStep, setSessionStep] = useState(null); // null | "template" | "before" | "checklist" | "after" | "summary"
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -2374,7 +2375,7 @@ function LoginScreen({ onLogin }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 function App() {
-  const [tab, setTab]               = useState("workout");
+  const [tab, setTab] = useState("workout");
   const [showPhaseModal, setShowPhaseModal] = useState(false);
   const [exercises]                 = useState(INITIAL_EXERCISES);
   const [workoutLogs, setWorkoutLogs]     = useState([]);
@@ -2454,6 +2455,7 @@ function App() {
         localStorage.removeItem("pp_session");
         sessionStorage.removeItem("pp_session");
         setSession(null); setUserId(null);
+        setTab("workout");
         setLoading(false);
         return;
       }
@@ -2499,7 +2501,7 @@ function App() {
 
   const signOut = () => {
     localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
-    setSession(null); setUserId(null);
+    setSession(null); setUserId(null); setTab("workout");
     setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]); setRecoveryLogs([]); setRecoverySessions([]); setPhase(null);
   };
 
