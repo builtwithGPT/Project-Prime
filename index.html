@@ -2405,35 +2405,35 @@ function App() {
   // ── Auto-refresh session every 45 minutes ─────────────────────────────────
   useEffect(() => {
     if (!session) return;
-    const refresh = async () => {
+    const doRefresh = async () => {
       try {
         const stored = localStorage.getItem("pp_session");
         if (!stored) return;
-        const { token } = JSON.parse(stored);
+        const { refreshToken, uid } = JSON.parse(stored);
+        if (!refreshToken) return;
         const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
           method: "POST",
           headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: token }),
+          body: JSON.stringify({ refresh_token: refreshToken }),
         });
         const data = await res.json();
         if (data.access_token) {
-          const newData = JSON.stringify({ token: data.access_token, uid: userId });
+          const newData = JSON.stringify({ token: data.access_token, uid, refreshToken: data.refresh_token || refreshToken });
           localStorage.setItem("pp_session", newData);
           sessionStorage.setItem("pp_session", newData);
           setSession(data.access_token);
         }
       } catch {}
     };
-    const interval = setInterval(refresh, 45 * 60 * 1000);
+    // Refresh immediately on load, then every 45 minutes
+    doRefresh();
+    const interval = setInterval(doRefresh, 45 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [session, userId]);
+  }, [userId]);
 
   // ── Load data when session ready ───────────────────────────────────────────
   useEffect(() => {
     if (session && userId) {
-      const data = JSON.stringify({ token: session, uid: userId });
-      localStorage.setItem("pp_session", data);
-      sessionStorage.setItem("pp_session", data);
       loadAll(session, userId);
     }
   }, [session, userId]);
