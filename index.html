@@ -50,26 +50,26 @@ const FORM_GUIDES = {
 // laterality: "bilateral" | "unilateral"
 // PF for unilateral is automatically doubled (user enters per-side reps)
 const EXERCISE_LIST = [
-  { name: "Banded Clamshell",           muscleGroup: "Warm-up",    type: "banded",     laterality: "unilateral", defaultSets: "2",  defaultReps: "15", superset: null,                   flag: null },
-  { name: "Glute Bridge",               muscleGroup: "Warm-up",    type: "bodyweight", laterality: "bilateral",  defaultSets: "2",  defaultReps: "15", superset: null,                   flag: null },
-  { name: "Incline Dumbbell Press",     muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "4",  defaultReps: "10", superset: "Dumbbell Row",         flag: null },
-  { name: "Dumbbell Row",               muscleGroup: "Back",       type: "weighted",   laterality: "unilateral", defaultSets: "4",  defaultReps: "10", superset: "Incline Dumbbell Press",flag: null },
-  { name: "Flat Dumbbell Press",        muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: "Pull-up / Chin-up",    flag: null },
-  { name: "Pull-up / Chin-up",          muscleGroup: "Back",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "5",  superset: "Flat Dumbbell Press",  flag: null },
-  { name: "Dumbbell Fly",               muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: null,                   flag: null },
-  { name: "Dips",                       muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: null },
-  { name: "Hip Thrust",                 muscleGroup: "Glutes",     type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: null,                   flag: null },
-  { name: "Single-Leg Hip Thrust",      muscleGroup: "Glutes",     type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  superset: null,                   flag: "⚠️ Add week 4+" },
-  { name: "Dumbbell RDL",               muscleGroup: "Hamstrings", type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Neutral spine" },
-  { name: "Prone Dumbbell Hamstring Curl",muscleGroup:"Hamstrings", type: "weighted",  laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: null,                   flag: null },
-  { name: "Single-Leg Dumbbell RDL",    muscleGroup: "Hamstrings", type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  superset: null,                   flag: "⚠️ Each side" },
-  { name: "Bulgarian Split Squat",      muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Heel elevation if needed" },
-  { name: "Seated Overhead Press",      muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Seated only" },
-  { name: "Bicep Curl",                 muscleGroup: "Arms",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", superset: "Tricep Extension",     flag: null },
-  { name: "Tricep Extension",           muscleGroup: "Arms",       type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", superset: "Bicep Curl",           flag: null },
-  { name: "Leg Raise",                  muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", superset: null,                   flag: null },
-  { name: "Core Rotation",              muscleGroup: "Core",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "15", superset: null,                   flag: null },
-  { name: "Dead Bug",                   muscleGroup: "Core",       type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "10", superset: null,                   flag: "⚠️ Keep lower back flat" },
+  { name: "Banded Clamshell",           muscleGroup: "Warm-up",    type: "banded",     laterality: "unilateral", defaultSets: "2",  defaultReps: "15", flag: null },
+  { name: "Glute Bridge",               muscleGroup: "Warm-up",    type: "bodyweight", laterality: "bilateral",  defaultSets: "2",  defaultReps: "15", flag: null },
+  { name: "Incline Dumbbell Press",     muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "4",  defaultReps: "10", flag: null },
+  { name: "Dumbbell Row",               muscleGroup: "Back",       type: "weighted",   laterality: "unilateral", defaultSets: "4",  defaultReps: "10", flag: null },
+  { name: "Flat Dumbbell Press",        muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null },
+  { name: "Pull-up / Chin-up",          muscleGroup: "Back",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "5",  flag: null },
+  { name: "Dumbbell Fly",               muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null },
+  { name: "Dips",                       muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null },
+  { name: "Hip Thrust",                 muscleGroup: "Glutes",     type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null },
+  { name: "Single-Leg Hip Thrust",      muscleGroup: "Glutes",     type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  flag: "⚠️ Add week 4+" },
+  { name: "Dumbbell RDL",               muscleGroup: "Hamstrings", type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: "⚠️ Neutral spine" },
+  { name: "Prone Dumbbell Hamstring Curl",muscleGroup:"Hamstrings", type: "weighted",  laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null },
+  { name: "Single-Leg Dumbbell RDL",    muscleGroup: "Hamstrings", type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  flag: "⚠️ Each side" },
+  { name: "Bulgarian Split Squat",      muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Heel elevation if needed" },
+  { name: "Seated Overhead Press",      muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: "⚠️ Seated only" },
+  { name: "Bicep Curl",                 muscleGroup: "Arms",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null },
+  { name: "Tricep Extension",           muscleGroup: "Arms",       type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null },
+  { name: "Leg Raise",                  muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null },
+  { name: "Core Rotation",              muscleGroup: "Core",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "15", flag: null },
+  { name: "Dead Bug",                   muscleGroup: "Core",       type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Keep lower back flat" },
 ];
 
 const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({ id: i + 1, ...e, active: true }));
@@ -489,8 +489,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 14 }}>{ex.name}</span>
-                        {ex.superset && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>⚡ SS</span>}
+                      <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 14 }}>{ex.name}</span>
                         {ex.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>UNI</span>}
                       </div>
                       {last ? (
@@ -535,7 +534,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
               <span style={{ background: color + "22", color, padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em" }}>{ex.muscleGroup.toUpperCase()}</span>
-              {ex.superset && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>⚡ SUPERSET w/ {ex.superset}</span>}
               {ex.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>UNILATERAL — enter reps per side</span>}
               {ex.flag && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>{ex.flag}</span>}
             </div>
@@ -2523,15 +2521,19 @@ function App() {
 
   // ── Body handlers ──────────────────────────────────────────────────────────
   const addBodyLog = async (entry) => {
-    const localEntry = { ...entry, _pending: true };
-    const updated = [...bodyLogs, localEntry];
-    setBodyLogs(updated); lsSet(LS_KEYS.body, updated);
     const rows = await sbPost("body_logs", { ...entry, user_id: userId }, session);
     if (rows?.[0]) {
-      const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id } : l);
-      setBodyLogs(synced); lsSet(LS_KEYS.body, synced);
+      const newEntry = { id: rows[0].id, weight: rows[0].weight, chest: rows[0].chest, waist: rows[0].waist, hips: rows[0].hips, glutes: rows[0].glutes, thighs: rows[0].thighs, arms: rows[0].arms, date: rows[0].date };
+      const updated = [...bodyLogs, newEntry];
+      setBodyLogs(updated);
+      lsSet(LS_KEYS.body, updated);
       return true;
     }
+    // Save to localStorage as fallback
+    const localEntry = { ...entry, _pending: true };
+    const updated = [...bodyLogs, localEntry];
+    setBodyLogs(updated);
+    lsSet(LS_KEYS.body, updated);
     return false;
   };
 
