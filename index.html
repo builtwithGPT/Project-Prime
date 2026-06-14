@@ -2118,26 +2118,35 @@ function App() {
   const saveNutritionDay = async (parsed, rawText) => {
     try {
       const dayPayload = {
-        user_id: userId, date: parsed.date, phase: parsed.phase,
-        target_calories: parsed.targets?.calories, target_protein: parsed.targets?.protein,
-        target_carbs: parsed.targets?.carbs, target_fat: parsed.targets?.fat,
-        total_calories: parsed.totals?.calories, total_protein: parsed.totals?.protein,
-        total_carbs: parsed.totals?.carbs, total_fat: parsed.totals?.fat,
-        remaining_calories: parsed.remaining?.calories, remaining_protein: parsed.remaining?.protein,
-        remaining_carbs: parsed.remaining?.carbs, remaining_fat: parsed.remaining?.fat,
-        compliance: typeof parsed.compliance === "string" ? parsed.compliance.slice(0, 500) : null,
-        notes: typeof parsed.notes === "string" ? parsed.notes : Array.isArray(parsed.notes) ? parsed.notes.join(" ") : null,
-        raw_import: rawText,
+        user_id: userId,
+        date: parsed.date,
+        phase: parsed.phase || "Gain Phase",
+        target_calories: Number(parsed.targets?.calories) || 2650,
+        target_protein: Number(parsed.targets?.protein) || 191,
+        target_carbs: Number(parsed.targets?.carbs) || 220,
+        target_fat: Number(parsed.targets?.fat) || 65,
+        total_calories: Number(parsed.totals?.calories) || 0,
+        total_protein: Number(parsed.totals?.protein) || 0,
+        total_carbs: Number(parsed.totals?.carbs) || 0,
+        total_fat: Number(parsed.totals?.fat) || 0,
+        remaining_calories: Number(parsed.remaining?.calories) || 0,
+        remaining_protein: Number(parsed.remaining?.protein) || 0,
+        remaining_carbs: Number(parsed.remaining?.carbs) || 0,
+        remaining_fat: Number(parsed.remaining?.fat) || 0,
+        compliance: typeof parsed.compliance === "string" ? parsed.compliance.slice(0, 200) : null,
+        notes: Array.isArray(parsed.notes) ? parsed.notes.join(" ").slice(0, 1000) : (typeof parsed.notes === "string" ? parsed.notes.slice(0, 1000) : null),
+        raw_import: rawText ? rawText.slice(0, 4000) : null,
       };
 
-      // Upsert — delete existing same-date record first
+      // Delete existing same-date record first
       const existing = nutritionDays.find(d => d.date === parsed.date);
       if (existing?.id) await sbDelete(`nutrition_days?id=eq.${existing.id}`, session);
 
       const rows = await sbPost("nutrition_days", dayPayload, session);
       if (!rows?.[0]?.id) {
-        console.error("nutrition_days insert failed:", JSON.stringify(rows));
-        return { ok: false, error: `DB insert failed: ${JSON.stringify(rows)}` };
+        const errMsg = JSON.stringify(rows);
+        console.error("nutrition_days insert failed:", errMsg);
+        return { ok: false, error: `DB insert failed: ${errMsg}` };
       }
       const dayId = rows[0].id;
 
@@ -2148,10 +2157,10 @@ function App() {
         const eRow = await sbPost("nutrition_entries", {
           user_id: userId,
           nutrition_day_id: dayId,
-          entry_time: e.time || null,
+          entry_time: e.time ? String(e.time).slice(0, 20) : null,
           entry_type: e.type || "food",
-          meal_name: e.name || null,
-          items: e.items || null,
+          meal_name: e.name ? String(e.name).slice(0, 100) : null,
+          items: e.items ? String(e.items).slice(0, 500) : null,
           calories: Number(e.calories) || 0,
           protein: Number(e.protein) || 0,
           carbs: Number(e.carbs) || 0,
