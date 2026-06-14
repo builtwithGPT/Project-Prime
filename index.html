@@ -1209,14 +1209,18 @@ Rules:
     setParsing(false);
   };
 
+  const [saveError, setSaveError] = useState("");
+
   const saveDay = async () => {
     if (!preview) return;
-    setSaving(true);
-    const ok = await onSaveDay(preview, pasteText);
-    if (ok) {
+    setSaving(true); setSaveError("");
+    const result = await onSaveDay(preview, pasteText);
+    if (result?.ok) {
       setSavedMsg("Nutrition record saved.");
       setPreview(null); setPasteText(""); setView("log");
       setTimeout(() => setSavedMsg(""), 3000);
+    } else {
+      setSaveError(result?.error || "Save failed — check browser console for details.");
     }
     setSaving(false);
   };
@@ -1428,6 +1432,7 @@ Rules:
                   Re-paste
                 </button>
               </div>
+              {saveError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 12, background: "#D94A4A11", border: "1px solid #D94A4A44", borderRadius: 8, padding: "10px 14px" }}>{saveError}</div>}
             </div>
           )}
         </div>
@@ -2131,8 +2136,8 @@ function App() {
 
       const rows = await sbPost("nutrition_days", dayPayload, session);
       if (!rows?.[0]?.id) {
-        console.error("nutrition_days insert failed:", rows);
-        return false;
+        console.error("nutrition_days insert failed:", JSON.stringify(rows));
+        return { ok: false, error: `DB insert failed: ${JSON.stringify(rows)}` };
       }
       const dayId = rows[0].id;
 
@@ -2157,10 +2162,10 @@ function App() {
 
       const newDay = { ...rows[0], entries: entryRows };
       setNutritionDays(prev => [newDay, ...prev.filter(d => d.date !== parsed.date)]);
-      return true;
+      return { ok: true };
     } catch (e) {
       console.error("saveNutritionDay error:", e);
-      return false;
+      return { ok: false, error: e.message };
     }
   };
 
