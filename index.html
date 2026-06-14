@@ -1634,17 +1634,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
 
   const completedCount = checklist.filter(i => i.completed).length;
 
-  const [saveResult, setSaveResult] = useState(null);
-
-  useEffect(() => {
-    if (saveResult === "success" && lastSession) {
-      setSessionStep("summary");
-      setSaveResult(null);
-    } else if (saveResult === "error") {
-      setSaveError("Save failed — please try again.");
-      setSaveResult(null);
-    }
-  }, [saveResult, lastSession]);
+  const [saveError, setSaveError] = useState("");
 
   const saveSession = async () => {
     setSaving(true); setSaveError("");
@@ -1666,10 +1656,11 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
       result_rating: resultRating,
       items: checklist,
     };
-    const saved = await onSaveSession(sessionData);
+    // Save to DB in background — don't block UI transition
+    onSaveSession(sessionData);
     setLastSession({ ...sessionData, duration });
     setSaving(false);
-    setSaveResult(saved ? "success" : "error");
+    setSessionStep("summary");
   };
 
   const endSession = () => {
@@ -1783,7 +1774,33 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
             {/* AFTER METRICS */}
             {sessionStep === "after" && (
               <div>
-                <div style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700, marginBottom: 20 }}>How do you feel now?</div>
+                {/* Before comparison */}
+                <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", marginBottom: 20, border: "1px solid #2A2D3A" }}>
+                  <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Before → After</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {[["Energy", beforeMetrics.energy, afterMetrics.energy, "#4AD99A", false],
+                      ["Soreness", beforeMetrics.soreness, afterMetrics.soreness, "#E8A838", true],
+                      ["Heel Pain", beforeMetrics.heel_pain, afterMetrics.heel_pain, "#D94A4A", true],
+                      ["Low Back", beforeMetrics.low_back, afterMetrics.low_back, "#D94A4A", true]].map(([label, before, after, color, lib]) => {
+                      const improved = lib ? after < before : after > before;
+                      const same = after === before;
+                      const dc = same ? "#4B5563" : improved ? "#4AD99A" : "#D94A4A";
+                      return (
+                        <div key={label} style={{ background: "#1A1D26", borderRadius: 8, padding: "8px 12px" }}>
+                          <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 4 }}>{label}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ color: "#8B92A5", fontSize: 14, fontWeight: 700 }}>{before}</span>
+                            <span style={{ color: dc }}>→</span>
+                            <span style={{ color: dc, fontSize: 18, fontWeight: 800 }}>{after}</span>
+                            {!same && <span style={{ color: dc, fontSize: 10 }}>{improved ? "▲" : "▼"}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Update your after metrics:</div>
                 <MetricSelector label="Energy" value={afterMetrics.energy} onChange={v => setAfterMetrics(m => ({ ...m, energy: v }))} max={5} color="#4AD99A" />
                 <MetricSelector label="Muscle Soreness" value={afterMetrics.soreness} onChange={v => setAfterMetrics(m => ({ ...m, soreness: v }))} max={5} color="#E8A838" />
                 <MetricSelector label="Heel Pain" value={afterMetrics.heel_pain} onChange={v => setAfterMetrics(m => ({ ...m, heel_pain: v }))} max={10} color="#D94A4A" />
