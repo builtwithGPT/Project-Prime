@@ -2,14 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Project Prime</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0F1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #E8EAF0; }
+    html, body { height: 100%; height: -webkit-fill-available; }
+    body { background: #0F1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #E8EAF0; overflow: hidden; }
+    #root { height: 100%; height: -webkit-fill-available; display: flex; flex-direction: column; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0F1117; }
     ::-webkit-scrollbar-thumb { background: #2A2D3A; border-radius: 3px; }
@@ -2099,7 +2101,7 @@ function App() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0F1117", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#E8EAF0" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", minHeight: "-webkit-fill-available", background: "#0F1117", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#E8EAF0" }}>
 
       {/* Top header */}
       <div style={{ background: "#1A1D26", borderBottom: "1px solid #2A2D3A", padding: "10px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
@@ -2126,7 +2128,7 @@ function App() {
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", minHeight: 0 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", minHeight: 0, WebkitOverflowScrolling: "touch" }}>
         {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} />}
@@ -2136,14 +2138,14 @@ function App() {
       </div>
 
       {/* Bottom tab bar */}
-      <div style={{ background: "#1A1D26", borderTop: "1px solid #2A2D3A", display: "flex", flexShrink: 0 }}>
+      <div style={{ background: "#1A1D26", borderTop: "1px solid #2A2D3A", display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {NAV.map(n => (
           <button key={n.id} onClick={() => setTab(n.id)}
-            style={{ flex: 1, background: "none", border: "none", padding: "10px 0 12px", cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            <span style={{ fontSize: 22 }}>{n.icon}</span>
-            <span style={{ fontSize: 11, color: tab === n.id ? "#4A90D9" : "#4B5563", fontWeight: tab === n.id ? 700 : 400 }}>{n.label}</span>
-            {tab === n.id && <div style={{ width: 24, height: 2, background: "#4A90D9", borderRadius: 1 }} />}
+            style={{ flex: 1, background: tab === n.id ? "#4A90D911" : "none", border: "none", padding: "10px 4px 12px", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 0 }}>
+            <span style={{ fontSize: 24 }}>{n.icon}</span>
+            <span style={{ fontSize: 10, color: tab === n.id ? "#4A90D9" : "#4B5563", fontWeight: tab === n.id ? 700 : 400, whiteSpace: "nowrap" }}>{n.label}</span>
+            {tab === n.id && <div style={{ width: 20, height: 2, background: "#4A90D9", borderRadius: 1, marginTop: 1 }} />}
           </button>
         ))}
       </div>
