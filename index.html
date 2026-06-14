@@ -312,9 +312,14 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
   };
 
   const endWorkout = () => {
-    // Build workout summary
+    // Compute session PF directly from today's logs
+    const currentSessionPF = todayLogs.reduce((sum, l) => {
+      const ex = exercises.find(e => e.id === l.exerciseId);
+      return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
+    }, 0);
+    // Exercises completed today
     const todayCompleted = active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id));
-    // Previous session PF — find last workout day before today
+    // Previous session PF
     const prevDayLogs = workoutLogs.filter(x => new Date(x.date).toDateString() !== new Date().toDateString());
     const prevDates = [...new Set(prevDayLogs.map(l => new Date(l.date).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
     const prevSessionLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toDateString() === prevDates[0]) : [];
@@ -322,7 +327,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
       const ex = exercises.find(e => e.id === l.exerciseId);
       return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
     }, 0);
-    const pfChange = prevPF > 0 ? ((sessionPF - prevPF) / prevPF * 100) : null;
+    const pfChange = prevPF > 0 ? ((currentSessionPF - prevPF) / prevPF * 100) : null;
     // Count PRs
     let prs = 0;
     todayLogs.forEach(l => {
@@ -333,11 +338,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
       const bestPrev = hist.reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, ex.type, ex.laterality)), 0);
       if (thisPF > bestPrev && bestPrev > 0) prs++;
     });
-    setWorkoutSummary({ completed: todayCompleted.length, total: active.length, sessionPF, prevPF, pfChange, prs });
+    const summary = { completed: todayCompleted.length, total: active.length, sessionPF: currentSessionPF, prevPF, pfChange, prs };
+    setWorkoutSummary(summary);
     setActiveMode(false);
     setWorkoutEnded(true);
     setLoggedIds(new Set());
-    onSaveSummary && onSaveSummary({ completed: todayCompleted.length, total: active.length, sessionPF, prevPF, pfChange, prs });
+    onSaveSummary && onSaveSummary(summary);
   };
 
   const saveExercise = async () => {
@@ -369,7 +375,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
 
   // ── WORKOUT SUMMARY SCREEN ───────────────────────────────────────────────────
   if (workoutSummary && !activeMode) {
-    const { completed, total, sessionPF, prevPF, pfChange, prs } = workoutSummary;
+    const { completed, total, sessionPF: summaryPF, prevPF, pfChange, prs } = workoutSummary;
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
         <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #4AD99A44", padding: 48, maxWidth: 520, width: "100%", textAlign: "center" }}>
@@ -384,7 +390,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
             </div>
             <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
               <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Session PF</div>
-              <div style={{ fontSize: 36, fontWeight: 800, color: "#E8A838" }}>{sessionPF.toLocaleString()}</div>
+              <div style={{ fontSize: 36, fontWeight: 800, color: "#E8A838" }}>{(summaryPF || 0).toLocaleString()}</div>
             </div>
             <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
               <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>vs Last Workout</div>
