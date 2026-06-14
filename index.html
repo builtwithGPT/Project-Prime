@@ -289,13 +289,13 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
   const todayLogs = workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString());
 
   const lastEntry = (id) => {
-    const logs = workoutLogs.filter(x => x.exerciseId === id);
+    const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id));
     return logs.length ? logs[logs.length - 1] : null;
   };
 
   const pfHistory = (id) => {
-    const ex = exercises.find(e => e.id === id);
-    return workoutLogs.filter(x => x.exerciseId === id).map(x => ({
+    const ex = exercises.find(e => Number(e.id) === Number(id));
+    return workoutLogs.filter(x => Number(x.exerciseId) === Number(id)).map(x => ({
       value: calcPF(x.sets, x.reps, x.weight, ex?.type, ex?.laterality), date: x.date
     }));
   };
@@ -719,7 +719,7 @@ function ProgressTab({ exercises, workoutLogs }) {
   const [view, setView] = useState("dashboard");
 
   const exStats = exercises.filter(e => e.active).map(ex => {
-    const logs = workoutLogs.filter(l => l.exerciseId === ex.id);
+    const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
     const pfSeries = logs.map(l => ({ value: calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality), date: l.date }));
     const first = pfSeries[0]?.value, last = pfSeries[pfSeries.length - 1]?.value;
     const prev  = pfSeries[pfSeries.length - 2]?.value;
@@ -984,7 +984,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {logs.map((l, j) => {
-                      const ex = exercises.find(e => e.id === l.exerciseId);
+                      const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
                       const pf = calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
                       return (
                         <div key={j} style={{ background: "#0F1117", borderRadius: 6, padding: "6px 10px", border: "1px solid #2A2D3A" }}>
@@ -1144,22 +1144,41 @@ function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
         body: JSON.stringify({
           model: "gpt-4o",
-          max_tokens: 1500,
+          max_tokens: 2000,
           messages: [{
             role: "system",
-            content: `You are a nutrition data parser for Project Prime fitness app. Extract structured nutrition data from the user's text and return ONLY valid JSON with no markdown. 
-Return this exact structure:
+            content: `You are a nutrition data extractor. The user will paste nutrition information in ANY format — it could be structured, conversational, a list of meals, or anything else. Your job is to extract the data and return ONLY a valid JSON object with no markdown, no backticks, no explanation.
+
+Always return this exact JSON structure (use null for missing fields, 0 for missing numbers):
 {
   "date": "YYYY-MM-DD",
-  "phase": "string",
-  "targets": {"calories": number, "protein": number, "carbs": number, "fat": number},
+  "phase": "Gain Phase",
+  "targets": {"calories": 2650, "protein": 191, "carbs": 220, "fat": 65},
   "totals": {"calories": number, "protein": number, "carbs": number, "fat": number},
   "remaining": {"calories": number, "protein": number, "carbs": number, "fat": number},
-  "compliance": "string",
-  "notes": "string",
-  "entries": [{"time": "string", "type": "string", "name": "string", "items": "string", "calories": number, "protein": number, "carbs": number, "fat": number}]
+  "compliance": "string or null",
+  "notes": "string or null",
+  "entries": [
+    {
+      "time": "HH:MM AM/PM or null",
+      "type": "food",
+      "name": "meal name",
+      "items": "comma separated food items",
+      "calories": number,
+      "protein": number,
+      "carbs": number,
+      "fat": number
+    }
+  ]
 }
-If date is missing use today: ${today}. Be tolerant of format variations.`
+
+Rules:
+- If date is not specified, use today: ${today}
+- If targets are not specified, use defaults: 2650 cal, 191g protein, 220g carbs, 65g fat
+- Calculate remaining = targets - totals
+- Extract every meal or food entry you can find
+- If macros for a specific meal are partially given, estimate the rest
+- Return ONLY the JSON object, nothing else`
           }, {
             role: "user",
             content: pasteText
@@ -1167,11 +1186,25 @@ If date is missing use today: ${today}. Be tolerant of format variations.`
         })
       });
       const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
       const text = data.choices?.[0]?.message?.content?.trim();
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      if (!text) throw new Error("Empty response");
+      const cleaned = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const parsed = JSON.parse(cleaned);
+      // Ensure required fields exist
+      if (!parsed.totals) parsed.totals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      if (!parsed.targets) parsed.targets = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
+      if (!parsed.remaining) parsed.remaining = {
+        calories: parsed.targets.calories - parsed.totals.calories,
+        protein: parsed.targets.protein - parsed.totals.protein,
+        carbs: parsed.targets.carbs - parsed.totals.carbs,
+        fat: parsed.targets.fat - parsed.totals.fat,
+      };
+      if (!parsed.entries) parsed.entries = [];
+      if (!parsed.date) parsed.date = today;
       setPreview(parsed);
     } catch (e) {
-      setParseError("Could not parse nutrition record. Check the format and try again.");
+      setParseError(`Parse failed: ${e.message}. Try pasting again or check your OpenAI key.`);
     }
     setParsing(false);
   };
@@ -1311,7 +1344,7 @@ If date is missing use today: ${today}. Be tolerant of format variations.`
                 Ask ChatGPT: <span style={{ color: "#4A90D9", fontStyle: "italic" }}>"Recap the daily nutrition statement/record for Prime App."</span> Then paste the result below.
               </div>
               <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
-                placeholder="Paste your PRIME_NUTRITION_RECORD here..."
+                placeholder="Paste any nutrition information here — meals, totals, a ChatGPT recap, or any format. GPT-4o will extract the data automatically..."
                 style={{ ...inputStyle, height: 280, resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
               {parseError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 12 }}>{parseError}</div>}
               <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
