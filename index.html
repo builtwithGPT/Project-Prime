@@ -2120,24 +2120,37 @@ function App() {
         total_carbs: parsed.totals?.carbs, total_fat: parsed.totals?.fat,
         remaining_calories: parsed.remaining?.calories, remaining_protein: parsed.remaining?.protein,
         remaining_carbs: parsed.remaining?.carbs, remaining_fat: parsed.remaining?.fat,
-        compliance: parsed.compliance, notes: parsed.notes, raw_import: rawText,
+        compliance: typeof parsed.compliance === "string" ? parsed.compliance.slice(0, 500) : null,
+        notes: typeof parsed.notes === "string" ? parsed.notes : Array.isArray(parsed.notes) ? parsed.notes.join(" ") : null,
+        raw_import: rawText,
       };
-      // Upsert day (delete existing if same date, then insert)
+
+      // Upsert — delete existing same-date record first
       const existing = nutritionDays.find(d => d.date === parsed.date);
       if (existing?.id) await sbDelete(`nutrition_days?id=eq.${existing.id}`, session);
 
       const rows = await sbPost("nutrition_days", dayPayload, session);
-      if (!rows?.[0]) return false;
+      if (!rows?.[0]?.id) {
+        console.error("nutrition_days insert failed:", rows);
+        return false;
+      }
       const dayId = rows[0].id;
 
-      // Insert entries
+      // Insert meal entries
       const entries = parsed.entries || [];
       const entryRows = [];
       for (const e of entries) {
         const eRow = await sbPost("nutrition_entries", {
-          user_id: userId, nutrition_day_id: dayId,
-          entry_time: e.time, entry_type: e.type, meal_name: e.name,
-          items: e.items, calories: e.calories, protein: e.protein, carbs: e.carbs, fat: e.fat,
+          user_id: userId,
+          nutrition_day_id: dayId,
+          entry_time: e.time || null,
+          entry_type: e.type || "food",
+          meal_name: e.name || null,
+          items: e.items || null,
+          calories: Number(e.calories) || 0,
+          protein: Number(e.protein) || 0,
+          carbs: Number(e.carbs) || 0,
+          fat: Number(e.fat) || 0,
         }, session);
         if (eRow?.[0]) entryRows.push(eRow[0]);
       }
@@ -2145,7 +2158,10 @@ function App() {
       const newDay = { ...rows[0], entries: entryRows };
       setNutritionDays(prev => [newDay, ...prev.filter(d => d.date !== parsed.date)]);
       return true;
-    } catch { return false; }
+    } catch (e) {
+      console.error("saveNutritionDay error:", e);
+      return false;
+    }
   };
 
   // ── Recovery handlers ──────────────────────────────────────────────────────
