@@ -1125,24 +1125,28 @@ function BodyTab({ bodyLogs, onSave }) {
 function NutritionDayCard({ d }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <Card style={{ padding: "16px 20px", cursor: "pointer" }} onClick={() => setExpanded(e => !e)}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${expanded ? "#4A90D944" : "#2A2D3A"}`, overflow: "hidden" }}>
+      <button
+        onClick={() => setExpanded(e => !e)}
+        style={{ width: "100%", background: "none", border: "none", padding: "16px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left" }}>
         <div>
           <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{new Date(d.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</div>
           <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{d.phase}{d.compliance ? ` · Compliance: ${d.compliance}` : ""}</div>
         </div>
-        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 20, textAlign: "right" }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 16, textAlign: "right" }}>
             <div><div style={{ color: "#E8A838", fontSize: 18, fontWeight: 700 }}>{d.total_calories}</div><div style={{ color: "#4B5563", fontSize: 10 }}>kcal</div></div>
             <div><div style={{ color: "#4A90D9", fontSize: 18, fontWeight: 700 }}>{d.total_protein}g</div><div style={{ color: "#4B5563", fontSize: 10 }}>protein</div></div>
             <div><div style={{ color: d.total_calories >= (d.target_calories || 2400) ? "#4AD99A" : "#E8A838", fontSize: 18, fontWeight: 700 }}>{Math.round((d.total_calories / (d.target_calories || 2650)) * 100)}%</div><div style={{ color: "#4B5563", fontSize: 10 }}>of target</div></div>
           </div>
-          <div style={{ color: "#4B5563", fontSize: 18 }}>{expanded ? "▲" : "▼"}</div>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", color: "#4A90D9", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+            {expanded ? "▲" : "▼"}
+          </div>
         </div>
-      </div>
+      </button>
       {expanded && (
-        <div style={{ marginTop: 16, borderTop: "1px solid #2A2D3A", paddingTop: 16 }} onClick={e => e.stopPropagation()}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div style={{ padding: "0 20px 16px", borderTop: "1px solid #2A2D3A" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
             {[["Calories", d.total_calories, d.target_calories || 2650, "#E8A838", "kcal"],
               ["Protein", d.total_protein, d.target_protein || 191, "#4A90D9", "g"],
               ["Carbs", d.total_carbs, d.target_carbs || 220, "#7B68EE", "g"],
@@ -1180,7 +1184,7 @@ function NutritionDayCard({ d }) {
           {d.notes && <div style={{ color: "#8B92A5", fontSize: 12, fontStyle: "italic", marginTop: 8, borderTop: "1px solid #2A2D3A", paddingTop: 8 }}>{d.notes}</div>}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
