@@ -1370,6 +1370,7 @@ Return ONLY this JSON:
 }`;
 
     try {
+      console.log("[PP Review] Calling OpenAI. Key set:", OPENAI_KEY !== "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" && OPENAI_KEY.length > 10);
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
@@ -1383,6 +1384,7 @@ Return ONLY this JSON:
         })
       });
       const data = await res.json();
+      console.log("[PP Review] OpenAI raw response:", JSON.stringify(data).slice(0, 500));
       if (data.error) throw new Error(data.error.message);
       const text = data.choices?.[0]?.message?.content?.trim() || "";
       const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -1398,12 +1400,13 @@ Return ONLY this JSON:
       // Persist to localStorage for this session
       try { localStorage.setItem("pp_weekly_review", JSON.stringify(reviewObj)); } catch {}
     } catch (e) {
+      console.error("Weekly review generation failed:", e);
       setWeeklyReview({
-        overall_status: "🟡 Monitor",
-        executive_summary: "Could not connect to AI coach. Check your connection and try again.",
-        major_wins: ["Review generation failed — data is still available below"],
-        areas_to_monitor: [],
-        next_week_recommendations: ["Retry generating the review when connection is available"],
+        overall_status: "🔴 Error",
+        executive_summary: `AI coach error: ${e.message}. Open browser console (F12) for details.`,
+        major_wins: [],
+        areas_to_monitor: [`Error detail: ${e.message}`],
+        next_week_recommendations: ["Check that your OpenAI API key is set correctly in the app", "Verify the key has available credits at platform.openai.com", "Check browser console (F12 → Console) for the full error"],
         phase: PHASE_CONFIG[phase?.type]?.label || "Unknown",
         phase_week: phaseInfo?.week || 1,
         review_date: new Date().toISOString(),
