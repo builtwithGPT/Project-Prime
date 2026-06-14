@@ -1634,7 +1634,17 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
 
   const completedCount = checklist.filter(i => i.completed).length;
 
-  const [saveError, setSaveError] = useState("");
+  const [saveResult, setSaveResult] = useState(null);
+
+  useEffect(() => {
+    if (saveResult === "success" && lastSession) {
+      setSessionStep("summary");
+      setSaveResult(null);
+    } else if (saveResult === "error") {
+      setSaveError("Save failed — please try again.");
+      setSaveResult(null);
+    }
+  }, [saveResult, lastSession]);
 
   const saveSession = async () => {
     setSaving(true); setSaveError("");
@@ -1657,13 +1667,9 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
       items: checklist,
     };
     const saved = await onSaveSession(sessionData);
-    if (saved) {
-      setLastSession({ ...sessionData, duration });
-      setSessionStep("summary");
-    } else {
-      setSaveError("Save failed — check console for details.");
-    }
+    setLastSession({ ...sessionData, duration });
     setSaving(false);
+    setSaveResult(saved ? "success" : "error");
   };
 
   const endSession = () => {
