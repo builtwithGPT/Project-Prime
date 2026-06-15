@@ -2189,15 +2189,7 @@ Rules:
                 <MacroBar label="Fat"      val={todayRecord.total_fat      || 0} target={todayRecord.target_fat      || T.fat}       color="#4AD9A0" />
                 {todayRecord.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 12, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 10 }}>{todayRecord.notes}</div>}
               </Card>
-            ) : (
-              <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: "20px 24px", display: "flex", alignItems: "center", gap: 14 }}>
-                <span style={{ fontSize: 28 }}>🥩</span>
-                <div>
-                  <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>No record today</div>
-                  <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>Paste your nutrition data on the left to log today.</div>
-                </div>
-              </div>
-            )}
+            ) : null}
 
             {/* Editable Phase Targets */}
             <Card>
