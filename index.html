@@ -1983,7 +1983,21 @@ function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
-  const T = NUTRITION_TARGETS;
+  // Editable targets — seeded from NUTRITION_TARGETS, persisted in localStorage
+  const [targets, setTargets] = useState(() => {
+    try { const s = localStorage.getItem("pp_nutrition_targets"); return s ? JSON.parse(s) : NUTRITION_TARGETS; }
+    catch { return NUTRITION_TARGETS; }
+  });
+  const [editingTargets, setEditingTargets] = useState(false);
+  const [targetDraft, setTargetDraft] = useState(targets);
+
+  const saveTargets = () => {
+    setTargets(targetDraft);
+    try { localStorage.setItem("pp_nutrition_targets", JSON.stringify(targetDraft)); } catch {}
+    setEditingTargets(false);
+  };
+
+  const T = targets;
   const today = new Date().toISOString().split("T")[0];
   const todayRecord = nutritionDays.find(d => d.date === today);
   const recentDays = [...nutritionDays].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 14);
@@ -2113,37 +2127,28 @@ Rules:
 
       {savedMsg && <div style={{ background: "#4AD99A22", border: "1px solid #4AD99A44", color: "#4AD99A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontWeight: 600 }}>{savedMsg}</div>}
 
-      {/* ── LOG DAILY NUTRITION VIEW (Today + Import combined) ────────────── */}
+      {/* ── LOG DAILY NUTRITION VIEW ──────────────────────────────────────── */}
       {view === "log" && !preview && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
-          {/* LEFT — Today's summary */}
-          <div>
-            {todayRecord ? (
-              <Card>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <div>
-                    <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Today — {todayRecord.phase || "Gain Phase"}</div>
-                    {todayRecord.compliance && <div style={{ color: "#4AD99A", fontSize: 12, marginTop: 3 }}>Compliance: {todayRecord.compliance}</div>}
-                  </div>
-                </div>
-                <MacroBar label="Calories" val={todayRecord.total_calories || 0} target={todayRecord.target_calories || T.calories} color="#E8A838" />
-                <MacroBar label="Protein"  val={todayRecord.total_protein  || 0} target={todayRecord.target_protein  || T.protein}   color="#4A90D9" />
-                <MacroBar label="Carbs"    val={todayRecord.total_carbs    || 0} target={todayRecord.target_carbs    || T.carbs}     color="#7B68EE" />
-                <MacroBar label="Fat"      val={todayRecord.total_fat      || 0} target={todayRecord.target_fat      || T.fat}       color="#4AD9A0" />
-                {todayRecord.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 16, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 12 }}>{todayRecord.notes}</div>}
-              </Card>
-            ) : (
-              <Card style={{ textAlign: "center", padding: 48 }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>🥩</div>
-                <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No nutrition record today</div>
-                <div style={{ color: "#8B92A5", fontSize: 14 }}>Paste your nutrition data in the panel on the right.</div>
-              </Card>
-            )}
+          {/* LEFT — Paste area (always visible, no instruction block) */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Card>
+              <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
+                placeholder="Paste any nutrition information here — meals, totals, a ChatGPT recap, or any format. GPT-4o will extract the data automatically..."
+                style={{ ...inputStyle, height: todayRecord ? 260 : 340, resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
+              {parseError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 10 }}>{parseError}</div>}
+              <button onClick={parseWithGPT} disabled={parsing || !pasteText.trim()}
+                style={{ width: "100%", marginTop: 14, background: parsing || !pasteText.trim() ? "#2A2D3A" : "#4A90D9",
+                  color: parsing || !pasteText.trim() ? "#4B5563" : "#fff",
+                  border: "none", borderRadius: 10, height: 52, fontSize: 15, fontWeight: 700, cursor: parsing || !pasteText.trim() ? "default" : "pointer" }}>
+                {parsing ? "Parsing with GPT-4o..." : "Record Daily Nutrition"}
+              </button>
+            </Card>
 
-            {/* Meal timeline */}
+            {/* Meal timeline — shows below paste when today has data */}
             {todayRecord?.entries?.length > 0 && (
-              <Card style={{ marginTop: 16 }}>
+              <Card>
                 <SectionLabel>Meal Timeline</SectionLabel>
                 {todayRecord.entries.map((e, i) => (
                   <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < todayRecord.entries.length - 1 ? "1px solid #2A2D3A" : "none" }}>
@@ -2166,38 +2171,78 @@ Rules:
             )}
           </div>
 
-          {/* RIGHT — Paste & import */}
+          {/* RIGHT — Today's summary + editable targets */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Card>
-              <SectionLabel>Paste Nutrition Record</SectionLabel>
-              <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 14, lineHeight: 1.6 }}>
-                Ask ChatGPT: <span style={{ color: "#4A90D9", fontStyle: "italic" }}>"Recap the daily nutrition statement/record for Prime App."</span> Then paste below.
-              </div>
-              <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
-                placeholder="Paste any nutrition information here — meals, totals, a ChatGPT recap, or any format. GPT-4o will extract the data automatically..."
-                style={{ ...inputStyle, height: 220, resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
-              {parseError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 10 }}>{parseError}</div>}
-              <button onClick={parseWithGPT} disabled={parsing || !pasteText.trim()}
-                style={{ width: "100%", marginTop: 14, background: parsing || !pasteText.trim() ? "#2A2D3A" : "#4A90D9",
-                  color: parsing || !pasteText.trim() ? "#4B5563" : "#fff",
-                  border: "none", borderRadius: 10, height: 52, fontSize: 15, fontWeight: 700, cursor: parsing || !pasteText.trim() ? "default" : "pointer" }}>
-                {parsing ? "Parsing with GPT-4o..." : "Parse Record"}
-              </button>
-            </Card>
 
-            <Card>
-              <SectionLabel>Gain Phase Targets</SectionLabel>
-              {[["Calories", T.calories, "kcal/day", "#E8A838"],
-                ["Protein", `${T.protein}g`, "per day", "#4A90D9"],
-                ["Carbs", `${T.carbs}g`, "per day", "#7B68EE"],
-                ["Fat", `${T.fat}g`, "per day", "#4AD9A0"],
-                ["Surplus", "+250", "vs 2,400 maint.", "#4AD99A"]].map(([label, val, unit, color]) => (
-                <div key={label} style={{ background: "#0F1117", borderRadius: 7, padding: "8px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
-                  <div style={{ textAlign: "right" }}>
-                    <span style={{ color, fontSize: 14, fontWeight: 700 }}>{val}</span>
-                    <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
+            {/* Today macro summary */}
+            {todayRecord ? (
+              <Card>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div>
+                    <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Today — {todayRecord.phase || "Gain Phase"}</div>
+                    {todayRecord.compliance && <div style={{ color: "#4AD99A", fontSize: 12, marginTop: 2 }}>Compliance: {todayRecord.compliance}</div>}
                   </div>
+                </div>
+                <MacroBar label="Calories" val={todayRecord.total_calories || 0} target={todayRecord.target_calories || T.calories} color="#E8A838" />
+                <MacroBar label="Protein"  val={todayRecord.total_protein  || 0} target={todayRecord.target_protein  || T.protein}   color="#4A90D9" />
+                <MacroBar label="Carbs"    val={todayRecord.total_carbs    || 0} target={todayRecord.target_carbs    || T.carbs}     color="#7B68EE" />
+                <MacroBar label="Fat"      val={todayRecord.total_fat      || 0} target={todayRecord.target_fat      || T.fat}       color="#4AD9A0" />
+                {todayRecord.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 12, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 10 }}>{todayRecord.notes}</div>}
+              </Card>
+            ) : (
+              <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: "20px 24px", display: "flex", alignItems: "center", gap: 14 }}>
+                <span style={{ fontSize: 28 }}>🥩</span>
+                <div>
+                  <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>No record today</div>
+                  <div style={{ color: "#4B5563", fontSize: 12, marginTop: 2 }}>Paste your nutrition data on the left to log today.</div>
+                </div>
+              </div>
+            )}
+
+            {/* Editable Phase Targets */}
+            <Card>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <SectionLabel style={{ margin: 0 }}>Phase Targets</SectionLabel>
+                {!editingTargets ? (
+                  <button onClick={() => { setTargetDraft({...targets}); setEditingTargets(true); }}
+                    style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
+                    Edit
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={saveTargets}
+                      style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      Save
+                    </button>
+                    <button onClick={() => setEditingTargets(false)}
+                      style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+              {[
+                { key: "calories", label: "Calories", unit: "kcal/day", color: "#E8A838" },
+                { key: "protein",  label: "Protein",  unit: "g/day",    color: "#4A90D9" },
+                { key: "carbs",    label: "Carbs",    unit: "g/day",    color: "#7B68EE" },
+                { key: "fat",      label: "Fat",      unit: "g/day",    color: "#4AD9A0" },
+              ].map(({ key, label, unit, color }) => (
+                <div key={key} style={{ background: "#0F1117", borderRadius: 7, padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                  {editingTargets ? (
+                    <input
+                      type="number"
+                      value={targetDraft[key]}
+                      onChange={e => setTargetDraft(d => ({ ...d, [key]: Number(e.target.value) }))}
+                      style={{ background: "#1A1D26", border: `1px solid ${color}44`, borderRadius: 6, color, fontSize: 14, fontWeight: 700,
+                        width: 80, padding: "4px 8px", textAlign: "right", outline: "none", fontFamily: "inherit" }}
+                    />
+                  ) : (
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ color, fontSize: 14, fontWeight: 700 }}>{T[key]}</span>
+                      <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
+                    </div>
+                  )}
                 </div>
               ))}
             </Card>
