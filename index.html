@@ -644,10 +644,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button onClick={() => setWorkoutSummary(null)} style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 12, height: 56, fontSize: 18, fontWeight: 800, cursor: "pointer" }}>Done</button>
-            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); startWorkout(); }} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 12, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>Amend Today</button>
-          </div>
+          <button onClick={() => setWorkoutSummary(null)} style={{ width: "100%", background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 12, height: 56, fontSize: 18, fontWeight: 800, cursor: "pointer" }}>Done</button>
         </div>
       </div>
     );
