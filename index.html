@@ -234,6 +234,11 @@ const PHASE_CONFIG = {
 };
 
 const NUTRITION_TARGETS = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
+// getTargets — phase targets take priority over defaults
+function getTargets(phase) {
+  if (!phase?.targets) return NUTRITION_TARGETS;
+  return { ...NUTRITION_TARGETS, ...phase.targets };
+}
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const fmtDate     = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -1735,7 +1740,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       waist: { current: latestWaist, baseline: baseWaist, change: waistChange },
       measurements: { chest: latest.chest, arms: latest.arms, thighs: latest.thighs, glutes: latest.glutes },
       primeFactorChange: { total: totalPFChange, upper: upperPFChange, lower: lowerPFChange },
-      nutrition: { avgCalories: avgCals, target: NUTRITION_TARGETS.calories, avgProtein: avgProt, proteinTarget: NUTRITION_TARGETS.protein, daysLogged: recentNutrition.length },
+      nutrition: { avgCalories: avgCals, target: getTargets(phase).calories, avgProtein: avgProt, proteinTarget: getTargets(phase).protein, daysLogged: recentNutrition.length },
       recovery: { sessionsCompleted: recentRecovery.length, avgEnergy, avgHeelPain: heelTrend, avgLowBack: backTrend },
       workoutDays: [...new Set(recentWorkouts.map(l => l.date.split("T")[0]))].length,
     };
@@ -1819,7 +1824,7 @@ Return ONLY this JSON:
   // Nutrition compliance (last 7 days)
   const last7days = (() => { const d = new Date(); d.setDate(d.getDate()-7); return d; })();
   const recentNutr = nutritionDays.filter(d => new Date(d.date+"T12:00:00") >= last7days);
-  const proteinDaysHit = recentNutr.filter(d => (d.total_protein||0) >= (d.target_protein||191)).length;
+  const proteinDaysHit = recentNutr.filter(d => (d.total_protein||0) >= (d.target_protein || getTargets(phase).protein)).length;
   const proteinCompliance = recentNutr.length > 0 ? Math.round(proteinDaysHit / recentNutr.length * 100) : null;
 
   // Recovery compliance (last 7 days)
@@ -2285,7 +2290,7 @@ function NutritionDayCard({ d }) {
         <div style={{ padding: "0 20px 16px", borderTop: "1px solid #2A2D3A" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, margin: "16px 0" }}>
             {[["Calories", d.total_calories, d.target_calories || 2650, "#E8A838", "kcal"],
-              ["Protein", d.total_protein, d.target_protein || 191, "#4A90D9", "g"],
+              ["Protein", d.total_protein, d.target_protein || getTargets(phase).protein, "#4A90D9", "g"],
               ["Carbs", d.total_carbs, d.target_carbs || 220, "#7B68EE", "g"],
               ["Fat", d.total_fat, d.target_fat || 65, "#4AD9A0", "g"]].map(([label, val, target, color, unit]) => (
               <div key={label}>
@@ -2338,7 +2343,7 @@ function NutritionHistoryView({ recentDays }) {
   );
 }
 
-function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
+function NutritionTab({ nutritionDays, onSaveDay, session, userId, phase }) {
   const [view, setView] = useState("log"); // "log" | "history"
   const [pasteText, setPasteText] = useState("");
   const [parsing, setParsing] = useState(false);
@@ -2347,21 +2352,8 @@ function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
-  // Editable targets — seeded from NUTRITION_TARGETS, persisted in localStorage
-  const [targets, setTargets] = useState(() => {
-    try { const s = localStorage.getItem("pp_nutrition_targets"); return s ? JSON.parse(s) : NUTRITION_TARGETS; }
-    catch { return NUTRITION_TARGETS; }
-  });
-  const [editingTargets, setEditingTargets] = useState(false);
-  const [targetDraft, setTargetDraft] = useState(targets);
-
-  const saveTargets = () => {
-    setTargets(targetDraft);
-    try { localStorage.setItem("pp_nutrition_targets", JSON.stringify(targetDraft)); } catch {}
-    setEditingTargets(false);
-  };
-
-  const T = targets;
+  // Targets come from phase (single source of truth) — edit in Phase Tracker
+  const T = getTargets(phase);
   const today = new Date().toISOString().split("T")[0];
   const todayRecord = nutritionDays.find(d => d.date === today);
   const recentDays = [...nutritionDays].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 14);
@@ -2374,8 +2366,8 @@ function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
 Return this exact structure:
 {
   "date": "YYYY-MM-DD",
-  "phase": "Gain Phase",
-  "targets": {"calories": 2650, "protein": 191, "carbs": 220, "fat": 65},
+  "phase": "${phase ? (phase.type === 'gain' ? 'Gain Phase' : 'Cut Phase') : 'Gain Phase'}",
+  "targets": {"calories": ${T.calories}, "protein": ${T.protein}, "carbs": ${T.carbs}, "fat": ${T.fat}},
   "totals": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
   "remaining": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
   "compliance": null,
@@ -2388,7 +2380,7 @@ Rules: use today (${today}) if no date given. Calculate remaining = targets - to
       const cleaned = await callAI(systemPrompt, pasteText, 2000);
       const parsed = JSON.parse(cleaned);
       if (!parsed.totals)    parsed.totals    = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-      if (!parsed.targets)   parsed.targets   = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
+      if (!parsed.targets)   parsed.targets   = { calories: T.calories, protein: T.protein, carbs: T.carbs, fat: T.fat };
       if (!parsed.remaining) parsed.remaining = {
         calories: parsed.targets.calories - parsed.totals.calories,
         protein:  parsed.targets.protein  - parsed.totals.protein,
@@ -2518,27 +2510,11 @@ Rules: use today (${today}) if no date given. Calculate remaining = targets - to
               </Card>
             ) : null}
 
-            {/* Editable Phase Targets */}
+            {/* Phase Targets — edit in Phase Tracker (single source of truth) */}
             <Card>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <SectionLabel style={{ margin: 0 }}>Phase Targets</SectionLabel>
-                {!editingTargets ? (
-                  <button onClick={() => { setTargetDraft({...targets}); setEditingTargets(true); }}
-                    style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
-                    Edit
-                  </button>
-                ) : (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={saveTargets}
-                      style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                      Save
-                    </button>
-                    <button onClick={() => setEditingTargets(false)}
-                      style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer" }}>
-                      Cancel
-                    </button>
-                  </div>
-                )}
+                <span style={{ color: "#4B5563", fontSize: 11 }}>Edit in Phase Tracker</span>
               </div>
               {[
                 { key: "calories", label: "Calories", unit: "kcal/day", color: "#E8A838" },
@@ -2548,20 +2524,10 @@ Rules: use today (${today}) if no date given. Calculate remaining = targets - to
               ].map(({ key, label, unit, color }) => (
                 <div key={key} style={{ background: "#0F1117", borderRadius: 7, padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
-                  {editingTargets ? (
-                    <input
-                      type="number"
-                      value={targetDraft[key]}
-                      onChange={e => setTargetDraft(d => ({ ...d, [key]: Number(e.target.value) }))}
-                      style={{ background: "#1A1D26", border: `1px solid ${color}44`, borderRadius: 6, color, fontSize: 14, fontWeight: 700,
-                        width: 80, padding: "4px 8px", textAlign: "right", outline: "none", fontFamily: "inherit" }}
-                    />
-                  ) : (
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ color, fontSize: 14, fontWeight: 700 }}>{T[key]}</span>
-                      <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
-                    </div>
-                  )}
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ color, fontSize: 14, fontWeight: 700 }}>{T[key]}</span>
+                    <div style={{ color: "#4B5563", fontSize: 10 }}>{unit}</div>
+                  </div>
                 </div>
               ))}
             </Card>
@@ -3235,6 +3201,67 @@ function RecoverySessionCard({ s }) {
 }
 
 // ─── PHASE TRACKER ────────────────────────────────────────────────────────────
+
+// ── PhaseTargetsCard — editable daily targets, stored on the phase object ────
+function PhaseTargetsCard({ phase, setPhase }) {
+  const defaults = { calories: phase?.type === "cut" ? 1600 : 2650, protein: 191, carbs: 220, fat: 65 };
+  const current = { ...defaults, ...(phase?.targets || {}) };
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(current);
+
+  const save = () => {
+    setPhase({ ...phase, targets: draft });
+    setEditing(false);
+  };
+
+  const T = editing ? draft : current;
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <SectionLabel style={{ margin: 0 }}>Daily Targets</SectionLabel>
+        {!editing ? (
+          <button onClick={() => { setDraft(current); setEditing(true); }}
+            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+            Edit
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={save}
+              style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              Save
+            </button>
+            <button onClick={() => setEditing(false)}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[
+          { key: "calories", label: "Calories", unit: "kcal/day", color: "#E8A838" },
+          { key: "protein",  label: "Protein",  unit: "g/day",    color: "#4A90D9" },
+          { key: "carbs",    label: "Carbs",    unit: "g/day",    color: "#7B68EE" },
+          { key: "fat",      label: "Fat",      unit: "g/day",    color: "#4AD9A0" },
+        ].map(({ key, label, unit, color }) => (
+          <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1117", borderRadius: 7, padding: "8px 12px" }}>
+            <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+            {editing ? (
+              <input type="number" value={draft[key]}
+                onChange={e => setDraft(d => ({ ...d, [key]: Number(e.target.value) }))}
+                style={{ background: "#1A1D26", border: `1px solid ${color}44`, borderRadius: 6, color, fontSize: 14, fontWeight: 700,
+                  width: 80, padding: "3px 8px", textAlign: "right", outline: "none", fontFamily: "inherit" }} />
+            ) : (
+              <span style={{ color, fontSize: 15, fontWeight: 700 }}>{T[key]} <span style={{ fontSize: 11, fontWeight: 400, color: "#4B5563" }}>{unit}</span></span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 function PhaseTracker({ phase, setPhase }) {
   const [showSetup, setShowSetup] = useState(!phase);
   const [setupType, setSetupType] = useState("gain");
@@ -3354,21 +3381,7 @@ function PhaseTracker({ phase, setPhase }) {
           </Card>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <Card>
-              <SectionLabel>Daily Targets</SectionLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {[
-                  { label: "Calories", val: phase.type === "gain" ? "2,650" : "1,600", unit: "kcal", color: "#E8A838" },
-                  { label: "Protein",  val: "191g", unit: "per day", color: "#4A90D9" },
-                  { label: "Training", val: "3×",   unit: "/ week",  color: "#4AD9A0" },
-                ].map(({ label, val, unit, color }) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1117", borderRadius: 7, padding: "8px 12px" }}>
-                    <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
-                    <span style={{ color, fontSize: 15, fontWeight: 700 }}>{val} <span style={{ fontSize: 11, fontWeight: 400, color: "#4B5563" }}>{unit}</span></span>
-                  </div>
-                ))}
-              </div>
-            </Card>
+            <PhaseTargetsCard phase={phase} setPhase={setPhase} />
             <Card>
               <SectionLabel>Phase Stats</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -3566,7 +3579,7 @@ function App() {
       lsSet(LS_KEYS.body, bLogs);
 
       if (pData?.[0]) {
-        setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [] });
+        setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [], targets: pData[0].targets || null });
       }
     } catch (e) { setDbError(true); }
     setLoading(false);
@@ -3704,7 +3717,7 @@ function App() {
         date: parsed.date,
         phase: parsed.phase || "Gain Phase",
         target_calories: Number(parsed.targets?.calories) || 2650,
-        target_protein: Number(parsed.targets?.protein) || 191,
+        target_protein: Number(parsed.targets?.protein) || getTargets(phase).protein,
         target_carbs: Number(parsed.targets?.carbs) || 220,
         target_fat: Number(parsed.targets?.fat) || 65,
         total_calories: Number(parsed.totals?.calories) || 0,
@@ -3833,13 +3846,22 @@ function App() {
 
   // ── Phase handlers ─────────────────────────────────────────────────────────
   const savePhase = async (newPhase) => {
+    const payload = {
+      type: newPhase.type,
+      start_date: newPhase.startDate,
+      end_date: newPhase.endDate,
+      history: newPhase.history || [],
+      targets: newPhase.targets || null,
+    };
     if (newPhase?.id) {
-      await sbPatch(`phase_data?id=eq.${newPhase.id}`, { type: newPhase.type, start_date: newPhase.startDate, end_date: newPhase.endDate, history: newPhase.history }, session);
+      await sbPatch(`phase_data?id=eq.${newPhase.id}`, payload, session);
     } else {
-      const rows = await sbPost("phase_data", { type: newPhase.type, start_date: newPhase.startDate, end_date: newPhase.endDate, history: newPhase.history || [], user_id: userId }, session);
+      const rows = await sbPost("phase_data", { ...payload, user_id: userId }, session);
       if (rows?.[0]) newPhase = { ...newPhase, id: rows[0].id };
     }
     setPhase(newPhase);
+    // Clear old separate nutrition targets — phase is now the source of truth
+    try { localStorage.removeItem("pp_nutrition_targets"); } catch {}
   };
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -3926,7 +3948,7 @@ function App() {
         {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
-        {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} />}
+        {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} phase={phase} />}
         {tab === "recovery"  && <RecoveryTab recoverySessions={recoverySessions} onSaveSession={saveRecoverySession} />}
       </div>
 
