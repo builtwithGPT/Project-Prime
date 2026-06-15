@@ -1548,6 +1548,110 @@ function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) 
   );
 }
 
+
+// ─── PROJECT PRIME CONFIDENCE ENGINE ──────────────────────────────────────────
+// Separates "what the data says" from "how much we trust the data"
+
+function calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays) {
+  if (!phase) return { tier: "none", score: 0, daysSinceStart: 0, reasons: [] };
+
+  const phaseStart   = new Date(phase.startDate);
+  const now          = new Date();
+  const daysSince    = Math.max(0, Math.round((now - phaseStart) / 86400000));
+  const phaseLogs    = bodyLogs.filter(l => new Date(l.date) >= phaseStart);
+  const weighIns     = phaseLogs.filter(l => l.weight).length;
+  const waistLogs    = phaseLogs.filter(l => l.waist).length;
+  const workoutDays  = [...new Set(
+    workoutLogs.filter(l => new Date(l.date) >= phaseStart).map(l => l.date.split("T")[0])
+  )].length;
+  const nutritionLogs = nutritionDays.filter(d => new Date(d.date + "T12:00:00") >= phaseStart).length;
+
+  // Score each dimension 0-25
+  const timeScore    = Math.min(25, (daysSince / 21) * 25);
+  const weightScore  = Math.min(25, (weighIns  / 8)  * 25);
+  const trainingScore = Math.min(25, (workoutDays / 6) * 25);
+  const nutritionScore = Math.min(25, (nutritionLogs / 7) * 25);
+  const score = Math.round(timeScore + weightScore + trainingScore + nutritionScore);
+
+  let tier;
+  if (score < 30 || daysSince < 7)       tier = "low";
+  else if (score < 65 || daysSince < 21) tier = "medium";
+  else                                    tier = "high";
+
+  const reasons = [];
+  if (weighIns  < 5)        reasons.push(`${weighIns} weigh-in${weighIns !== 1 ? "s" : ""} (need 5+ for trend)`);
+  if (workoutDays < 3)      reasons.push(`${workoutDays} workout day${workoutDays !== 1 ? "s" : ""} logged`);
+  if (nutritionLogs < 5)    reasons.push(`${nutritionLogs} nutrition day${nutritionLogs !== 1 ? "s" : ""} logged`);
+  if (daysSince < 7)        reasons.push(`${daysSince} day${daysSince !== 1 ? "s" : ""} into phase`);
+
+  return { tier, score, daysSince, weighIns, workoutDays, nutritionLogs, reasons };
+}
+
+// Derive the overall phase verdict using confidence tier + trend direction
+function calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase) {
+  const { tier } = confidence;
+
+  // No phase — no verdict
+  if (!phase) return "gray";
+
+  // Low confidence — always baseline regardless of numbers
+  if (tier === "low") return "baseline";
+
+  // Medium confidence — softer thresholds, no red
+  if (tier === "medium") {
+    const anyBad = weightStatus === "red" || waistStatus === "red";
+    if (anyBad) return "yellow";
+    const allOk = weightStatus === "green" && waistStatus !== "red";
+    return allOk ? "green" : "yellow";
+  }
+
+  // High confidence — full spectrum
+  const anyRed   = weightStatus === "red" || waistStatus === "red" || pfStatus === "red";
+  const allGreen = weightStatus === "green" && waistStatus !== "red" && pfStatus !== "red";
+  if (anyRed)   return "red";
+  if (allGreen) return "green";
+  return "yellow";
+}
+
+// Build the four-part coach narrative (Observation / Confidence / Interpretation / Action)
+function buildCoachNarrative(confidence, weightChange, wRate, waistChange, totalPFChange, verdict, phase, weeklyReview) {
+  // If we have a live AI review, use its executive summary
+  if (weeklyReview?.executive_summary && !weeklyReview.executive_summary.includes("error")) {
+    return weeklyReview.executive_summary;
+  }
+
+  if (!phase) return "Set an active phase to unlock your coaching assessment.";
+
+  const { tier, daysSince, weighIns } = confidence;
+  const isGain = phase.type === "gain";
+
+  if (tier === "low") {
+    const wNote = weightChange !== null && weightChange > 0
+      ? `Body weight has increased ${weightChange} lbs since the start of the phase — this is expected from increased food volume, glycogen storage, and hydration, not fat gain. `
+      : "";
+    const pfNote = totalPFChange !== null && totalPFChange > 0
+      ? `Prime Factor is already showing a ${totalPFChange}% improvement — a strong early indicator. `
+      : "";
+    return `${wNote}${pfNote}Only ${daysSince} day${daysSince !== 1 ? "s" : ""} of data with ${weighIns} weigh-in${weighIns !== 1 ? "s" : ""} — not enough to identify a true trend. Focus on consistency. No adjustments recommended.`;
+  }
+
+  if (tier === "medium") {
+    const wNote = wRate !== null ? `Weight is changing at ${wRate >= 0 ? "+" : ""}${wRate} lbs/week — ${isGain ? (wRate > 0.8 ? "slightly above target pace, continue monitoring" : wRate < 0.2 ? "below target pace, ensure calorie surplus is consistent" : "within the ideal range") : "on track"}. ` : "";
+    const waistNote = waistChange !== null ? `Waist has ${waistChange === 0 ? "remained stable" : (waistChange > 0 ? `increased ${waistChange}"` : `decreased ${Math.abs(waistChange)}"`)}, which is ${waistChange <= 0.5 ? "acceptable" : "worth monitoring over the next two weeks before any adjustment"}. ` : "";
+    const pfNote = totalPFChange !== null ? `Prime Factor is ${totalPFChange > 0 ? `up ${totalPFChange}%` : totalPFChange === 0 ? "flat" : `down ${Math.abs(totalPFChange)}%`} since phase start. ` : "";
+    return `${wNote}${waistNote}${pfNote}Trend is emerging but not yet confirmed. Continue collecting data before making any plan adjustments.`;
+  }
+
+  // High confidence
+  if (verdict === "green") {
+    return `Phase is progressing as intended. Weight is moving at ${wRate !== null ? `${wRate >= 0 ? "+" : ""}${wRate} lbs/week` : "a controlled pace"}${waistChange !== null && waistChange <= 0.25 ? " and waist measurements remain stable, indicating lean muscle gain" : ""}${totalPFChange !== null && totalPFChange > 0 ? `. Prime Factor is up ${totalPFChange}% since phase start` : ""}. Continue the current plan.`;
+  }
+  if (verdict === "red") {
+    return `One or more key metrics require attention. ${wRate !== null && wRate > 0.8 ? `Weight is increasing at ${wRate} lbs/week — above the ideal 0.25–0.75 lbs/week range. ` : ""}${waistChange !== null && waistChange > 0.75 ? `Waist has increased ${waistChange}" which may indicate excess fat gain. ` : ""}Review nutrition and consider adjustments.`;
+  }
+  return `Progress is mixed. Some metrics are on track but others need attention. Continue monitoring and avoid making large changes until trends are clearer.`;
+}
+
 function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, recoverySessions, phase, phaseInfo }) {
   const [showForm, setShowForm]     = useState(false);
   const [fields, setFields]         = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
@@ -1732,10 +1836,14 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     const heelTrend = recentRecovery.length  ? +(recentRecovery.reduce((s, r) => s + (r.after_heel_pain || 0), 0) / recentRecovery.length).toFixed(1) : null;
     const backTrend = recentRecovery.length  ? +(recentRecovery.reduce((s, r) => s + (r.after_low_back_tightness || 0), 0) / recentRecovery.length).toFixed(1) : null;
 
+    const conf = calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays);
     const snapshot = {
       phase: phase ? `${PHASE_CONFIG[phase.type]?.label} — Week ${phaseInfo?.week || 1}` : "No active phase",
       phaseWeek: phaseInfo?.week || 1,
       daysRemaining: phaseInfo?.remaining || 0,
+      confidenceTier: conf.tier,
+      confidenceScore: conf.score,
+      daysSincePhaseStart: conf.daysSince,
       weight: { current: latestWeight, baseline: baseWeight, change: weightChange, weeklyRate: wRate },
       waist: { current: latestWaist, baseline: baseWaist, change: waistChange },
       measurements: { chest: latest.chest, arms: latest.arms, thighs: latest.thighs, glutes: latest.glutes },
@@ -1745,22 +1853,41 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       workoutDays: [...new Set(recentWorkouts.map(l => l.date.split("T")[0]))].length,
     };
 
+    const confidenceInstructions = conf.tier === "low"
+      ? `CRITICAL: Data confidence is LOW (only ${conf.daysSince} days, ${conf.weighIns} weigh-ins). You MUST:
+- Set overall_status to "🔵 Establishing Baseline"
+- Do NOT recommend calorie changes
+- Do NOT flag weight gain as excessive fat
+- Do NOT issue course correction warnings
+- Focus executive_summary on early positive signals and expected fluctuations
+- Explain that initial weight changes reflect glycogen, hydration, and food volume — not fat gain
+- Recommend building consistency, not making adjustments`
+      : conf.tier === "medium"
+      ? `Data confidence is MEDIUM (${conf.daysSince} days). You MAY:
+- Use 🟢 On Track or 🟡 Monitor status (NOT 🔴 Course Correction unless clearly warranted)
+- Note emerging trends cautiously
+- Suggest monitoring but NOT major plan changes
+- Phrase recommendations as "continue monitoring" not "adjust immediately"`
+      : `Data confidence is HIGH (${conf.daysSince} days). Full assessment permitted. Use all status levels as appropriate.`;
+
     const prompt = `You are an elite personal coach reviewing Project Prime fitness data. Analyze this week's data and return ONLY a JSON object (no markdown, no explanation).
+
+${confidenceInstructions}
 
 DATA:
 ${JSON.stringify(snapshot, null, 2)}
 
-Project Prime success criteria for a Gain Phase:
-- Weight increases 0.25–0.75 lbs/week
-- Waist stays stable or increases minimally (<0.5" per month)  
-- Prime Factor (PF) increases week over week
-- Protein target (~191g/day) hit consistently
-- Recovery sessions improving pain scores
+Project Prime success criteria for a ${phase?.type === "gain" ? "Gain" : "Cut"} Phase:
+- Weight ${phase?.type === "gain" ? "increases 0.25–0.75 lbs/week" : "decreases 0.5–1.5 lbs/week"}
+- Waist stays stable or ${phase?.type === "gain" ? "increases minimally (<0.5" per month)" : "decreases consistently"}
+- Prime Factor (PF) ${phase?.type === "gain" ? "increases week over week" : "stays stable or increases"}
+- Protein target hit consistently
+- Recovery sessions improving
 
 Return ONLY this JSON:
 {
-  "overall_status": "🟢 Excellent Progress" | "🟢 On Track" | "🟡 Monitor" | "🔴 Course Correction Needed",
-  "executive_summary": "2-3 sentence specific coaching summary referencing the actual numbers",
+  "overall_status": "${conf.tier === "low" ? "🔵 Establishing Baseline" : '🟢 Excellent Progress" | "🟢 On Track" | "🟡 Monitor" | "🔴 Course Correction Needed'}",
+  "executive_summary": "2-3 sentence coaching summary following: Observation → what happened. Confidence → how much to trust it. Interpretation → what it likely means. Action → what to do.",
   "major_wins": ["win 1", "win 2", "win 3"],
   "areas_to_monitor": ["area 1", "area 2"],
   "next_week_recommendations": ["action 1", "action 2", "action 3"]
@@ -1836,19 +1963,31 @@ Return ONLY this JSON:
     workoutLogs.filter(l => new Date(l.date) >= last7days).map(l => l.date.split("T")[0])
   )].length;
 
-  // Overall phase verdict
-  const allGreen = weightStatus === "green" && waistStatus !== "red" && pfStatus !== "red";
-  const anyRed   = weightStatus === "red"   || waistStatus === "red"  || pfStatus === "red";
-  const verdict  = !phase || sorted.length < 2
-    ? "gray"
-    : anyRed ? "red" : allGreen ? "green" : "yellow";
+  // ── Confidence Engine ─────────────────────────────────────────────────────
+  const confidence = calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays);
+  const verdict    = calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase);
+  const coachNarrative = buildCoachNarrative(confidence, weightChange, wRate, waistChange, totalPFChange, verdict, phase, weeklyReview);
+
+  // KPI statuses respect confidence tier — low confidence suppresses red
+  const confidentWeightStatus = confidence.tier === "low" ? "blue" : weightStatus;
+  const confidentWaistStatus  = confidence.tier === "low" ? "blue" : waistStatus;
+  const confidentPFStatus     = confidence.tier === "low" ? (pfStatus === "gray" ? "gray" : "blue") : pfStatus;
 
   const verdictConfig = {
-    green:  { emoji: "🟢", label: "LEAN GAIN ON TRACK",        color: "#4AD99A", bg: "#4AD99A0D", border: "#4AD99A33", action: "Continue the current plan." },
-    yellow: { emoji: "🟡", label: "MONITOR — ADJUSTMENTS MAY BE NEEDED", color: "#E8A838", bg: "#E8A8380D", border: "#E8A83833", action: "Review nutrition and training load this week." },
-    red:    { emoji: "🔴", label: "COURSE CORRECTION NEEDED",   color: "#D94A4A", bg: "#D94A4A0D", border: "#D94A4A33", action: "Review the plan with your coach immediately." },
-    gray:   { emoji: "⚪", label: "LOG DATA TO SEE STATUS",     color: "#4B5563", bg: "#4B55630D", border: "#4B556333", action: "Log body measurements and workouts to unlock your assessment." },
+    green:    { emoji: "🟢", label: "LEAN GAIN ON TRACK",              color: "#4AD99A", bg: "#4AD99A0D", border: "#4AD99A33", action: "Continue the current plan." },
+    yellow:   { emoji: "🟡", label: "MONITOR — TREND EMERGING",        color: "#E8A838", bg: "#E8A8380D", border: "#E8A83833", action: "Continue collecting data before making adjustments." },
+    red:      { emoji: "🔴", label: "COURSE CORRECTION NEEDED",        color: "#D94A4A", bg: "#D94A4A0D", border: "#D94A4A33", action: "Review the plan with your coach." },
+    baseline: { emoji: "🔵", label: "ESTABLISHING BASELINE",           color: "#4A90D9", bg: "#4A90D90D", border: "#4A90D933", action: "Build consistency. No adjustments recommended." },
+    gray:     { emoji: "⚪", label: "LOG DATA TO SEE STATUS",          color: "#4B5563", bg: "#4B55630D", border: "#4B556333", action: "Log body measurements and workouts to unlock your assessment." },
   }[verdict];
+
+  // Confidence badge info
+  const confidenceBadge = {
+    low:    { label: `LOW CONFIDENCE · ${confidence.daysSince}d of data`, color: "#4A90D9" },
+    medium: { label: `MEDIUM CONFIDENCE · ${confidence.daysSince}d of data`, color: "#E8A838" },
+    high:   { label: `HIGH CONFIDENCE · ${confidence.daysSince}d of data`, color: "#4AD99A" },
+    none:   { label: "NO PHASE DATA", color: "#4B5563" },
+  }[confidence.tier];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1883,6 +2022,11 @@ Return ONLY this JSON:
             <div>
               <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>PROJECT PRIME STATUS</div>
               <div style={{ color: verdictConfig.color, fontSize: 20, fontWeight: 800, letterSpacing: "-0.3px", marginTop: 1 }}>{verdictConfig.label}</div>
+              {confidenceBadge && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, background: confidenceBadge.color + "18", border: `1px solid ${confidenceBadge.color}44`, borderRadius: 4, padding: "2px 7px" }}>
+                  <span style={{ color: confidenceBadge.color, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{confidenceBadge.label}</span>
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -1912,19 +2056,19 @@ Return ONLY this JSON:
                   label: "Weight",
                   value: latestWeight ? `${latestWeight} lbs` : "No data",
                   sub: weightChange !== null ? `${weightChange >= 0 ? "+" : ""}${weightChange} lbs from phase start` : null,
-                  status: weightStatus,
+                  status: confidentWeightStatus,
                 },
                 {
                   label: "Waist",
                   value: latestWaist ? `${latestWaist}"` : "No data",
                   sub: waistChange !== null ? (waistChange === 0 ? "No change" : `${waistChange >= 0 ? "+" : ""}${waistChange}" from baseline`) : null,
-                  status: waistStatus,
+                  status: confidentWaistStatus,
                 },
                 {
                   label: "Prime Factor",
                   value: totalPFChange !== null ? `${totalPFChange >= 0 ? "+" : ""}${totalPFChange}%` : "No data",
                   sub: totalPFChange !== null ? `Upper ${upperPFChange !== null ? (upperPFChange >= 0 ? "+" : "") + upperPFChange + "%" : "—"} · Lower ${lowerPFChange !== null ? (lowerPFChange >= 0 ? "+" : "") + lowerPFChange + "%" : "—"}` : null,
-                  status: pfStatus,
+                  status: confidentPFStatus,
                 },
                 {
                   label: "Training",
@@ -1945,8 +2089,8 @@ Return ONLY this JSON:
                   status: recCompliance === null ? "gray" : recCompliance >= 75 ? "green" : recCompliance >= 50 ? "yellow" : "red",
                 },
               ].map(({ label, value, sub, status }) => {
-                const sc = { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563" }[status];
-                const dot = { green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪" }[status];
+                const sc = { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563", blue: "#4A90D9" }[status] || "#4B5563";
+                const dot = { green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪", blue: "🔵" }[status] || "⚪";
                 return (
                   <div key={label} style={{ display: "flex", alignItems: "center", gap: 12, background: "#0F1117", borderRadius: 8, padding: "10px 14px" }}>
                     <span style={{ fontSize: 13, flexShrink: 0 }}>{dot}</span>
@@ -1967,19 +2111,14 @@ Return ONLY this JSON:
             {/* Static coach verdict based on data */}
             <div>
               <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>COACH ASSESSMENT</div>
-              {weeklyReview?.executive_summary ? (
-                <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#C8CDD8", lineHeight: 1.7, fontStyle: "italic" }}>
-                  "{weeklyReview.executive_summary}"
-                </div>
-              ) : (
-                <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#8B92A5", lineHeight: 1.7 }}>
-                  {verdict === "green"
-                    ? `${phaseName || "Your phase"} is progressing as intended. Body weight is moving in the right direction while waist measurements remain controlled and Prime Factor is improving. Continue the current calorie surplus and progressive overload.`
-                    : verdict === "yellow"
-                    ? "Some metrics need attention. Review your nutrition compliance and ensure training sessions are progressing in weight or volume. Log more data for a complete assessment."
-                    : verdict === "gray"
-                    ? "Log body measurements and complete workouts to unlock your full phase assessment."
-                    : "One or more key metrics are moving in the wrong direction. Review your plan and consider adjustments to nutrition or training."}
+              {/* Four-part coach narrative — driven by confidence engine */}
+              <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#C8CDD8", lineHeight: 1.7, fontStyle: "italic" }}>
+                "{coachNarrative}"
+              </div>
+              {confidence.tier === "low" && confidence.reasons.length > 0 && (
+                <div style={{ background: "#4A90D90A", border: "1px solid #4A90D922", borderRadius: 8, padding: "8px 12px", marginTop: 8 }}>
+                  <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Why baseline status?</div>
+                  <div style={{ color: "#8B92A5", fontSize: 11, lineHeight: 1.6 }}>{confidence.reasons.join(" · ")}</div>
                 </div>
               )}
             </div>
@@ -2047,7 +2186,7 @@ Return ONLY this JSON:
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
 
         {/* Weight */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A" }[weightStatus]}`, padding: 18 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A", blue: "#4A90D933" }[confidentWeightStatus] || "#2A2D3A"}`, padding: 18 }}>
           <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Weight Progress</div>
           <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{latestWeight ?? "—"}</div>
           <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>lbs</div>
@@ -2060,7 +2199,7 @@ Return ONLY this JSON:
         </div>
 
         {/* Waist */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A" }[waistStatus]}`, padding: 18 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A", blue: "#4A90D933" }[confidentWaistStatus] || "#2A2D3A"}`, padding: 18 }}>
           <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Waist Control</div>
           <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{latestWaist ?? "—"}</div>
           <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>inches</div>
