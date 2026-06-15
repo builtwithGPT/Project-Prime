@@ -1975,7 +1975,7 @@ function NutritionHistoryView({ recentDays }) {
 }
 
 function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
-  const [view, setView] = useState("log"); // "log" | "import" | "history"
+  const [view, setView] = useState("log"); // "log" | "history"
   const [pasteText, setPasteText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
@@ -2097,13 +2097,14 @@ Rules:
 
   return (
     <div>
+      {/* Header + tab switcher */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Nutrition</h2>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-          {[["log", "Today"], ["import", "Import"], ["history", "History"]].map(([id, label]) => (
-            <button key={id} onClick={() => setView(id)}
+          {[["log", "Log Daily Nutrition"], ["history", "History"]].map(([id, label]) => (
+            <button key={id} onClick={() => { setView(id); setPreview(null); setPasteText(""); setParseError(""); }}
               style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
-                border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
+                border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
               {label}
             </button>
           ))}
@@ -2112,9 +2113,11 @@ Rules:
 
       {savedMsg && <div style={{ background: "#4AD99A22", border: "1px solid #4AD99A44", color: "#4AD99A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontWeight: 600 }}>{savedMsg}</div>}
 
-      {/* TODAY VIEW */}
-      {view === "log" && (
+      {/* ── LOG DAILY NUTRITION VIEW (Today + Import combined) ────────────── */}
+      {view === "log" && !preview && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+          {/* LEFT — Today's summary */}
           <div>
             {todayRecord ? (
               <Card>
@@ -2123,26 +2126,18 @@ Rules:
                     <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Today — {todayRecord.phase || "Gain Phase"}</div>
                     {todayRecord.compliance && <div style={{ color: "#4AD99A", fontSize: 12, marginTop: 3 }}>Compliance: {todayRecord.compliance}</div>}
                   </div>
-                  <button onClick={() => setView("import")}
-                    style={{ background: "#4A90D922", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                    Update
-                  </button>
                 </div>
                 <MacroBar label="Calories" val={todayRecord.total_calories || 0} target={todayRecord.target_calories || T.calories} color="#E8A838" />
-                <MacroBar label="Protein" val={todayRecord.total_protein || 0} target={todayRecord.target_protein || T.protein} color="#4A90D9" />
-                <MacroBar label="Carbs" val={todayRecord.total_carbs || 0} target={todayRecord.target_carbs || T.carbs} color="#7B68EE" />
-                <MacroBar label="Fat" val={todayRecord.total_fat || 0} target={todayRecord.target_fat || T.fat} color="#4AD9A0" />
+                <MacroBar label="Protein"  val={todayRecord.total_protein  || 0} target={todayRecord.target_protein  || T.protein}   color="#4A90D9" />
+                <MacroBar label="Carbs"    val={todayRecord.total_carbs    || 0} target={todayRecord.target_carbs    || T.carbs}     color="#7B68EE" />
+                <MacroBar label="Fat"      val={todayRecord.total_fat      || 0} target={todayRecord.target_fat      || T.fat}       color="#4AD9A0" />
                 {todayRecord.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 16, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 12 }}>{todayRecord.notes}</div>}
               </Card>
             ) : (
               <Card style={{ textAlign: "center", padding: 48 }}>
                 <div style={{ fontSize: 40, marginBottom: 16 }}>🥩</div>
                 <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No nutrition record today</div>
-                <div style={{ color: "#8B92A5", fontSize: 14, marginBottom: 24 }}>Log your day with ChatGPT then import the record here.</div>
-                <button onClick={() => setView("import")}
-                  style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 10, padding: "14px 32px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>
-                  Import Today's Record
-                </button>
+                <div style={{ color: "#8B92A5", fontSize: 14 }}>Paste your nutrition data in the panel on the right.</div>
               </Card>
             )}
 
@@ -2171,7 +2166,25 @@ Rules:
             )}
           </div>
 
-          <div>
+          {/* RIGHT — Paste & import */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Card>
+              <SectionLabel>Paste Nutrition Record</SectionLabel>
+              <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 14, lineHeight: 1.6 }}>
+                Ask ChatGPT: <span style={{ color: "#4A90D9", fontStyle: "italic" }}>"Recap the daily nutrition statement/record for Prime App."</span> Then paste below.
+              </div>
+              <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
+                placeholder="Paste any nutrition information here — meals, totals, a ChatGPT recap, or any format. GPT-4o will extract the data automatically..."
+                style={{ ...inputStyle, height: 220, resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
+              {parseError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 10 }}>{parseError}</div>}
+              <button onClick={parseWithGPT} disabled={parsing || !pasteText.trim()}
+                style={{ width: "100%", marginTop: 14, background: parsing || !pasteText.trim() ? "#2A2D3A" : "#4A90D9",
+                  color: parsing || !pasteText.trim() ? "#4B5563" : "#fff",
+                  border: "none", borderRadius: 10, height: 52, fontSize: 15, fontWeight: 700, cursor: parsing || !pasteText.trim() ? "default" : "pointer" }}>
+                {parsing ? "Parsing with GPT-4o..." : "Parse Record"}
+              </button>
+            </Card>
+
             <Card>
               <SectionLabel>Gain Phase Targets</SectionLabel>
               {[["Calories", T.calories, "kcal/day", "#E8A838"],
@@ -2192,107 +2205,80 @@ Rules:
         </div>
       )}
 
-      {/* IMPORT VIEW */}
-      {view === "import" && (
+      {/* ── PREVIEW + CONFIRM ────────────────────────────────────────────── */}
+      {view === "log" && preview && (
         <div style={{ maxWidth: 700 }}>
-          {!preview ? (
-            <Card>
-              <SectionLabel>Paste Daily Nutrition Record</SectionLabel>
-              <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-                Ask ChatGPT: <span style={{ color: "#4A90D9", fontStyle: "italic" }}>"Recap the daily nutrition statement/record for Prime App."</span> Then paste the result below.
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div>
+                <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Preview — {preview.date}</div>
+                <div style={{ color: "#8B92A5", fontSize: 13 }}>{preview.phase}</div>
               </div>
-              <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
-                placeholder="Paste any nutrition information here — meals, totals, a ChatGPT recap, or any format. GPT-4o will extract the data automatically..."
-                style={{ ...inputStyle, height: 280, resize: "vertical", fontSize: 13, lineHeight: 1.6 }} />
-              {parseError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 12 }}>{parseError}</div>}
-              <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-                <button onClick={parseWithGPT} disabled={parsing || !pasteText.trim()}
-                  style={{ flex: 1, background: parsing || !pasteText.trim() ? "#2A2D3A" : "#4A90D9",
-                    color: parsing || !pasteText.trim() ? "#4B5563" : "#fff",
-                    border: "none", borderRadius: 10, height: 56, fontSize: 16, fontWeight: 700, cursor: parsing || !pasteText.trim() ? "default" : "pointer" }}>
-                  {parsing ? "Parsing with GPT-4o..." : "Parse Record"}
-                </button>
-                <button onClick={() => { setPasteText(""); setParseError(""); setView("log"); }}
-                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
-                  Cancel
-                </button>
-              </div>
-            </Card>
-          ) : (
-            <div>
-              <Card style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                  <div>
-                    <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 16 }}>Preview — {preview.date}</div>
-                    <div style={{ color: "#8B92A5", fontSize: 13 }}>{preview.phase}</div>
-                  </div>
-                  {preview.compliance && <span style={{ background: "#4AD99A22", color: "#4AD99A", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>Compliance: {preview.compliance}</span>}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                  <div>
-                    <SectionLabel>Totals</SectionLabel>
-                    <MacroBar label="Calories" val={preview.totals?.calories || 0} target={preview.targets?.calories || T.calories} color="#E8A838" />
-                    <MacroBar label="Protein" val={preview.totals?.protein || 0} target={preview.targets?.protein || T.protein} color="#4A90D9" />
-                    <MacroBar label="Carbs" val={preview.totals?.carbs || 0} target={preview.targets?.carbs || T.carbs} color="#7B68EE" />
-                    <MacroBar label="Fat" val={preview.totals?.fat || 0} target={preview.targets?.fat || T.fat} color="#4AD9A0" />
-                  </div>
-                  <div>
-                    <SectionLabel>Remaining</SectionLabel>
-                    {[["Calories", preview.remaining?.calories || 0, "#E8A838"],
-                      ["Protein", `${preview.remaining?.protein || 0}g`, "#4A90D9"],
-                      ["Carbs", `${preview.remaining?.carbs || 0}g`, "#7B68EE"],
-                      ["Fat", `${preview.remaining?.fat || 0}g`, "#4AD9A0"]].map(([label, val, color]) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #2A2D3A" }}>
-                        <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
-                        <span style={{ color, fontSize: 13, fontWeight: 700 }}>{val}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {preview.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 16, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 12 }}>{preview.notes}</div>}
-              </Card>
-
-              {preview.entries?.length > 0 && (
-                <Card style={{ marginBottom: 16 }}>
-                  <SectionLabel>Meal Timeline ({preview.entries.length} entries)</SectionLabel>
-                  {preview.entries.map((e, i) => (
-                    <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < preview.entries.length - 1 ? "1px solid #2A2D3A" : "none" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                        <div>
-                          <span style={{ color: "#8B92A5", fontSize: 11 }}>{e.time} · </span>
-                          <span style={{ color: "#E8EAF0", fontSize: 14, fontWeight: 600 }}>{e.name}</span>
-                        </div>
-                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{e.calories} kcal</span>
-                      </div>
-                      {e.items && <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 3 }}>{e.items}</div>}
-                      <div style={{ display: "flex", gap: 12 }}>
-                        <span style={{ color: "#4A90D9", fontSize: 12 }}>{e.protein}g P</span>
-                        <span style={{ color: "#7B68EE", fontSize: 12 }}>{e.carbs}g C</span>
-                        <span style={{ color: "#4AD9A0", fontSize: 12 }}>{e.fat}g F</span>
-                      </div>
-                    </div>
-                  ))}
-                </Card>
-              )}
-
-              <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={saveDay} disabled={saving}
-                  style={{ flex: 1, background: saving ? "#2A2D3A" : "#4AD99A", color: saving ? "#4B5563" : "#0F1117",
-                    border: "none", borderRadius: 10, height: 56, fontSize: 17, fontWeight: 800, cursor: saving ? "default" : "pointer" }}>
-                  {saving ? "Saving..." : "Save Nutrition Record"}
-                </button>
-                <button onClick={() => setPreview(null)}
-                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
-                  Re-paste
-                </button>
-              </div>
-              {saveError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 12, background: "#D94A4A11", border: "1px solid #D94A4A44", borderRadius: 8, padding: "10px 14px" }}>{saveError}</div>}
+              {preview.compliance && <span style={{ background: "#4AD99A22", color: "#4AD99A", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>Compliance: {preview.compliance}</span>}
             </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+              <div>
+                <SectionLabel>Totals</SectionLabel>
+                <MacroBar label="Calories" val={preview.totals?.calories || 0} target={preview.targets?.calories || T.calories} color="#E8A838" />
+                <MacroBar label="Protein"  val={preview.totals?.protein  || 0} target={preview.targets?.protein  || T.protein}   color="#4A90D9" />
+                <MacroBar label="Carbs"    val={preview.totals?.carbs    || 0} target={preview.targets?.carbs    || T.carbs}     color="#7B68EE" />
+                <MacroBar label="Fat"      val={preview.totals?.fat      || 0} target={preview.targets?.fat      || T.fat}       color="#4AD9A0" />
+              </div>
+              <div>
+                <SectionLabel>Remaining</SectionLabel>
+                {[["Calories", preview.remaining?.calories || 0, "#E8A838"],
+                  ["Protein",  `${preview.remaining?.protein || 0}g`, "#4A90D9"],
+                  ["Carbs",    `${preview.remaining?.carbs   || 0}g`, "#7B68EE"],
+                  ["Fat",      `${preview.remaining?.fat     || 0}g`, "#4AD9A0"]].map(([label, val, color]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #2A2D3A" }}>
+                    <span style={{ color: "#8B92A5", fontSize: 13 }}>{label}</span>
+                    <span style={{ color, fontSize: 13, fontWeight: 700 }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {preview.notes && <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 16, fontStyle: "italic", borderTop: "1px solid #2A2D3A", paddingTop: 12 }}>{preview.notes}</div>}
+          </Card>
+
+          {preview.entries?.length > 0 && (
+            <Card style={{ marginBottom: 16 }}>
+              <SectionLabel>Meal Timeline ({preview.entries.length} entries)</SectionLabel>
+              {preview.entries.map((e, i) => (
+                <div key={i} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: i < preview.entries.length - 1 ? "1px solid #2A2D3A" : "none" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                    <div>
+                      <span style={{ color: "#8B92A5", fontSize: 11 }}>{e.time} · </span>
+                      <span style={{ color: "#E8EAF0", fontSize: 14, fontWeight: 600 }}>{e.name}</span>
+                    </div>
+                    <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{e.calories} kcal</span>
+                  </div>
+                  {e.items && <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 3 }}>{e.items}</div>}
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <span style={{ color: "#4A90D9", fontSize: 12 }}>{e.protein}g P</span>
+                    <span style={{ color: "#7B68EE", fontSize: 12 }}>{e.carbs}g C</span>
+                    <span style={{ color: "#4AD9A0", fontSize: 12 }}>{e.fat}g F</span>
+                  </div>
+                </div>
+              ))}
+            </Card>
           )}
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <button onClick={saveDay} disabled={saving}
+              style={{ flex: 1, background: saving ? "#2A2D3A" : "#4AD99A", color: saving ? "#4B5563" : "#0F1117",
+                border: "none", borderRadius: 10, height: 56, fontSize: 17, fontWeight: 800, cursor: saving ? "default" : "pointer" }}>
+              {saving ? "Saving..." : "Save Nutrition Record"}
+            </button>
+            <button onClick={() => setPreview(null)}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
+              Re-paste
+            </button>
+          </div>
+          {saveError && <div style={{ color: "#D94A4A", fontSize: 13, marginTop: 12, background: "#D94A4A11", border: "1px solid #D94A4A44", borderRadius: 8, padding: "10px 14px" }}>{saveError}</div>}
         </div>
       )}
 
-      {/* HISTORY VIEW */}
+      {/* ── HISTORY VIEW ─────────────────────────────────────────────────── */}
       {view === "history" && (
         <NutritionHistoryView recentDays={recentDays} />
       )}
