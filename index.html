@@ -120,6 +120,111 @@ const NAV = [
   { id: "recovery", label: "Recovery",  icon: "🩺" },
 ];
 
+// ── Coach Tips — cycle with set number ───────────────────────────────────────
+const COACH_TIPS = {
+  "Banded Clamshell": [
+    "Keep your hips stacked. The knee moves — your pelvis does not rotate.",
+    "Pause at the top and feel the side glute contract.",
+    "Quality activation beats speed. Slow, controlled reps.",
+  ],
+  "Glute Bridge": [
+    "Drive through your heels and squeeze your glutes at the top.",
+    "Keep your ribs down — do not arch your low back.",
+    "Hold the top position for one second before lowering.",
+  ],
+  "Incline Dumbbell Press": [
+    "Lower slowly and feel the stretch in your upper chest.",
+    "Keep your shoulder blades pinned to the bench.",
+    "Control the weight. Clean reps beat ego weight.",
+  ],
+  "Dumbbell Row": [
+    "Pull your elbow toward your hip, not your shoulder.",
+    "Keep your torso stable — no twisting or momentum.",
+    "Squeeze your back at the top of every rep.",
+  ],
+  "Flat Dumbbell Press": [
+    "Keep your feet planted and your upper back tight.",
+    "Lower under control and avoid bouncing out of the bottom.",
+    "Press smoothly and maintain chest tension.",
+  ],
+  "Pull-up / Chin-up": [
+    "Start from a full hang and pull your chest toward the bar.",
+    "Control the lowering phase — do not drop.",
+    "Stop when range of motion or form breaks down.",
+  ],
+  "Dumbbell Fly": [
+    "Keep a slight bend in your elbows throughout the movement.",
+    "Think about stretching and squeezing the chest, not moving weight.",
+    "Protect your shoulders — stop before discomfort.",
+  ],
+  "Dips": [
+    "Lean slightly forward to emphasize your chest.",
+    "Lower with control and avoid bouncing at the bottom.",
+    "Keep your shoulders stable throughout the movement.",
+  ],
+  "Hip Thrust": [
+    "Finish with your glutes — do not hyperextend your low back.",
+    "Drive through your heels and pause at the top.",
+    "Keep your chin tucked and ribs down.",
+  ],
+  "Single-Leg Hip Thrust": [
+    "Keep your hips level throughout the movement.",
+    "Drive through the working heel.",
+    "Move slowly — balance and control are the goal.",
+  ],
+  "Dumbbell RDL": [
+    "Push your hips back and maintain a neutral spine.",
+    "Keep the dumbbells close to your legs.",
+    "Feel the stretch in your hamstrings before returning up.",
+  ],
+  "Prone Dumbbell Hamstring Curl": [
+    "Keep your hips pressed into the bench.",
+    "Lower slowly — the eccentric builds strength.",
+    "Do not swing the weight.",
+  ],
+  "Single-Leg Dumbbell RDL": [
+    "Keep your hips square to the floor.",
+    "Reach the free leg back as you hinge forward.",
+    "Reduce weight if balance causes poor form.",
+  ],
+  "Bulgarian Split Squat": [
+    "Drive through your front heel.",
+    "Stay tall and avoid collapsing forward.",
+    "Use heel elevation as needed to protect your foot.",
+  ],
+  "Seated Overhead Press": [
+    "Keep your core braced and ribs down.",
+    "Press with control — do not turn it into a back extension.",
+    "Lower slowly to shoulder level before the next rep.",
+  ],
+  "Bicep Curl": [
+    "Keep your elbows pinned to your sides.",
+    "Lower slowly and control the eccentric.",
+    "Stop before your shoulders or back start helping.",
+  ],
+  "Tricep Extension": [
+    "Keep your elbows pointing forward and close together.",
+    "Lower slowly and feel the stretch.",
+    "Fully extend without letting your elbows flare.",
+  ],
+  "Leg Raise": [
+    "Keep your low back pressed into the floor.",
+    "Lower your legs slowly and under control.",
+    "Stop the range before your back arches.",
+  ],
+  "Core Rotation": [
+    "Rotate with your torso — do not just swing your arms.",
+    "Keep your abs braced throughout the movement.",
+    "Control the movement at the end of each rotation.",
+  ],
+  "Dead Bug": [
+    "Press your lower back into the floor before moving.",
+    "Move opposite arm and leg slowly.",
+    "Shorten your range if your back loses contact with the floor.",
+  ],
+};
+
+
 const PHASE_CONFIG = {
   gain: { label: "Gain Phase", color: "#4AD99A", bg: "#4AD99A22", icon: "📈", weeks: 12, calories: 2650, description: "Caloric surplus · Build muscle · Progressive overload" },
   cut:  { label: "Cut Phase",  color: "#4A90D9", bg: "#4A90D922", icon: "🔥", weeks: 4,  calories: 1600, description: "Caloric deficit · Preserve muscle · Shed fat" },
@@ -914,32 +1019,47 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
           </div>
         </div>
 
-        {/* Session PF + End Workout */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 14, flexShrink: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Session PF</div>
-              <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{sessionPF.toLocaleString()}</div>
-            </div>
-            <button onClick={endWorkout}
-              style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-              End Workout
-            </button>
-          </div>
-          {todayLogs.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 120, overflowY: "auto" }}>
-              {[...todayLogs].reverse().map((l, i) => {
-                const lEx = exercises.find(e => e.id === l.exerciseId);
-                return (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #2A2D3A" }}>
-                    <span style={{ fontSize: 11, color: "#8B92A5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{lEx?.name}</span>
-                    <span style={{ fontSize: 11, color: "#E8A838", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{calcPF(l.sets, l.reps, l.weight, lEx?.type, lEx?.laterality).toLocaleString()}</span>
+        {/* Coach Tip — cycles with set number */}
+        {(() => {
+          const tips = COACH_TIPS[ex?.name];
+          const tipIdx = tips ? (Math.max(0, currentSetNum - 1)) % tips.length : -1;
+          const tip = tips ? tips[tipIdx] : null;
+          return (
+            <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #4A90D933", padding: 16, flexShrink: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>💬</span>
+                  <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    Coach Tip · Set {Math.min(currentSetNum, targetSets)}
                   </div>
-                );
-              })}
+                </div>
+                <button onClick={endWorkout}
+                  style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  End Workout
+                </button>
+              </div>
+              {tip ? (
+                <div style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.7, fontStyle: "italic" }}>
+                  "{tip}"
+                </div>
+              ) : (
+                <div style={{ color: "#4B5563", fontSize: 13 }}>No tips available for this exercise.</div>
+              )}
+              {tips && (
+                <div style={{ display: "flex", gap: 4, marginTop: 10 }}>
+                  {tips.map((_, i) => (
+                    <div key={i} style={{ height: 3, flex: 1, borderRadius: 2, background: i === tipIdx ? "#4A90D9" : "#2A2D3A", transition: "background 0.3s" }} />
+                  ))}
+                </div>
+              )}
+              {/* Session PF compact */}
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #2A2D3A", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Session PF</span>
+                <span style={{ color: "#E8A838", fontSize: 16, fontWeight: 800 }}>{sessionPF.toLocaleString()}</span>
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
     </div>
   );
