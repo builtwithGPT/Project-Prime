@@ -1066,7 +1066,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
                     Coach Tip · Set {Math.min(currentSetNum, targetSets)}
                   </div>
                 </div>
-                <button onClick={endWorkout}
+                <button onClick={() => endWorkout()}
                   style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 7, padding: "5px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                   End Workout
                 </button>
