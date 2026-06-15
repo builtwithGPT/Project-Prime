@@ -1853,45 +1853,51 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       workoutDays: [...new Set(recentWorkouts.map(l => l.date.split("T")[0]))].length,
     };
 
-    const confidenceInstructions = conf.tier === "low"
-      ? `CRITICAL: Data confidence is LOW (only ${conf.daysSince} days, ${conf.weighIns} weigh-ins). You MUST:
-- Set overall_status to "🔵 Establishing Baseline"
-- Do NOT recommend calorie changes
-- Do NOT flag weight gain as excessive fat
-- Do NOT issue course correction warnings
-- Focus executive_summary on early positive signals and expected fluctuations
-- Explain that initial weight changes reflect glycogen, hydration, and food volume — not fat gain
-- Recommend building consistency, not making adjustments`
-      : conf.tier === "medium"
-      ? `Data confidence is MEDIUM (${conf.daysSince} days). You MAY:
-- Use 🟢 On Track or 🟡 Monitor status (NOT 🔴 Course Correction unless clearly warranted)
-- Note emerging trends cautiously
-- Suggest monitoring but NOT major plan changes
-- Phrase recommendations as "continue monitoring" not "adjust immediately"`
-      : `Data confidence is HIGH (${conf.daysSince} days). Full assessment permitted. Use all status levels as appropriate.`;
+    const phaseType = phase?.type === "gain" ? "Gain" : "Cut";
+    const isGainPhase = phase?.type === "gain";
 
-    const prompt = `You are an elite personal coach reviewing Project Prime fitness data. Analyze this week's data and return ONLY a JSON object (no markdown, no explanation).
+    let confidenceInstructions;
+    if (conf.tier === "low") {
+      confidenceInstructions = "CRITICAL: Data confidence is LOW (only " + conf.daysSince + " days, " + conf.weighIns + " weigh-ins). You MUST:\n" +
+        "- Set overall_status to 🔵 Establishing Baseline\n" +
+        "- Do NOT recommend calorie changes\n" +
+        "- Do NOT flag weight gain as excessive fat\n" +
+        "- Do NOT issue course correction warnings\n" +
+        "- Focus executive_summary on early positive signals and expected fluctuations\n" +
+        "- Explain that initial weight changes reflect glycogen, hydration, and food volume not fat gain\n" +
+        "- Recommend building consistency, not making adjustments";
+    } else if (conf.tier === "medium") {
+      confidenceInstructions = "Data confidence is MEDIUM (" + conf.daysSince + " days). You MAY:\n" +
+        "- Use On Track or Monitor status (NOT Course Correction unless clearly warranted)\n" +
+        "- Note emerging trends cautiously\n" +
+        "- Suggest monitoring but NOT major plan changes\n" +
+        "- Phrase recommendations as continue monitoring not adjust immediately";
+    } else {
+      confidenceInstructions = "Data confidence is HIGH (" + conf.daysSince + " days). Full assessment permitted. Use all status levels as appropriate.";
+    }
 
-${confidenceInstructions}
+    const statusOptions = conf.tier === "low"
+      ? "🔵 Establishing Baseline"
+      : "🟢 Excellent Progress or 🟢 On Track or 🟡 Monitor or 🔴 Course Correction Needed";
 
-DATA:
-${JSON.stringify(snapshot, null, 2)}
+    const weightCriteria = isGainPhase ? "increases 0.25-0.75 lbs/week" : "decreases 0.5-1.5 lbs/week";
+    const waistCriteria  = isGainPhase ? "stays stable or increases minimally under 0.5 inches per month" : "decreases consistently";
+    const pfCriteria     = isGainPhase ? "increases week over week" : "stays stable or increases";
 
-Project Prime success criteria for a ${phase?.type === "gain" ? "Gain" : "Cut"} Phase:
-- Weight ${phase?.type === "gain" ? "increases 0.25–0.75 lbs/week" : "decreases 0.5–1.5 lbs/week"}
-- Waist stays stable or ${phase?.type === "gain" ? "increases minimally (<0.5" per month)" : "decreases consistently"}
-- Prime Factor (PF) ${phase?.type === "gain" ? "increases week over week" : "stays stable or increases"}
-- Protein target hit consistently
-- Recovery sessions improving
-
-Return ONLY this JSON:
-{
-  "overall_status": "${conf.tier === "low" ? "🔵 Establishing Baseline" : '🟢 Excellent Progress" | "🟢 On Track" | "🟡 Monitor" | "🔴 Course Correction Needed'}",
-  "executive_summary": "2-3 sentence coaching summary following: Observation → what happened. Confidence → how much to trust it. Interpretation → what it likely means. Action → what to do.",
-  "major_wins": ["win 1", "win 2", "win 3"],
-  "areas_to_monitor": ["area 1", "area 2"],
-  "next_week_recommendations": ["action 1", "action 2", "action 3"]
-}`;
+    const prompt = "You are an elite personal coach reviewing Project Prime fitness data. Return ONLY a JSON object (no markdown, no explanation).\n\n" +
+      confidenceInstructions + "\n\nDATA:\n" + JSON.stringify(snapshot, null, 2) +
+      "\n\nProject Prime success criteria for a " + phaseType + " Phase:\n" +
+      "- Weight " + weightCriteria + "\n" +
+      "- Waist " + waistCriteria + "\n" +
+      "- Prime Factor " + pfCriteria + "\n" +
+      "- Protein target hit consistently\n" +
+      "- Recovery sessions improving\n\n" +
+      "Return ONLY this JSON:\n{\n" +
+      '  "overall_status": "' + statusOptions + '",\n' +
+      '  "executive_summary": "2-3 sentence coaching summary: Observation what happened. Confidence how much to trust it. Interpretation what it likely means. Action what to do.",\n' +
+      '  "major_wins": ["win 1", "win 2", "win 3"],\n' +
+      '  "areas_to_monitor": ["area 1", "area 2"],\n' +
+      '  "next_week_recommendations": ["action 1", "action 2", "action 3"]\n}';
 
     try {
       const text = await callAI(
