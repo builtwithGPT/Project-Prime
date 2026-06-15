@@ -546,12 +546,16 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
 
     // Check if this exercise already has a log for today (upsert logic)
     const existingToday = todayLogs.find(l => Number(l.exerciseId) === Number(ex.id));
-    const ok = await onLogExercise(ex.id, entry, existingToday?.id || null);
+    const result = await onLogExercise(ex.id, entry, existingToday?.id || null);
+    const ok = result?.ok ?? result; // support both old bool and new {ok, freshLogs}
+    const freshLogs = result?.freshLogs || null;
     if (ok) {
       setSaveStatus("saved");
       setLoggedIds(prev => new Set([...prev, ex.id]));
       setExerciseDone(true);
       stopRest();
+      // Store freshLogs so advanceToNext can pass them to endWorkout
+      latestLogsRef.current = freshLogs;
     } else {
       setSaveStatus("error");
       setTimeout(() => setSaveStatus(null), 4000);
@@ -559,13 +563,17 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
   };
 
   // ── After exercise saved — show completion moment, then advance ────────────
+  const latestLogsRef = useRef(null);
   const advanceToNext = () => {
-    const nextIdx = active.findIndex((e, i) => i > currentIdx && !loggedIds.has(e.id) && !todayLogs.some(l => l.exerciseId === e.id));
+    const fresh = latestLogsRef.current;
+    const freshToday = fresh
+      ? fresh.filter(x => new Date(x.date).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA"))
+      : todayLogs;
+    const nextIdx = active.findIndex((e, i) => i > currentIdx && !loggedIds.has(e.id) && !freshToday.some(l => Number(l.exerciseId) === Number(e.id)));
     if (nextIdx !== -1) {
       loadExercise(nextIdx, true);
     } else {
-      // All done
-      endWorkout();
+      endWorkout(fresh);
     }
   };
 
@@ -582,23 +590,26 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
     setActiveMode(true);
   };
 
-  const endWorkout = () => {
+  // endWorkout accepts optional freshLogs — avoids stale closure when called right after a state update
+  const endWorkout = (freshLogs) => {
     const todayLocalKey = new Date().toLocaleDateString("en-CA");
-    const prevDayLogs  = workoutLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey);
+    const allLogs = freshLogs || workoutLogs;
+    const tLogs   = allLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === todayLocalKey);
+    const prevDayLogs  = allLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey);
     const prevDates    = [...new Set(prevDayLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))].sort((a, b) => new Date(b) - new Date(a));
     const prevSessLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0]) : [];
     const prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
-    const curPF  = todayLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+    const curPF  = tLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
     const pfChange = prevPF > 0 ? ((curPF - prevPF) / prevPF * 100) : null;
     let prs = 0;
-    todayLogs.forEach(l => {
+    tLogs.forEach(l => {
       const e = exercises.find(x => x.id === l.exerciseId); if (!e) return;
       const thisPF = calcPF(l.sets, l.reps, l.weight, e.type, e.laterality);
-      const bestPrev = workoutLogs.filter(x => x.exerciseId === l.exerciseId && new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey)
+      const bestPrev = prevDayLogs.filter(x => x.exerciseId === l.exerciseId)
         .reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, e.type, e.laterality)), 0);
       if (thisPF > bestPrev && bestPrev > 0) prs++;
     });
-    const summary = { completed: todayLogs.length, total: active.length, sessionPF: curPF, prevPF, pfChange, prs };
+    const summary = { completed: tLogs.length, total: active.length, sessionPF: curPF, prevPF, pfChange, prs };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
     localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true }));
@@ -3643,33 +3654,35 @@ function App() {
 
   // ── Workout handlers ───────────────────────────────────────────────────────
   // addWorkoutLog — upserts: PATCH if existingId provided, POST otherwise
+  // Always succeeds locally (localStorage fallback). Returns { ok, freshLogs }.
   const addWorkoutLog = async (exerciseId, entry, existingId = null) => {
     const payload = { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId };
 
     if (existingId) {
-      // UPDATE existing record for today
-      const ok = await sbPatch(`workout_logs?id=eq.${existingId}`, payload, session);
-      if (ok) {
-        const updated = workoutLogs.map(l => l.id === existingId ? { ...l, ...entry, exerciseId } : l);
-        setWorkoutLogs(updated); lsSet(LS_KEYS.workout, updated);
-        return true;
+      // Optimistically update state first
+      const optimistic = workoutLogs.map(l => l.id === existingId ? { ...l, ...entry, exerciseId } : l);
+      setWorkoutLogs(optimistic); lsSet(LS_KEYS.workout, optimistic);
+      // Then try DB patch (failure is non-fatal — local state already updated)
+      sbPatch(`workout_logs?id=eq.${existingId}`, payload, session).catch(() => {});
+      return { ok: true, freshLogs: optimistic };
+    }
+
+    // INSERT — optimistic local add first
+    const localEntry = { exerciseId, ...entry, _localId: Date.now() };
+    const optimistic = [...workoutLogs, localEntry];
+    setWorkoutLogs(optimistic); lsSet(LS_KEYS.workout, optimistic);
+
+    // Then sync to DB
+    try {
+      const rows = await sbPost("workout_logs", payload, session);
+      if (Array.isArray(rows) && rows[0]?.id) {
+        const synced = optimistic.map(l => l === localEntry ? { ...entry, id: rows[0].id, exerciseId } : l);
+        setWorkoutLogs(synced); lsSet(LS_KEYS.workout, synced);
+        return { ok: true, freshLogs: synced };
       }
-      return false;
-    }
-
-    // INSERT new record
-    const localEntry = { exerciseId, ...entry, _pending: true };
-    const updated = [...workoutLogs, localEntry];
-    setWorkoutLogs(updated);
-    lsSet(LS_KEYS.workout, updated);
-
-    const rows = await sbPost("workout_logs", payload, session);
-    if (rows?.[0]) {
-      const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id, exerciseId } : l);
-      setWorkoutLogs(synced); lsSet(LS_KEYS.workout, synced);
-      return true;
-    }
-    return false;
+    } catch {}
+    // DB failed but local entry exists — still report ok so UI advances
+    return { ok: true, freshLogs: optimistic };
   };
 
   // ── Body handlers ──────────────────────────────────────────────────────────
