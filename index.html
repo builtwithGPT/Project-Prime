@@ -288,180 +288,259 @@ function MacroRing({ pct, color, label, val, target, unit }) {
 }
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
-function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
+function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, session, userId }) {
   const active = exercises.filter(e => e.active);
-  const [activeMode, setActiveMode] = useState(false);
+
+  // ── Top-level mode ──────────────────────────────────────────────────────────
+  const [activeMode, setActiveMode]     = useState(false);
   const [workoutEnded, setWorkoutEnded] = useState(() => {
-    try {
-      const stored = localStorage.getItem("pp_workout_ended");
-      if (!stored) return false;
-      const { date, ended } = JSON.parse(stored);
-      return date === new Date().toDateString() && ended;
-    } catch { return false; }
+    try { const s = localStorage.getItem("pp_workout_ended"); if (!s) return false; const { date, ended } = JSON.parse(s); return date === new Date().toDateString() && ended; } catch { return false; }
   });
   const [workoutSummary, setWorkoutSummary] = useState(null);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [logSets, setLogSets] = useState("3");
-  const [logReps, setLogReps] = useState("10");
-  const [logWeight, setLogWeight] = useState("0");
-  const [logNotes, setLogNotes] = useState("");
-  const [saveStatus, setSaveStatus] = useState(null);
-  const [showFormGuide, setShowFormGuide] = useState(false);
-  const [loggedIds, setLoggedIds] = useState(new Set());
 
+  // ── Exercise navigation ─────────────────────────────────────────────────────
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [loggedIds,  setLoggedIds]  = useState(new Set());
+
+  // ── Per-set state ───────────────────────────────────────────────────────────
+  // completedSets: { [exerciseId]: [ {setNum, reps, weight, rpe, pf, ts}, ... ] }
+  const [completedSets, setCompletedSets] = useState({});
+  // currentSet: the set currently being staged (before tapping Complete)
+  const [currentSetNum,    setCurrentSetNum]    = useState(1);
+  const [currentSetWeight, setCurrentSetWeight] = useState("0");
+  const [currentSetReps,   setCurrentSetReps]   = useState("10");
+  const [currentSetRpe,    setCurrentSetRpe]     = useState("");
+
+  // ── Rest timer ──────────────────────────────────────────────────────────────
+  const [resting,       setResting]       = useState(false);
+  const [restSeconds,   setRestSeconds]   = useState(60);
+  const [restTotal,     setRestTotal]     = useState(60);
+  const restRef = useRef(null);
+
+  // ── UI state ────────────────────────────────────────────────────────────────
+  const [showFormGuide,   setShowFormGuide]   = useState(false);
+  const [saveStatus,      setSaveStatus]      = useState(null);
+  const [jumpConfirm,     setJumpConfirm]     = useState(null); // {targetIdx}
+  const [exerciseDone,    setExerciseDone]    = useState(false); // post-exercise completion moment
+
+  // ── Derived ─────────────────────────────────────────────────────────────────
   const todayLogs = workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString());
+  const sessionPF = todayLogs.reduce((sum, l) => {
+    const ex = exercises.find(e => e.id === l.exerciseId);
+    return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
+  }, 0);
 
   const lastEntry = (id) => {
     const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id));
     return logs.length ? logs[logs.length - 1] : null;
   };
 
-  const pfHistory = (id) => {
-    const ex = exercises.find(e => Number(e.id) === Number(id));
-    return workoutLogs.filter(x => Number(x.exerciseId) === Number(id)).map(x => ({
-      value: calcPF(x.sets, x.reps, x.weight, ex?.type, ex?.laterality), date: x.date
-    }));
+  const ex = active[currentIdx];
+  const exSets = ex ? (completedSets[ex.id] || []) : [];
+  const targetSets = ex ? (+ex.defaultSets || 3) : 3;
+  const targetReps = ex ? (+ex.defaultReps || 10) : 10;
+  const last = ex ? lastEntry(ex.id) : null;
+  const color = ex ? (MUSCLE_COLORS[ex.muscleGroup] || "#4B5563") : "#4B5563";
+
+  // Live PF for the current set being staged
+  const stagedPF = ex ? calcPF(1, +currentSetReps, +currentSetWeight, ex.type, ex.laterality) : 0;
+  // PF accumulated for this exercise so far
+  const exAccumPF = exSets.reduce((s, set) => s + (set.pf || 0), 0);
+  // Last session PF for this exercise
+  const lastExPF = ex ? (() => {
+    const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id));
+    return h.length ? calcPF(h[h.length-1].sets, h[h.length-1].reps, h[h.length-1].weight, ex.type, ex.laterality) : null;
+  })() : null;
+
+  // ── Rest timer logic ────────────────────────────────────────────────────────
+  const startRest = (seconds = 60) => {
+    setRestSeconds(seconds); setRestTotal(seconds); setResting(true);
+    clearInterval(restRef.current);
+    restRef.current = setInterval(() => {
+      setRestSeconds(s => { if (s <= 1) { clearInterval(restRef.current); setResting(false); return 0; } return s - 1; });
+    }, 1000);
   };
+  const stopRest  = () => { clearInterval(restRef.current); setResting(false); };
+  const skipRest  = () => stopRest();
+  const adjustRest = (delta) => {
+    setRestSeconds(s => Math.max(0, s + delta));
+    setRestTotal(t => Math.max(0, t + delta));
+  };
+  const resetRest = () => { clearInterval(restRef.current); startRest(60); };
+  useEffect(() => () => clearInterval(restRef.current), []);
 
-  const sessionPF = todayLogs.reduce((sum, l) => {
-    const ex = exercises.find(e => e.id === l.exerciseId);
-    return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
-  }, 0);
+  // ── Load exercise ───────────────────────────────────────────────────────────
+  const loadExercise = (idx, force = false) => {
+    const target = active[idx];
+    if (!target) return;
+    const alreadyDone = loggedIds.has(active[currentIdx]?.id) || todayLogs.some(l => l.exerciseId === active[currentIdx]?.id);
+    const hasPendingSets = (completedSets[active[currentIdx]?.id] || []).length > 0 && !alreadyDone;
 
-  const loadExercise = (idx) => {
-    const ex = active[idx];
-    if (!ex) return;
-    const last = lastEntry(ex.id);
+    if (hasPendingSets && !force) {
+      setJumpConfirm({ targetIdx: idx }); return;
+    }
+    const prevEntry = lastEntry(target.id);
+    const prevSets  = completedSets[target.id] || [];
+    const lastSetWeight = prevSets.length ? prevSets[prevSets.length - 1].weight : null;
     setCurrentIdx(idx);
-    setLogSets(last?.sets?.toString() || ex.defaultSets || "3");
-    setLogReps(last?.reps?.toString() || ex.defaultReps || "10");
-    setLogWeight(last?.weight?.toString() || "0");
-    setLogNotes("");
+    setCurrentSetNum(prevSets.length + 1);
+    setCurrentSetWeight(String(lastSetWeight ?? prevEntry?.weight ?? 0));
+    setCurrentSetReps(String(prevEntry?.reps ?? target.defaultReps ?? 10));
+    setCurrentSetRpe("");
     setShowFormGuide(false);
     setSaveStatus(null);
+    setExerciseDone(false);
+    stopRest();
   };
 
-  const startWorkout = () => {
-    setLoggedIds(new Set(todayLogs.map(l => l.exerciseId)));
-    setWorkoutEnded(false);
-    setWorkoutSummary(null);
-    localStorage.removeItem("pp_workout_ended");
-    loadExercise(0);
-    setActiveMode(true);
+  // ── Complete a single set ───────────────────────────────────────────────────
+  const completeSet = () => {
+    if (!ex) return;
+    const setData = {
+      setNum:  currentSetNum,
+      reps:    +currentSetReps,
+      weight:  +currentSetWeight,
+      rpe:     currentSetRpe ? +currentSetRpe : null,
+      pf:      calcPF(1, +currentSetReps, +currentSetWeight, ex.type, ex.laterality),
+      ts:      new Date().toISOString(),
+    };
+    const updated = [...exSets, setData];
+    setCompletedSets(prev => ({ ...prev, [ex.id]: updated }));
+    // Seed next set from this one
+    setCurrentSetNum(currentSetNum + 1);
+    // weight stays the same, reps stay the same
+    setCurrentSetRpe("");
+    startRest(60);
   };
 
-  const endWorkout = () => {
-    // Compute session PF directly from today's logs
-    const currentSessionPF = todayLogs.reduce((sum, l) => {
-      const ex = exercises.find(e => e.id === l.exerciseId);
-      return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
-    }, 0);
-    // Exercises completed today
-    const todayCompleted = active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id));
-    // Previous session PF
-    const prevDayLogs = workoutLogs.filter(x => new Date(x.date).toDateString() !== new Date().toDateString());
-    const prevDates = [...new Set(prevDayLogs.map(l => new Date(l.date).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
-    const prevSessionLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toDateString() === prevDates[0]) : [];
-    const prevPF = prevSessionLogs.reduce((sum, l) => {
-      const ex = exercises.find(e => e.id === l.exerciseId);
-      return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
-    }, 0);
-    const pfChange = prevPF > 0 ? ((currentSessionPF - prevPF) / prevPF * 100) : null;
-    // Count PRs
-    let prs = 0;
-    todayLogs.forEach(l => {
-      const ex = exercises.find(e => e.id === l.exerciseId);
-      if (!ex) return;
-      const thisPF = calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
-      const hist = workoutLogs.filter(x => x.exerciseId === l.exerciseId && new Date(x.date).toDateString() !== new Date().toDateString());
-      const bestPrev = hist.reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, ex.type, ex.laterality)), 0);
-      if (thisPF > bestPrev && bestPrev > 0) prs++;
-    });
-    const summary = { completed: todayCompleted.length, total: active.length, sessionPF: currentSessionPF, prevPF, pfChange, prs };
-    setWorkoutSummary(summary);
-    setActiveMode(false);
-    setWorkoutEnded(true);
-    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toDateString(), ended: true }));
-    setLoggedIds(new Set());
-    onSaveSummary && onSaveSummary(summary);
-  };
-
-  const saveExercise = async () => {
-    const ex = active[currentIdx];
+  // ── Complete the whole exercise ─────────────────────────────────────────────
+  const completeExercise = async () => {
+    if (!ex || exSets.length === 0) return;
     setSaveStatus("saving");
-    const entry = { sets: +logSets, reps: +logReps, weight: +logWeight, notes: logNotes, date: new Date().toISOString() };
+
+    // Aggregate: use median weight and total reps/sets for backward compat
+    const totalReps  = Math.round(exSets.reduce((s, x) => s + x.reps, 0) / exSets.length);
+    const avgWeight  = Math.round(exSets.reduce((s, x) => s + x.weight, 0) / exSets.length * 10) / 10;
+    const entry = {
+      sets:   exSets.length,
+      reps:   totalReps,
+      weight: avgWeight,
+      notes:  exSets.map(s => `Set ${s.setNum}: ${s.reps}r@${s.weight}lbs${s.rpe ? ` RPE${s.rpe}` : ""}`).join(" | "),
+      date:   new Date().toISOString(),
+    };
+
     const ok = await onLogExercise(ex.id, entry);
     if (ok) {
       setSaveStatus("saved");
       setLoggedIds(prev => new Set([...prev, ex.id]));
-      setTimeout(() => {
-        setSaveStatus(null);
-        if (currentIdx < active.length - 1) {
-          loadExercise(currentIdx + 1);
-        }
-      }, 800);
+      setExerciseDone(true);
+      stopRest();
     } else {
-      // Save failed — data is still in localStorage, don't advance
       setSaveStatus("error");
       setTimeout(() => setSaveStatus(null), 4000);
     }
   };
 
-  const previewPF = active[currentIdx]
-    ? calcPF(+logSets, +logReps, +logWeight, active[currentIdx].type, active[currentIdx].laterality)
-    : 0;
+  // ── After exercise saved — show completion moment, then advance ────────────
+  const advanceToNext = () => {
+    const nextIdx = active.findIndex((e, i) => i > currentIdx && !loggedIds.has(e.id) && !todayLogs.some(l => l.exerciseId === e.id));
+    if (nextIdx !== -1) {
+      loadExercise(nextIdx, true);
+    } else {
+      // All done
+      endWorkout();
+    }
+  };
 
-  const lastPF = active[currentIdx] ? (() => {
-    const hist = pfHistory(active[currentIdx].id);
-    return hist.length ? hist[hist.length - 1].value : null;
-  })() : null;
+  // ── Start / End workout ─────────────────────────────────────────────────────
+  const startWorkout = () => {
+    setLoggedIds(new Set(todayLogs.map(l => l.exerciseId)));
+    setWorkoutEnded(false); setWorkoutSummary(null);
+    setCompletedSets({});
+    localStorage.removeItem("pp_workout_ended");
+    const firstUndone = active.findIndex(e => !todayLogs.some(l => l.exerciseId === e.id));
+    loadExercise(firstUndone >= 0 ? firstUndone : 0, true);
+    setActiveMode(true);
+  };
 
-  const pfDiff = previewPF && lastPF ? ((previewPF - lastPF) / lastPF * 100) : null;
+  const endWorkout = () => {
+    const prevDayLogs  = workoutLogs.filter(x => new Date(x.date).toDateString() !== new Date().toDateString());
+    const prevDates    = [...new Set(prevDayLogs.map(l => new Date(l.date).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
+    const prevSessLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toDateString() === prevDates[0]) : [];
+    const prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+    const curPF  = todayLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+    const pfChange = prevPF > 0 ? ((curPF - prevPF) / prevPF * 100) : null;
+    let prs = 0;
+    todayLogs.forEach(l => {
+      const e = exercises.find(x => x.id === l.exerciseId); if (!e) return;
+      const thisPF = calcPF(l.sets, l.reps, l.weight, e.type, e.laterality);
+      const bestPrev = workoutLogs.filter(x => x.exerciseId === l.exerciseId && new Date(x.date).toDateString() !== new Date().toDateString())
+        .reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, e.type, e.laterality)), 0);
+      if (thisPF > bestPrev && bestPrev > 0) prs++;
+    });
+    const summary = { completed: todayLogs.length, total: active.length, sessionPF: curPF, prevPF, pfChange, prs };
+    setWorkoutSummary(summary);
+    setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
+    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toDateString(), ended: true }));
+    setLoggedIds(new Set());
+    onSaveSummary && onSaveSummary(summary);
+  };
 
-  // ── WORKOUT SUMMARY MODAL ────────────────────────────────────────────────────
+  // ── WORKOUT SUMMARY MODAL ──────────────────────────────────────────────────
   const WorkoutSummaryModal = () => {
     if (!workoutSummary) return null;
-    const { completed, total, sessionPF: summaryPF, prevPF, pfChange, prs } = workoutSummary;
+    const { completed, total, sessionPF: sPF, prevPF, pfChange, prs } = workoutSummary;
     return (
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: "#1A1D26", borderRadius: 20, border: "1px solid #4AD99A44", padding: 48, maxWidth: 520, width: "100%", textAlign: "center", boxShadow: "0 32px 80px rgba(0,0,0,0.8)" }}>
+        <div style={{ background: "#1A1D26", borderRadius: 20, border: "1px solid #4AD99A44", padding: 48, maxWidth: 520, width: "100%", textAlign: "center" }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🏆</div>
           <div style={{ fontSize: 30, fontWeight: 800, color: "#4AD99A", marginBottom: 4 }}>WORKOUT COMPLETE</div>
           <div style={{ color: "#4B5563", fontSize: 14, marginBottom: 36 }}>{fmtDateLong(new Date())}</div>
-
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
-            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
-              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Exercises</div>
-              <div style={{ fontSize: 36, fontWeight: 800, color: "#E8EAF0" }}>{completed}<span style={{ fontSize: 18, color: "#4B5563" }}>/{total}</span></div>
-            </div>
-            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
-              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Session PF</div>
-              <div style={{ fontSize: 36, fontWeight: 800, color: "#E8A838" }}>{(summaryPF || 0).toLocaleString()}</div>
-            </div>
-            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
-              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>vs Last Workout</div>
-              {pfChange !== null ? (
-                <div style={{ fontSize: 36, fontWeight: 800, color: pfChange >= 0 ? "#4AD99A" : "#D94A4A" }}>
-                  {pfChange >= 0 ? "+" : ""}{pfChange.toFixed(1)}%
-                </div>
-              ) : (
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#4B5563" }}>First session</div>
-              )}
-            </div>
-            <div style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
-              <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>New PRs</div>
-              <div style={{ fontSize: 36, fontWeight: 800, color: prs > 0 ? "#FFD700" : "#4B5563" }}>{prs}</div>
-            </div>
+            {[
+              ["Exercises", `${completed}/${total}`, "#E8EAF0"],
+              ["Session PF", (sPF||0).toLocaleString(), "#E8A838"],
+              ["vs Last", pfChange !== null ? `${pfChange >= 0 ? "+" : ""}${pfChange.toFixed(1)}%` : "First", pfChange === null ? "#4B5563" : pfChange >= 0 ? "#4AD99A" : "#D94A4A"],
+              ["New PRs", prs, prs > 0 ? "#FFD700" : "#4B5563"],
+            ].map(([label, val, color]) => (
+              <div key={label} style={{ background: "#0F1117", borderRadius: 12, padding: "20px 16px" }}>
+                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{label}</div>
+                <div style={{ fontSize: 34, fontWeight: 800, color }}>{val}</div>
+              </div>
+            ))}
           </div>
-
           <div style={{ display: "flex", gap: 12 }}>
-            <button onClick={() => setWorkoutSummary(null)}
-              style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 12, height: 56, fontSize: 18, fontWeight: 800, cursor: "pointer" }}>
-              Done
+            <button onClick={() => setWorkoutSummary(null)} style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 12, height: 56, fontSize: 18, fontWeight: 800, cursor: "pointer" }}>Done</button>
+            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); startWorkout(); }} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 12, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>New Workout</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── JUMP CONFIRMATION MODAL ────────────────────────────────────────────────
+  const JumpConfirmModal = () => {
+    if (!jumpConfirm) return null;
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #E8A83844", padding: 32, maxWidth: 400, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 24, marginBottom: 12 }}>⚠️</div>
+          <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 17, marginBottom: 8 }}>Unsaved Sets</div>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
+            You have {exSets.length} completed set{exSets.length !== 1 ? "s" : ""} for <strong style={{ color: "#E8EAF0" }}>{ex?.name}</strong> that haven't been saved as an exercise log yet.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button onClick={() => { setJumpConfirm(null); completeExercise().then(() => setTimeout(() => loadExercise(jumpConfirm.targetIdx, true), 500)); }}
+              style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, height: 48, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Save & Continue
             </button>
-            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); startWorkout(); }}
-              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 12, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>
-              Continue
+            <button onClick={() => { setCompletedSets(p => { const n = {...p}; delete n[ex.id]; return n; }); setJumpConfirm(null); loadExercise(jumpConfirm.targetIdx, true); }}
+              style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 10, height: 48, fontSize: 15, cursor: "pointer" }}>
+              Discard Sets
+            </button>
+            <button onClick={() => setJumpConfirm(null)}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 40, fontSize: 14, cursor: "pointer" }}>
+              Cancel — Stay Here
             </button>
           </div>
         </div>
@@ -469,7 +548,9 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
     );
   };
 
-  // ── LIST VIEW ────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // LIST VIEW (pre-workout)
+  // ─────────────────────────────────────────────────────────────────────────────
   if (!activeMode) {
     const GROUP_ORDER = ["Warm-up", "Chest", "Back", "Glutes", "Hamstrings", "Legs", "Shoulders", "Arms", "Core"];
     const byGroup = {};
@@ -482,7 +563,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
-            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · {todayLogs.length} exercises logged today</div>
+            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · {todayLogs.length} exercises logged</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             {todayLogs.length > 0 && <div style={{ color: "#E8A838", fontSize: 14, fontWeight: 700 }}>Session PF {sessionPF.toLocaleString()}</div>}
@@ -492,7 +573,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
             </button>
           </div>
         </div>
-
         {GROUP_ORDER.filter(g => byGroup[g]?.length > 0).map(group => (
           <div key={group} style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -500,33 +580,29 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
               <span style={{ color: MUSCLE_COLORS[group] || "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{group}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {byGroup[group].map(ex => {
-                const last = lastEntry(ex.id);
-                const logged = todayLogs.some(l => l.exerciseId === ex.id);
+              {byGroup[group].map(e => {
+                const lastE = lastEntry(e.id);
+                const logged = todayLogs.some(l => l.exerciseId === e.id);
                 return (
-                  <div key={ex.id} style={{ background: "#1A1D26", borderRadius: 10, border: logged ? "1px solid #4AD99A44" : "1px solid #2A2D3A", padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: logged ? "#4AD99A" : "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14 }}>
+                  <div key={e.id} style={{ background: "#1A1D26", borderRadius: 10, border: logged ? "1px solid #4AD99A44" : "1px solid #2A2D3A", padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: logged ? "#4AD99A" : "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, color: logged ? "#0F1117" : "#4B5563", fontWeight: 700 }}>
                       {logged ? "✓" : ""}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 14 }}>{ex.name}</span>
-                        {ex.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>UNI</span>}
+                      <div style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 14 }}>{e.name}
+                        {e.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700, marginLeft: 8 }}>UNI</span>}
                       </div>
-                      {last ? (
-                        <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>Last: {last.sets}×{last.reps}{last.weight ? ` @ ${last.weight} lbs` : ""} — PF {calcPF(last.sets, last.reps, last.weight, ex.type, ex.laterality).toLocaleString()}</div>
-                      ) : (
-                        <div style={{ color: "#3A3D4A", fontSize: 12, marginTop: 2 }}>No previous sessions</div>
-                      )}
+                      {lastE ? (
+                        <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>Last: {lastE.sets}×{lastE.reps}{lastE.weight ? ` @ ${lastE.weight} lbs` : ""} — PF {calcPF(lastE.sets, lastE.reps, lastE.weight, e.type, e.laterality).toLocaleString()}</div>
+                      ) : <div style={{ color: "#3A3D4A", fontSize: 12, marginTop: 2 }}>No previous sessions</div>}
                     </div>
-                    <div style={{ color: "#4B5563", fontSize: 11 }}>{ex.defaultSets}×{ex.defaultReps}</div>
+                    <div style={{ color: "#4B5563", fontSize: 11 }}>{e.defaultSets}×{e.defaultReps}</div>
                   </div>
                 );
               })}
             </div>
           </div>
         ))}
-
         <div style={{ background: "#1A1D26", borderRadius: 10, border: "1px solid #4AD9D933", padding: "14px 18px", marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ color: "#4AD9D9", fontWeight: 700, fontSize: 13 }}>Alfredson Eccentric Calf Protocol <span style={{ background: "#4AD9D922", padding: "1px 6px", borderRadius: 4, fontSize: 10 }}>DAILY</span></div>
@@ -539,164 +615,295 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
     );
   }
 
-  // ── ACTIVE WORKOUT MODE ──────────────────────────────────────────────────────
-  const ex = active[currentIdx];
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ACTIVE WORKOUT MODE
+  // ─────────────────────────────────────────────────────────────────────────────
   if (!ex) return null;
-  const last = lastEntry(ex.id);
-  const color = MUSCLE_COLORS[ex.muscleGroup] || "#4B5563";
+  const isLastSet   = currentSetNum > targetSets;
+  const readyToLift = !resting && !exerciseDone;
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, height: "calc(100vh - 130px)" }}>
       <WorkoutSummaryModal />
-      <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 24, display: "flex", flexDirection: "column", gap: 16, overflow: "hidden" }}>
+      <JumpConfirmModal />
 
-        {/* Header */}
+      {/* ── MAIN PANEL ───────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
+
+        {/* Header bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ background: color + "22", color, padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em" }}>{ex.muscleGroup.toUpperCase()}</span>
+            {ex.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>UNILATERAL</span>}
+            {ex.flag && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700 }}>{ex.flag}</span>}
+          </div>
+          <button onClick={() => setActiveMode(false)} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>
+            ← Back to Workout
+          </button>
+        </div>
+
+        {/* Exercise name + last session */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-              <span style={{ background: color + "22", color, padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, letterSpacing: "0.06em" }}>{ex.muscleGroup.toUpperCase()}</span>
-              {ex.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>UNILATERAL — enter reps per side</span>}
-              {ex.flag && <span style={{ background: "#E8A83822", color: "#E8A838", padding: "4px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700 }}>{ex.flag}</span>}
-            </div>
-            <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", lineHeight: 1.1, marginBottom: 8 }}>{ex.name}</div>
+          <div>
+            <div style={{ fontSize: 32, fontWeight: 800, color: "#E8EAF0", lineHeight: 1.1 }}>{ex.name}</div>
             {showFormGuide ? (
-              <div style={{ background: "#0F1117", borderRadius: 8, padding: "12px 14px", fontSize: 13, color: "#C8CDD8", lineHeight: 1.7, cursor: "pointer" }} onClick={() => setShowFormGuide(false)}>
+              <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#C8CDD8", lineHeight: 1.7, marginTop: 8, cursor: "pointer", maxWidth: 500 }} onClick={() => setShowFormGuide(false)}>
                 {FORM_GUIDES[ex.name]} <span style={{ color: "#4B5563", fontSize: 11 }}>(tap to hide)</span>
               </div>
             ) : (
-              <button onClick={() => setShowFormGuide(true)} style={{ background: "none", border: "none", color: "#4B5563", fontSize: 12, cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+              <button onClick={() => setShowFormGuide(true)} style={{ background: "none", border: "none", color: "#4B5563", fontSize: 12, cursor: "pointer", padding: "4px 0", textDecoration: "underline", marginTop: 4 }}>
                 Show form guide
               </button>
             )}
           </div>
-          <button onClick={() => setActiveMode(false)}
-            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, cursor: "pointer", flexShrink: 0, marginLeft: 16 }}>
-            ← Back to list
-          </button>
-        </div>
-
-        {/* Last performance */}
-        <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 18px", border: "1px solid #2A2D3A" }}>
-          <div style={{ fontSize: 11, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-            {last ? `Last Session — ${fmtDate(last.date)}` : "No previous sessions"}
-          </div>
-          {last ? (
-            <div style={{ display: "flex", gap: 28, alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: "#E8EAF0" }}>{last.weight ? `${last.weight} lbs` : "BW"}</div>
-                <div style={{ fontSize: 11, color: "#4B5563" }}>weight</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: "#E8EAF0" }}>{last.sets} × {last.reps}</div>
-                <div style={{ fontSize: 11, color: "#4B5563" }}>sets × reps</div>
-              </div>
-              <div style={{ marginLeft: "auto", textAlign: "right" }}>
-                <div style={{ fontSize: 26, fontWeight: 800, color: "#E8A838" }}>{calcPF(last.sets, last.reps, last.weight, ex.type, ex.laterality).toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: "#4B5563" }}>prime factor</div>
-              </div>
+          {last && (
+            <div style={{ background: "#0F1117", borderRadius: 10, padding: "10px 16px", border: "1px solid #2A2D3A", textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Last — {fmtDate(last.date)}</div>
+              <div style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{last.weight ? `${last.weight} lbs` : "BW"} · {last.sets}×{last.reps}</div>
+              <div style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>PF {calcPF(last.sets, last.reps, last.weight, ex.type, ex.laterality).toLocaleString()}</div>
             </div>
-          ) : (
-            <div style={{ color: "#3A3D4A", fontSize: 13 }}>First session — set your baseline</div>
           )}
         </div>
 
-        {/* +/- controls */}
-        <div style={{ display: "grid", gridTemplateColumns: ex.type === "weighted" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 14 }}>
-          {[
-            ["SETS", logSets, setLogSets, 1, 10, 1],
-            [ex.laterality === "unilateral" ? "REPS / SIDE" : "REPS", logReps, setLogReps, 1, 50, 1],
-            ...(ex.type === "weighted" ? [["WEIGHT (lbs)", logWeight, setLogWeight, 0, 300, 5]] : []),
-          ].map(([label, val, setter, min, max, step]) => (
-            <div key={label} style={{ background: "#0F1117", borderRadius: 10, padding: "14px", border: "1px solid #2A2D3A", textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "#4B5563", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 12 }}>{label}</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                <button onClick={() => setter(v => String(Math.max(min, +v - step)))}
-                  style={{ width: 56, height: 56, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer", flexShrink: 0 }}>−</button>
-                <div style={{ fontSize: 36, fontWeight: 800, color: "#E8EAF0", minWidth: 60, fontVariantNumeric: "tabular-nums" }}>{val}</div>
-                <button onClick={() => setter(v => String(Math.min(max, +v + step)))}
-                  style={{ width: 56, height: 56, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer", flexShrink: 0 }}>+</button>
+        {/* ── EXERCISE COMPLETE MOMENT ────────────────────────────────────── */}
+        {exerciseDone && (
+          <div style={{ background: "#4AD99A0D", border: "1px solid #4AD99A44", borderRadius: 16, padding: 28, textAlign: "center", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+            <div style={{ fontSize: 48 }}>✅</div>
+            <div style={{ color: "#4AD99A", fontSize: 26, fontWeight: 800, letterSpacing: "0.02em" }}>EXERCISE COMPLETE</div>
+            <div style={{ display: "flex", gap: 24, justifyContent: "center" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ color: "#E8A838", fontSize: 32, fontWeight: 800 }}>{exAccumPF.toLocaleString()}</div>
+                <div style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Exercise PF</div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* PF preview with PR/progress indicator */}
-        <div style={{ background: "#0F1117", borderRadius: 10, padding: "12px 18px",
-          border: (previewPF > 0 && lastPF && previewPF > lastPF * 1.05) ? "1px solid #FFD70044" : (pfDiff !== null && pfDiff >= 0) ? "1px solid #4AD99A44" : "1px solid #2A2D3A",
-          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ color: "#8B92A5", fontSize: 14 }}>Prime Factor</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "#E8A838", fontVariantNumeric: "tabular-nums" }}>{previewPF.toLocaleString()}</div>
-          {pfDiff !== null && (
-            <div style={{ textAlign: "right" }}>
-              {previewPF > 0 && lastPF && previewPF > lastPF * 1.05 ? (
-                <div style={{ color: "#FFD700", fontSize: 18, fontWeight: 800 }}>🥇 NEW PR</div>
-              ) : (
-                <div style={{ color: pfDiff > 2 ? "#4AD99A" : pfDiff >= -2 ? "#E8A838" : "#D94A4A", fontSize: 14, fontWeight: 700 }}>
-                  {pfDiff > 2 ? "▲" : pfDiff >= -2 ? "▬" : "▼"} {pfDiff >= 0 ? "+" : ""}{pfDiff.toFixed(1)}%
+              {lastExPF && (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ color: exAccumPF > lastExPF ? "#4AD99A" : exAccumPF < lastExPF ? "#D94A4A" : "#E8A838", fontSize: 32, fontWeight: 800 }}>
+                    {exAccumPF > lastExPF ? "+" : ""}{(((exAccumPF - lastExPF) / lastExPF) * 100).toFixed(1)}%
+                  </div>
+                  <div style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>vs Last Session</div>
                 </div>
               )}
-              <div style={{ color: "#4B5563", fontSize: 11 }}>vs last session</div>
             </div>
-          )}
-        </div>
-
-        {/* Notes */}
-        <input value={logNotes} onChange={e => setLogNotes(e.target.value)}
-          placeholder="Notes (optional)"
-          style={{ ...inputStyle, fontSize: 13 }} />
-
-        {/* Save button */}
-        <button onClick={saveExercise} disabled={saveStatus === "saving"}
-          style={{ background: saveStatus === "saved" ? "#2A2D3A" : "#4AD99A", color: saveStatus === "saved" ? "#4AD99A" : "#0F1117",
-            border: saveStatus === "saved" ? "2px solid #4AD99A" : "none",
-            borderRadius: 12, height: 64, width: "100%", fontSize: 20, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", transition: "all 0.2s" }}>
-          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "✓ Saved — advancing..." : saveStatus === "error" ? "⚠ Sync failed — data saved locally" : "SAVE EXERCISE"}
-        </button>
-
-        {/* Prev/Next */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <button onClick={() => currentIdx > 0 && loadExercise(currentIdx - 1)} disabled={currentIdx === 0}
-            style={{ background: "#2A2D3A", color: currentIdx === 0 ? "#3A3D4A" : "#8B92A5", border: "none", borderRadius: 10, height: 48, fontSize: 15, cursor: currentIdx === 0 ? "default" : "pointer" }}>
-            ← Previous
-          </button>
-          <button onClick={() => currentIdx < active.length - 1 && loadExercise(currentIdx + 1)} disabled={currentIdx === active.length - 1}
-            style={{ background: "#2A2D3A", color: currentIdx === active.length - 1 ? "#3A3D4A" : "#E8EAF0", border: "none", borderRadius: 10, height: 48, fontSize: 15, fontWeight: 600, cursor: currentIdx === active.length - 1 ? "default" : "pointer" }}>
-            Next Exercise →
-          </button>
-        </div>
-      </div>
-
-      {/* RIGHT: exercise list + today's log */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
-
-        {/* Exercise plan */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Workout Plan</div>
-            <button onClick={endWorkout}
-              style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              End Workout
+            {exAccumPF > (lastExPF || 0) && lastExPF && (
+              <div style={{ background: "#FFD70022", border: "1px solid #FFD70044", borderRadius: 8, padding: "8px 20px", color: "#FFD700", fontSize: 14, fontWeight: 700 }}>
+                🏆 NEW PERSONAL RECORD
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", maxWidth: 340, marginTop: 8 }}>
+              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Set Log</div>
+              {exSets.map(s => (
+                <div key={s.setNum} style={{ display: "flex", justifyContent: "space-between", background: "#0F1117", borderRadius: 6, padding: "6px 12px" }}>
+                  <span style={{ color: "#8B92A5", fontSize: 12 }}>Set {s.setNum}</span>
+                  <span style={{ color: "#E8EAF0", fontSize: 12, fontWeight: 600 }}>{s.reps} reps @ {s.weight} lbs</span>
+                  <span style={{ color: "#E8A838", fontSize: 12 }}>{s.pf.toLocaleString()} PF</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={advanceToNext}
+              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 14, height: 68, width: "100%", maxWidth: 380, fontSize: 20, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", marginTop: 8 }}>
+              NEXT EXERCISE →
             </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        )}
+
+        {/* ── REST TIMER STATE ─────────────────────────────────────────────── */}
+        {!exerciseDone && resting && (
+          <div style={{ background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 16, padding: 28, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20 }}>
+            <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>RESTING</div>
+
+            {/* Circular countdown */}
+            <div style={{ position: "relative", width: 160, height: 160 }}>
+              <svg width="160" height="160" style={{ transform: "rotate(-90deg)" }}>
+                <circle cx="80" cy="80" r="70" fill="none" stroke="#2A2D3A" strokeWidth="8" />
+                <circle cx="80" cy="80" r="70" fill="none" stroke="#4AD99A" strokeWidth="8"
+                  strokeDasharray={`${2 * Math.PI * 70}`}
+                  strokeDashoffset={`${2 * Math.PI * 70 * (1 - restSeconds / restTotal)}`}
+                  strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s linear" }} />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: 48, fontWeight: 800, color: "#4AD99A", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                  {String(Math.floor(restSeconds / 60)).padStart(2, "0")}:{String(restSeconds % 60).padStart(2, "0")}
+                </div>
+                <div style={{ color: "#4B5563", fontSize: 11, marginTop: 4 }}>remaining</div>
+              </div>
+            </div>
+
+            {/* Next set preview */}
+            <div style={{ background: "#1A1D26", borderRadius: 10, padding: "14px 24px", border: "1px solid #2A2D3A", textAlign: "center" }}>
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>
+                {isLastSet ? "FINISHING EXERCISE" : `UP NEXT — SET ${currentSetNum} OF ${targetSets}`}
+              </div>
+              <div style={{ color: "#E8EAF0", fontSize: 22, fontWeight: 800 }}>
+                {isLastSet ? "All sets complete" : `${currentSetWeight} lbs × ${currentSetReps} reps`}
+              </div>
+            </div>
+
+            {/* Timer controls */}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+              {[["−30s", () => adjustRest(-30)], ["Reset", resetRest], ["+30s", () => adjustRest(30)]].map(([label, fn]) => (
+                <button key={label} onClick={fn}
+                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "10px 18px", fontSize: 14, cursor: "pointer" }}>
+                  {label}
+                </button>
+              ))}
+              <button onClick={skipRest}
+                style={{ background: "#4A90D922", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Skip Rest →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── READY TO LIFT STATE ──────────────────────────────────────────── */}
+        {!exerciseDone && restSeconds === 0 && !resting && exSets.length > 0 && !isLastSet && (
+          <div style={{ background: "#4AD99A0D", border: "1px solid #4AD99A44", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#4AD99A", boxShadow: "0 0 8px #4AD99A" }} />
+            <span style={{ color: "#4AD99A", fontSize: 16, fontWeight: 800, letterSpacing: "0.06em" }}>READY TO LIFT</span>
+          </div>
+        )}
+
+        {/* ── CURRENT SET PANEL ────────────────────────────────────────────── */}
+        {!exerciseDone && !resting && (
+          <div style={{ background: "#1A1D26", border: "2px solid #4A90D944", borderRadius: 16, padding: "20px 24px", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* Set counter */}
+            <div style={{ textAlign: "center" }}>
+              <div style={{ color: "#4A90D9", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>CURRENT SET</div>
+              <div style={{ fontSize: 15, color: "#8B92A5" }}>
+                Set <span style={{ color: "#E8EAF0", fontWeight: 800, fontSize: 22 }}>{Math.min(currentSetNum, targetSets)}</span> of <span style={{ fontWeight: 700 }}>{targetSets}</span>
+              </div>
+            </div>
+
+            {/* Weight + Reps controls */}
+            <div style={{ display: "grid", gridTemplateColumns: ex.type === "weighted" ? "1fr 1fr" : "1fr", gap: 14 }}>
+              {ex.type === "weighted" && (
+                <div style={{ background: "#0F1117", borderRadius: 12, padding: 16, textAlign: "center" }}>
+                  <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>WEIGHT (lbs)</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                    <button onClick={() => setCurrentSetWeight(w => String(Math.max(0, +w - 5)))}
+                      style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>−</button>
+                    <div style={{ fontSize: 48, fontWeight: 800, color: "#E8EAF0", minWidth: 80, fontVariantNumeric: "tabular-nums" }}>{currentSetWeight}</div>
+                    <button onClick={() => setCurrentSetWeight(w => String(Math.min(400, +w + 5)))}
+                      style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ background: "#0F1117", borderRadius: 12, padding: 16, textAlign: "center" }}>
+                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
+                  {ex.laterality === "unilateral" ? "REPS / SIDE" : "REPS"}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                  <button onClick={() => setCurrentSetReps(r => String(Math.max(1, +r - 1)))}
+                    style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>−</button>
+                  <div style={{ fontSize: 48, fontWeight: 800, color: "#E8EAF0", minWidth: 80, fontVariantNumeric: "tabular-nums" }}>{currentSetReps}</div>
+                  <button onClick={() => setCurrentSetReps(r => String(Math.min(100, +r + 1)))}
+                    style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+                </div>
+              </div>
+            </div>
+
+            {/* RPE + live PF */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: "#4B5563", fontSize: 12 }}>RPE</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[6,7,8,9,10].map(r => (
+                    <button key={r} onClick={() => setCurrentSetRpe(String(r))}
+                      style={{ width: 36, height: 36, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        background: currentSetRpe === String(r) ? "#4A90D9" : "#2A2D3A",
+                        color:      currentSetRpe === String(r) ? "#fff"     : "#4B5563" }}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{stagedPF.toLocaleString()}</div>
+                <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Set PF</div>
+              </div>
+            </div>
+
+            {/* COMPLETE SET button — the hero */}
+            {!isLastSet ? (
+              <button onClick={completeSet}
+                style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 22, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4A90D944" }}>
+                ✓ COMPLETE SET {Math.min(currentSetNum, targetSets)}
+              </button>
+            ) : (
+              <button onClick={completeExercise} disabled={saveStatus === "saving" || exSets.length === 0}
+                style={{ background: saveStatus === "saving" ? "#2A2D3A" : "#4AD99A", color: saveStatus === "saving" ? "#4B5563" : "#0F1117",
+                  border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 22, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4AD99A44" }}>
+                {saveStatus === "saving" ? "Saving..." : saveStatus === "error" ? "⚠ Sync failed — saved locally" : exSets.length === 0 ? "Complete at least one set" : "✓ FINISH EXERCISE"}
+              </button>
+            )}
+
+            {/* Completed sets log */}
+            {exSets.length > 0 && (
+              <div>
+                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Completed Sets</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {exSets.map(s => (
+                    <div key={s.setNum} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1117", borderRadius: 8, padding: "8px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ color: "#4AD99A", fontSize: 14 }}>✓</span>
+                        <span style={{ color: "#8B92A5", fontSize: 13 }}>Set {s.setNum}</span>
+                        <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 700 }}>{s.reps} reps {s.weight > 0 ? `@ ${s.weight} lbs` : ""}</span>
+                        {s.rpe && <span style={{ background: "#4A90D922", color: "#4A90D9", fontSize: 11, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>RPE {s.rpe}</span>}
+                      </div>
+                      <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{s.pf.toLocaleString()} PF</span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 14px" }}>
+                    <span style={{ color: "#4B5563", fontSize: 12 }}>Exercise total</span>
+                    <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 800 }}>{exAccumPF.toLocaleString()} PF
+                      {lastExPF && <span style={{ color: exAccumPF >= lastExPF ? "#4AD99A" : "#D94A4A", fontSize: 11, marginLeft: 8 }}>
+                        ({exAccumPF >= lastExPF ? "+" : ""}{(((exAccumPF - lastExPF) / lastExPF) * 100).toFixed(1)}%)
+                      </span>}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── SIDEBAR ──────────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
+
+        {/* Workout Plan */}
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ fontSize: 10, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Workout Plan</div>
+            <div style={{ color: "#8B92A5", fontSize: 11 }}>{active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)).length}/{active.length}</div>
+          </div>
+          {/* Progress bar */}
+          <div style={{ height: 3, background: "#2A2D3A", borderRadius: 2, marginBottom: 12 }}>
+            <div style={{ height: "100%", background: "#4AD99A", borderRadius: 2, transition: "width 0.3s",
+              width: `${(active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)).length / active.length) * 100}%` }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {active.map((e, i) => {
               const isActive = i === currentIdx;
-              const isDone = loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id);
-              const eColor = MUSCLE_COLORS[e.muscleGroup] || "#4B5563";
+              const isDone   = loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id);
+              const hasSets  = (completedSets[e.id] || []).length > 0;
               return (
-                <div key={e.id} onClick={() => loadExercise(i)}
-                  style={{ padding: "9px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                <div key={e.id} onClick={() => !isActive && loadExercise(i)}
+                  style={{ padding: "9px 12px", borderRadius: 8, display: "flex", alignItems: "center", gap: 10,
+                    cursor: isActive ? "default" : "pointer",
                     background: isActive ? "#4A90D911" : "none",
                     border: isActive ? "1px solid #4A90D944" : "1px solid transparent",
                     opacity: isDone && !isActive ? 0.5 : 1 }}>
                   <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800,
-                    background: isDone ? "#4AD99A" : isActive ? "#4A90D9" : "#2A2D3A",
-                    color: isDone || isActive ? (isDone ? "#0F1117" : "#fff") : "#4B5563" }}>
-                    {isDone ? "✓" : i + 1}
+                    background: isDone ? "#4AD99A" : isActive ? "#4A90D9" : hasSets ? "#E8A83844" : "#2A2D3A",
+                    color: isDone ? "#0F1117" : isActive ? "#fff" : hasSets ? "#E8A838" : "#4B5563" }}>
+                    {isDone ? "✓" : hasSets ? exSets.length : i + 1}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 400, color: isActive ? "#4A90D9" : isDone ? "#8B92A5" : "#C8CDD8",
-                      textDecoration: isDone && !isActive ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 400,
+                      color: isActive ? "#4A90D9" : isDone ? "#8B92A5" : "#C8CDD8",
+                      textDecoration: isDone && !isActive ? "line-through" : "none",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {e.name}
                     </div>
                     <div style={{ fontSize: 10, color: "#4B5563" }}>{e.defaultSets}×{e.defaultReps} · {e.muscleGroup}</div>
@@ -707,22 +914,26 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
           </div>
         </div>
 
-        {/* Today's log */}
+        {/* Session PF + End Workout */}
         <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 14, flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Today's Log</div>
-            <div style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>PF {sessionPF.toLocaleString()}</div>
+            <div>
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Session PF</div>
+              <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{sessionPF.toLocaleString()}</div>
+            </div>
+            <button onClick={endWorkout}
+              style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              End Workout
+            </button>
           </div>
-          {todayLogs.length === 0 ? (
-            <div style={{ color: "#3A3D4A", fontSize: 12, textAlign: "center", padding: "8px 0" }}>Nothing logged yet</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 180, overflowY: "auto" }}>
+          {todayLogs.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, maxHeight: 120, overflowY: "auto" }}>
               {[...todayLogs].reverse().map((l, i) => {
                 const lEx = exercises.find(e => e.id === l.exerciseId);
                 return (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: "1px solid #2A2D3A" }}>
-                    <span style={{ fontSize: 12, color: "#8B92A5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{lEx?.name}</span>
-                    <span style={{ fontSize: 12, color: "#E8A838", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{calcPF(l.sets, l.reps, l.weight, lEx?.type, lEx?.laterality).toLocaleString()}</span>
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #2A2D3A" }}>
+                    <span style={{ fontSize: 11, color: "#8B92A5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{lEx?.name}</span>
+                    <span style={{ fontSize: 11, color: "#E8A838", fontWeight: 700, flexShrink: 0, marginLeft: 8 }}>{calcPF(l.sets, l.reps, l.weight, lEx?.type, lEx?.laterality).toLocaleString()}</span>
                   </div>
                 );
               })}
@@ -733,6 +944,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary }) {
     </div>
   );
 }
+
 
 // ─── PROGRESS TAB ─────────────────────────────────────────────────────────────
 function ProgressTab({ exercises, workoutLogs }) {
@@ -3548,7 +3760,7 @@ function App() {
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", minHeight: 0, WebkitOverflowScrolling: "touch" }}>
-        {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} />}
+        {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
         {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} />}
