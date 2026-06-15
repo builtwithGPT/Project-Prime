@@ -15,6 +15,9 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #0F1117; }
     ::-webkit-scrollbar-thumb { background: #2A2D3A; border-radius: 3px; }
+    /* iOS safe area — prevents content hiding behind home bar */
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+    .tab-bar { padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px); }
   </style>
 </head>
 <body>
@@ -761,7 +764,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
   const readyToLift = !resting && !exerciseDone;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, height: "calc(100vh - 130px)" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16, height: "calc(100dvh - 160px)" }}>
       <WorkoutSummaryModal />
       <JumpConfirmModal />
 
@@ -1038,13 +1041,13 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
                     {isDone ? "✓" : hasSets ? exSets.length : i + 1}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 400,
+                    <div style={{ fontSize: 14, fontWeight: isActive ? 700 : 500,
                       color: isActive ? "#4A90D9" : isDone ? "#8B92A5" : "#C8CDD8",
                       textDecoration: isDone && !isActive ? "line-through" : "none",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {e.name}
                     </div>
-                    <div style={{ fontSize: 10, color: "#4B5563" }}>{e.defaultSets}×{e.defaultReps} · {e.muscleGroup}</div>
+                    <div style={{ fontSize: 12, color: "#4B5563" }}>{e.defaultSets}×{e.defaultReps} · {e.muscleGroup}</div>
                   </div>
                 </div>
               );
@@ -1062,7 +1065,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 16 }}>💬</span>
-                  <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                  <div style={{ color: "#4A90D9", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
                     Coach Tip · Set {Math.min(currentSetNum, targetSets)}
                   </div>
                 </div>
@@ -1072,7 +1075,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
                 </button>
               </div>
               {tip ? (
-                <div style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.7, fontStyle: "italic" }}>
+                <div style={{ color: "#C8CDD8", fontSize: 16, lineHeight: 1.7, fontStyle: "italic" }}>
                   "{tip}"
                 </div>
               ) : (
@@ -2821,7 +2824,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   // ── ACTIVE SESSION ─────────────────────────────────────────────────────────
   if (selectedTemplate && ["before", "checklist", "after"].includes(sessionStep)) {
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "calc(100vh - 130px)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "calc(100dvh - 160px)" }}>
         <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 24, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
           {/* Session header */}
@@ -3929,7 +3932,7 @@ function App() {
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", minHeight: 0, WebkitOverflowScrolling: "touch" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 0", minHeight: 0, WebkitOverflowScrolling: "touch", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}>
         {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
