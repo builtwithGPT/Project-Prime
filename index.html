@@ -83,7 +83,28 @@ function calcPF(sets, reps, weight, type, laterality) {
 }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const OPENAI_KEY = "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";
+const OPENAI_KEY = "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"; // kept for deploy.sh compatibility — not used directly
+const AI_WORKER = "https://shrill-cloud-995e.jdurham.workers.dev";
+
+// ── Shared AI function — all AI calls route through Cloudflare Worker ─────────
+async function callAI(systemPrompt, userPrompt, maxTokens = 1000) {
+  const res = await fetch(AI_WORKER, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userPrompt },
+      ],
+    }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  const text = data.choices?.[0]?.message?.content?.trim() || "";
+  return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+}
 
 const MUSCLE_COLORS = {
   "Warm-up": "#4B5563", "Chest": "#4A90D9", "Back": "#7B68EE",
@@ -1383,25 +1404,12 @@ Return ONLY this JSON:
 }`;
 
     try {
-      console.log("[PP Review] Calling OpenAI. Key set:", OPENAI_KEY !== "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" && OPENAI_KEY.length > 10);
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          max_tokens: 1000,
-          messages: [
-            { role: "system", content: "You are an elite Project Prime fitness coach. Return only valid JSON, no markdown, no explanation." },
-            { role: "user", content: prompt }
-          ]
-        })
-      });
-      const data = await res.json();
-      console.log("[PP Review] OpenAI raw response:", JSON.stringify(data).slice(0, 500));
-      if (data.error) throw new Error(data.error.message);
-      const text = data.choices?.[0]?.message?.content?.trim() || "";
-      const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
-      const parsed = JSON.parse(clean);
+      const text = await callAI(
+        "You are an elite Project Prime fitness coach. Return only valid JSON, no markdown, no explanation.",
+        prompt,
+        1000
+      );
+      const parsed = JSON.parse(text);
       const reviewObj = {
         ...parsed,
         phase: PHASE_CONFIG[phase?.type]?.label || "Unknown",
@@ -1410,10 +1418,8 @@ Return ONLY this JSON:
         input_data_snapshot: snapshot,
       };
       setWeeklyReview(reviewObj);
-      // Persist to localStorage for this session
       try { localStorage.setItem("pp_weekly_review", JSON.stringify(reviewObj)); } catch {}
     } catch (e) {
-      console.error("Weekly review generation failed:", e);
       setWeeklyReview({
         overall_status: "🔴 Error",
         executive_summary: `AI coach error: ${e.message}. Open browser console (F12) for details.`,
@@ -2005,79 +2011,42 @@ function NutritionTab({ nutritionDays, onSaveDay, session, userId }) {
   const parseWithGPT = async () => {
     if (!pasteText.trim()) return;
     setParsing(true); setParseError(""); setPreview(null);
-    try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${OPENAI_KEY}` },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          max_tokens: 2000,
-          messages: [{
-            role: "system",
-            content: `You are a nutrition data extractor. The user will paste nutrition information in ANY format — it could be structured, conversational, a list of meals, or anything else. Your job is to extract the data and return ONLY a valid JSON object with no markdown, no backticks, no explanation.
+    const systemPrompt = `You are a nutrition data extractor. Extract data from ANY format and return ONLY valid JSON, no markdown, no explanation.
 
-Always return this exact JSON structure (use null for missing fields, 0 for missing numbers):
+Return this exact structure:
 {
   "date": "YYYY-MM-DD",
   "phase": "Gain Phase",
   "targets": {"calories": 2650, "protein": 191, "carbs": 220, "fat": 65},
-  "totals": {"calories": number, "protein": number, "carbs": number, "fat": number},
-  "remaining": {"calories": number, "protein": number, "carbs": number, "fat": number},
-  "compliance": "string or null",
-  "notes": "string or null",
-  "entries": [
-    {
-      "time": "HH:MM AM/PM or null",
-      "type": "food",
-      "name": "meal name",
-      "items": "comma separated food items",
-      "calories": number,
-      "protein": number,
-      "carbs": number,
-      "fat": number
-    }
-  ]
+  "totals": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
+  "remaining": {"calories": 0, "protein": 0, "carbs": 0, "fat": 0},
+  "compliance": null,
+  "notes": null,
+  "entries": [{"time": null, "name": "meal name", "items": "foods", "calories": 0, "protein": 0, "carbs": 0, "fat": 0}]
 }
 
-Rules:
-- If date is not specified, use today: ${today}
-- If targets are not specified, use defaults: 2650 cal, 191g protein, 220g carbs, 65g fat
-- Calculate remaining = targets - totals
-- Extract every meal or food entry you can find
-- If macros for a specific meal are partially given, estimate the rest
-- Return ONLY the JSON object, nothing else`
-          }, {
-            role: "user",
-            content: pasteText
-          }]
-        })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      const text = data.choices?.[0]?.message?.content?.trim();
-      if (!text) throw new Error("Empty response");
-      const fence = String.fromCharCode(96);
-      const cleaned = text.replace(new RegExp("^" + fence + fence + fence + "json\\s*", "i"), "").replace(new RegExp("^" + fence + fence + fence + "\\s*", "i"), "").replace(new RegExp(fence + fence + fence + "\\s*$", "i"), "").trim();
+Rules: use today (${today}) if no date given. Calculate remaining = targets - totals. Return ONLY the JSON.`;
+    try {
+      const cleaned = await callAI(systemPrompt, pasteText, 2000);
       const parsed = JSON.parse(cleaned);
-      // Ensure required fields exist
-      if (!parsed.totals) parsed.totals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-      if (!parsed.targets) parsed.targets = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
+      if (!parsed.totals)    parsed.totals    = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+      if (!parsed.targets)   parsed.targets   = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
       if (!parsed.remaining) parsed.remaining = {
         calories: parsed.targets.calories - parsed.totals.calories,
-        protein: parsed.targets.protein - parsed.totals.protein,
-        carbs: parsed.targets.carbs - parsed.totals.carbs,
-        fat: parsed.targets.fat - parsed.totals.fat,
+        protein:  parsed.targets.protein  - parsed.totals.protein,
+        carbs:    parsed.targets.carbs    - parsed.totals.carbs,
+        fat:      parsed.targets.fat      - parsed.totals.fat,
       };
       if (!parsed.entries) parsed.entries = [];
-      if (!parsed.date) parsed.date = today;
+      if (!parsed.date)    parsed.date    = today;
       setPreview(parsed);
     } catch (e) {
-      setParseError(`Parse failed: ${e.message}. Try pasting again or check your OpenAI key.`);
+      setParseError(`Parse failed: ${e.message}. Try pasting again.`);
     }
     setParsing(false);
   };
 
-  const [saveError, setSaveError] = useState("");
+    const [saveError, setSaveError] = useState("");
 
   const saveDay = async () => {
     if (!preview) return;
