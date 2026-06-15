@@ -3160,54 +3160,7 @@ function App() {
   const [userId, setUserId]         = useState(null);
 
   // ── Session restore ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const stored = localStorage.getItem("pp_session") || sessionStorage.getItem("pp_session");
-    if (stored) {
-      try {
-        const { token, uid, refreshToken } = JSON.parse(stored);
-        setSession(token); setUserId(uid);
-      } catch { setLoading(false); }
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  // ── Auto-refresh session every 45 minutes ─────────────────────────────────
-  useEffect(() => {
-    if (!session) return;
-    const doRefresh = async () => {
-      try {
-        const stored = localStorage.getItem("pp_session");
-        if (!stored) return;
-        const { refreshToken, uid } = JSON.parse(stored);
-        if (!refreshToken) return;
-        const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-          method: "POST",
-          headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-        const data = await res.json();
-        if (data.access_token) {
-          const newData = JSON.stringify({ token: data.access_token, uid, refreshToken: data.refresh_token || refreshToken });
-          localStorage.setItem("pp_session", newData);
-          sessionStorage.setItem("pp_session", newData);
-          setSession(data.access_token);
-        }
-      } catch {}
-    };
-    // Refresh immediately on load, then every 45 minutes
-    doRefresh();
-    const interval = setInterval(doRefresh, 45 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [userId]);
-
-  // ── Load data when session ready ───────────────────────────────────────────
-  useEffect(() => {
-    if (session && userId) {
-      loadAll(session, userId);
-    }
-  }, [session, userId]);
-
+  // ── loadAll — fetches all data for user from Supabase ──────────────────────
   const loadAll = useCallback(async (token, uid) => {
     setLoading(true); setDbError(false);
     try {
@@ -3220,7 +3173,7 @@ function App() {
         sbGet(`phase_data?user_id=eq.${uid}&order=created_at.desc&limit=1`, token),
       ]);
 
-      // If any request returns 401, session is expired — force re-login
+      // If any request returns 401, session expired — force re-login
       if ([wData, bData, ndData, rlData, rsData, pData].some(d => d?._unauthorized)) {
         localStorage.removeItem("pp_session");
         sessionStorage.removeItem("pp_session");
@@ -3268,6 +3221,73 @@ function App() {
     } catch (e) { setDbError(true); }
     setLoading(false);
   }, []);
+
+  // ── Boot: refresh token FIRST, then load data ─────────────────────────────
+  // This prevents the "empty app" bug when the access token expires overnight.
+  // We refresh before setting session state so loadAll always gets a valid token.
+  useEffect(() => {
+    const boot = async () => {
+      const stored = localStorage.getItem("pp_session") || sessionStorage.getItem("pp_session");
+      if (!stored) { setLoading(false); return; }
+      let parsed;
+      try { parsed = JSON.parse(stored); } catch { setLoading(false); return; }
+      let { token, uid, refreshToken } = parsed;
+
+      if (refreshToken) {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+            method: "POST",
+            headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+          const data = await res.json();
+          if (data.access_token) {
+            token = data.access_token;
+            const newStored = JSON.stringify({ token, uid, refreshToken: data.refresh_token || refreshToken });
+            localStorage.setItem("pp_session", newStored);
+            sessionStorage.setItem("pp_session", newStored);
+          } else if (data.error === "invalid_grant") {
+            // Refresh token fully expired — require sign-in again
+            localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
+            setLoading(false); return;
+          }
+          // If refresh fails for other reasons (network), fall through with existing token
+        } catch {}
+      }
+
+      setSession(token);
+      setUserId(uid);
+      loadAll(token, uid); // call directly with fresh token, don't wait for state
+    };
+    boot();
+  }, []);
+
+  // ── Auto-refresh every 45 minutes while app is open ───────────────────────
+  useEffect(() => {
+    if (!session) return;
+    const doRefresh = async () => {
+      try {
+        const stored = localStorage.getItem("pp_session");
+        if (!stored) return;
+        const { refreshToken, uid } = JSON.parse(stored);
+        if (!refreshToken) return;
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+          method: "POST",
+          headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        const data = await res.json();
+        if (data.access_token) {
+          const newData = JSON.stringify({ token: data.access_token, uid, refreshToken: data.refresh_token || refreshToken });
+          localStorage.setItem("pp_session", newData);
+          sessionStorage.setItem("pp_session", newData);
+          setSession(data.access_token);
+        }
+      } catch {}
+    };
+    const interval = setInterval(doRefresh, 45 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [userId]);
 
   const signOut = () => {
     localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
