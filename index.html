@@ -398,8 +398,18 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
 
   // ── Top-level mode ──────────────────────────────────────────────────────────
   const [activeMode, setActiveMode]     = useState(false);
+  // todayKey — local YYYY-MM-DD used as the session key
+  const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+
   const [workoutEnded, setWorkoutEnded] = useState(() => {
-    try { const s = localStorage.getItem("pp_workout_ended"); if (!s) return false; const { date, ended } = JSON.parse(s); return date === new Date().toDateString() && ended; } catch { return false; }
+    try {
+      const s = localStorage.getItem("pp_workout_ended");
+      if (!s) return false;
+      const { date, ended } = JSON.parse(s);
+      // Accept both old format (toDateString) and new format (en-CA) for migration
+      const todayOld = new Date().toDateString();
+      return ended && (date === todayKey || date === todayOld);
+    } catch { return false; }
   });
   const [workoutSummary, setWorkoutSummary] = useState(null);
 
@@ -429,7 +439,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
   const [exerciseDone,    setExerciseDone]    = useState(false); // post-exercise completion moment
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const todayLogs = workoutLogs.filter(x => new Date(x.date).toDateString() === new Date().toDateString());
+  const todayKey2 = new Date().toLocaleDateString("en-CA");
+  const todayLogs = workoutLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === todayKey2);
   const sessionPF = todayLogs.reduce((sum, l) => {
     const ex = exercises.find(e => e.id === l.exerciseId);
     return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
@@ -518,14 +529,13 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
     startRest(60);
   };
 
-  // ── Complete the whole exercise ─────────────────────────────────────────────
+  // ── Complete the whole exercise — upsert (one log per exercise per day) ──────
   const completeExercise = async () => {
     if (!ex || exSets.length === 0) return;
     setSaveStatus("saving");
 
-    // Aggregate: use median weight and total reps/sets for backward compat
-    const totalReps  = Math.round(exSets.reduce((s, x) => s + x.reps, 0) / exSets.length);
-    const avgWeight  = Math.round(exSets.reduce((s, x) => s + x.weight, 0) / exSets.length * 10) / 10;
+    const totalReps = Math.round(exSets.reduce((s, x) => s + x.reps, 0) / exSets.length);
+    const avgWeight = Math.round(exSets.reduce((s, x) => s + x.weight, 0) / exSets.length * 10) / 10;
     const entry = {
       sets:   exSets.length,
       reps:   totalReps,
@@ -534,7 +544,9 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
       date:   new Date().toISOString(),
     };
 
-    const ok = await onLogExercise(ex.id, entry);
+    // Check if this exercise already has a log for today (upsert logic)
+    const existingToday = todayLogs.find(l => Number(l.exerciseId) === Number(ex.id));
+    const ok = await onLogExercise(ex.id, entry, existingToday?.id || null);
     if (ok) {
       setSaveStatus("saved");
       setLoggedIds(prev => new Set([...prev, ex.id]));
@@ -562,16 +574,19 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
     setLoggedIds(new Set(todayLogs.map(l => l.exerciseId)));
     setWorkoutEnded(false); setWorkoutSummary(null);
     setCompletedSets({});
+    // Remove ended flag — allow amend on same day
     localStorage.removeItem("pp_workout_ended");
-    const firstUndone = active.findIndex(e => !todayLogs.some(l => l.exerciseId === e.id));
+    // Start from first incomplete exercise (or exercise 0 for fresh start)
+    const firstUndone = active.findIndex(e => !todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
     loadExercise(firstUndone >= 0 ? firstUndone : 0, true);
     setActiveMode(true);
   };
 
   const endWorkout = () => {
-    const prevDayLogs  = workoutLogs.filter(x => new Date(x.date).toDateString() !== new Date().toDateString());
-    const prevDates    = [...new Set(prevDayLogs.map(l => new Date(l.date).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
-    const prevSessLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toDateString() === prevDates[0]) : [];
+    const todayLocalKey = new Date().toLocaleDateString("en-CA");
+    const prevDayLogs  = workoutLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey);
+    const prevDates    = [...new Set(prevDayLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))].sort((a, b) => new Date(b) - new Date(a));
+    const prevSessLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0]) : [];
     const prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
     const curPF  = todayLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
     const pfChange = prevPF > 0 ? ((curPF - prevPF) / prevPF * 100) : null;
@@ -579,14 +594,14 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
     todayLogs.forEach(l => {
       const e = exercises.find(x => x.id === l.exerciseId); if (!e) return;
       const thisPF = calcPF(l.sets, l.reps, l.weight, e.type, e.laterality);
-      const bestPrev = workoutLogs.filter(x => x.exerciseId === l.exerciseId && new Date(x.date).toDateString() !== new Date().toDateString())
+      const bestPrev = workoutLogs.filter(x => x.exerciseId === l.exerciseId && new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey)
         .reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, e.type, e.laterality)), 0);
       if (thisPF > bestPrev && bestPrev > 0) prs++;
     });
     const summary = { completed: todayLogs.length, total: active.length, sessionPF: curPF, prevPF, pfChange, prs };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
-    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toDateString(), ended: true }));
+    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true }));
     setLoggedIds(new Set());
     onSaveSummary && onSaveSummary(summary);
   };
@@ -616,7 +631,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <button onClick={() => setWorkoutSummary(null)} style={{ flex: 1, background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 12, height: 56, fontSize: 18, fontWeight: 800, cursor: "pointer" }}>Done</button>
-            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); startWorkout(); }} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 12, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>New Workout</button>
+            <button onClick={() => { setWorkoutSummary(null); setWorkoutEnded(false); startWorkout(); }} style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 12, height: 56, padding: "0 20px", fontSize: 14, cursor: "pointer" }}>Amend Today</button>
           </div>
         </div>
       </div>
@@ -674,7 +689,14 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
             {todayLogs.length > 0 && <div style={{ color: "#E8A838", fontSize: 14, fontWeight: 700 }}>Session PF {sessionPF.toLocaleString()}</div>}
             <button onClick={startWorkout}
               style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              {todayLogs.length > 0 && !workoutEnded ? "Resume Workout" : workoutEnded ? "New Workout" : "Start Workout"}
+              {(() => {
+                if (todayLogs.length === 0) return "Start Workout";
+                if (workoutEnded) return "Amend Today\'s Workout";
+                // If all active exercises are logged today, treat as complete even without the flag
+                const allDone = active.length > 0 && active.every(e => todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
+                if (allDone) return "Amend Today\'s Workout";
+                return "Resume Workout";
+              })()}
             </button>
           </div>
         </div>
@@ -3620,13 +3642,28 @@ function App() {
   };
 
   // ── Workout handlers ───────────────────────────────────────────────────────
-  const addWorkoutLog = async (exerciseId, entry) => {
+  // addWorkoutLog — upserts: PATCH if existingId provided, POST otherwise
+  const addWorkoutLog = async (exerciseId, entry, existingId = null) => {
+    const payload = { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId };
+
+    if (existingId) {
+      // UPDATE existing record for today
+      const ok = await sbPatch(`workout_logs?id=eq.${existingId}`, payload, session);
+      if (ok) {
+        const updated = workoutLogs.map(l => l.id === existingId ? { ...l, ...entry, exerciseId } : l);
+        setWorkoutLogs(updated); lsSet(LS_KEYS.workout, updated);
+        return true;
+      }
+      return false;
+    }
+
+    // INSERT new record
     const localEntry = { exerciseId, ...entry, _pending: true };
     const updated = [...workoutLogs, localEntry];
     setWorkoutLogs(updated);
     lsSet(LS_KEYS.workout, updated);
 
-    const rows = await sbPost("workout_logs", { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId }, session);
+    const rows = await sbPost("workout_logs", payload, session);
     if (rows?.[0]) {
       const synced = updated.map(l => l === localEntry ? { ...entry, id: rows[0].id, exerciseId } : l);
       setWorkoutLogs(synced); lsSet(LS_KEYS.workout, synced);
