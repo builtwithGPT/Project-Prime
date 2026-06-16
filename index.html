@@ -2175,7 +2175,10 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
   // ── Score history (last 4 weeks) from localStorage ───────────────────────
   const [scoreHistory, setScoreHistory] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("pp_score_history") || "[]"); } catch { return []; }
+    try {
+      const s = localStorage.getItem("pp_score_history");
+      return s ? JSON.parse(s) : [];
+    } catch(e) { return []; }
   });
 
   // Save this week's score
