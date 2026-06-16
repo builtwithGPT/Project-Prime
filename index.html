@@ -2386,26 +2386,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
               })}
             </div>
 
-            {/* Baseline progress card — compact, supporting element only */}
-            {scoreState.mode === "baseline" && (
-              <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", marginBottom: 20, border: "1px solid #4A90D922" }}>
-                <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>BASELINE PROGRESS</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {scoreState.checklist.map(function(item) {
-                    return (
-                      <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 13, flexShrink: 0 }}>{item.done ? "✅" : "⬜"}</span>
-                        <div>
-                          <div style={{ color: item.done ? "#4AD99A" : "#8B92A5", fontSize: 11, fontWeight: item.done ? 700 : 400 }}>{item.label}</div>
-                          <div style={{ color: "#4B5563", fontSize: 10 }}>{item.current} / {item.target}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Score Trend */}
             <div style={{ background: "#0F1117", borderRadius: 10, padding: "16px 18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
@@ -2473,6 +2453,26 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
                 Score is updated daily using 28-day rolling strength data, 7-day rolling weight, and most recent waist measurements.
               </div>
             </div>
+
+            {/* Baseline Progress — below Score Trend, disappears when all conditions met */}
+            {scoreState.mode === "baseline" && scoreState.checklist && !scoreState.checklist.every(function(i) { return i.done; }) && (
+              <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", marginTop: 12, border: "1px solid #4A90D922" }}>
+                <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>BASELINE PROGRESS</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {scoreState.checklist.map(function(item) {
+                    return (
+                      <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, flexShrink: 0 }}>{item.done ? "✅" : "⬜"}</span>
+                        <div>
+                          <div style={{ color: item.done ? "#4AD99A" : "#8B92A5", fontSize: 11, fontWeight: item.done ? 700 : 400 }}>{item.label}</div>
+                          <div style={{ color: "#4B5563", fontSize: 10 }}>{item.current} / {item.target}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ══ RIGHT COLUMN ══ */}
@@ -2485,31 +2485,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
                 {scoreState.mode === "baseline"
                   ? "\"We are still collecting enough data to evaluate this phase accurately. Early weight changes may reflect hydration, glycogen storage, food volume, and normal fluctuation. No course correction is recommended yet.\""
                   : "\"" + (scoreState.mode === "active" ? scoreBandCoachNote[scoreBand.label] : coachNarrative) + "\""}
-              </div>
-            </div>
-
-            {/* Key Results */}
-            <div>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>KEY RESULTS</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {[
-                  { label: "Weight",    value: latestWeight ? latestWeight + " lbs" : "No data",  sub: weightChange !== null ? (weightChange >= 0 ? "+" : "") + weightChange + " lbs from start" : null, status: confidentWeightStatus },
-                  { label: "Waist",     value: latestWaist  ? latestWaist + '"'     : "No data",  sub: waistChange  !== null ? (waistChange === 0 ? "No change" : (waistChange >= 0 ? "+" : "") + waistChange + '"') : null, status: confidentWaistStatus },
-                  { label: "PF",        value: totalPFChange !== null ? (totalPFChange >= 0 ? "+" : "") + totalPFChange + "%" : "No data", sub: null, status: confidentPFStatus },
-                  { label: "Training",  value: recentWorkoutDays > 0 ? recentWorkoutDays + " sessions" : "No data", sub: "last 7d", status: recentWorkoutDays >= 3 ? "green" : recentWorkoutDays >= 2 ? "yellow" : "gray" },
-                  { label: "Nutrition", value: proteinCompliance !== null ? "Protein " + proteinCompliance + "%" : "No data", sub: recentNutr.length + " days", status: proteinCompliance === null ? "gray" : proteinCompliance >= 80 ? "green" : proteinCompliance >= 60 ? "yellow" : "red" },
-                  { label: "Recovery",  value: recCompliance !== null ? recCompliance + "%" : "No data", sub: "improved", status: recCompliance === null ? "gray" : recCompliance >= 75 ? "green" : recCompliance >= 50 ? "yellow" : "red" },
-                ].map(function(row) {
-                  const dot = { green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪", blue: "🔵" }[row.status] || "⚪";
-                  return (
-                    <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 8, background: "#0F1117", borderRadius: 7, padding: "7px 11px" }}>
-                      <span style={{ fontSize: 11 }}>{dot}</span>
-                      <span style={{ color: "#8B92A5", fontSize: 11, minWidth: 62 }}>{row.label}:</span>
-                      <span style={{ color: "#E8EAF0", fontSize: 11, fontWeight: 700 }}>{row.value}</span>
-                      {row.sub && <span style={{ color: "#4B5563", fontSize: 10, marginLeft: 4 }}>{row.sub}</span>}
-                    </div>
-                  );
-                })}
               </div>
             </div>
 
