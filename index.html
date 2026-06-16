@@ -120,7 +120,7 @@ const NAV = [
   { id: "progress", label: "Progress",  icon: "📈" },
   { id: "body",     label: "Body",      icon: "⚖️" },
   { id: "nutrition",label: "Nutrition", icon: "🥩" },
-  { id: "recovery", label: "Recovery",  icon: "🩺" },
+  { id: "recovery", label: "Recovery",  icon: "🌿" },
 ];
 
 // ── Coach Tips — cycle with set number ───────────────────────────────────────
@@ -3352,7 +3352,7 @@ function MetricSelector({ label, value, onChange, max, color }) {
 }
 
 function RecoveryTab({ recoverySessions, onSaveSession }) {
-  const [view, setView] = useState("today");
+  const [view, setView] = useState("recover");
   const [sessionStep, setSessionStep] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [checklist, setChecklist] = useState([]);
@@ -3415,7 +3415,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   const endSession = () => {
     setSessionStep(null);
     setSelectedTemplate(null);
-    setView("today");
+    setView("recover");
   };
 
   const DeltaBadge = ({ before, after, label, lowerIsBetter = false }) => {
@@ -3662,7 +3662,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
           <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Maintain the machine so training can continue for decades.</div>
         </div>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-          {[["today", "Today"], ["history", "History"], ["templates", "Templates"]].map(([id, label]) => (
+          {[["recover", "Recover"], ["history", "History"]].map(([id, label]) => (
             <button key={id} onClick={() => setView(id)}
               style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
                 border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
@@ -3672,97 +3672,52 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
         </div>
       </div>
 
-      {/* TODAY VIEW */}
-      {view === "today" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          <div>
-            {todaySession ? (
-              <Card style={{ marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                  <div>
-                    <div style={{ color: "#4AD99A", fontWeight: 700, fontSize: 16, marginBottom: 3 }}>✓ Session Complete Today</div>
-                    <div style={{ color: "#8B92A5", fontSize: 13 }}>{todaySession.template_name} · {todaySession.duration_minutes} min</div>
-                    <div style={{ color: "#8B92A5", fontSize: 13 }}>{todaySession.completed_count}/{todaySession.total_count} items completed</div>
-                  </div>
-                  {todaySession.result_rating && (
-                    <div style={{ background: todaySession.result_rating === "better" ? "#4AD99A22" : todaySession.result_rating === "neutral" ? "#E8A83822" : "#D94A4A22",
-                      color: todaySession.result_rating === "better" ? "#4AD99A" : todaySession.result_rating === "neutral" ? "#E8A838" : "#D94A4A",
-                      padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
-                      {todaySession.result_rating === "better" ? "✅ Better" : todaySession.result_rating === "neutral" ? "➡️ Neutral" : "❌ Worse"}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {[["Energy", todaySession.before_energy, todaySession.after_energy, "#4AD99A", false],
-                    ["Soreness", todaySession.before_soreness, todaySession.after_soreness, "#E8A838", true],
-                    ["Heel Pain", todaySession.before_heel_pain, todaySession.after_heel_pain, "#D94A4A", true],
-                    ["Low Back", todaySession.before_low_back_tightness, todaySession.after_low_back_tightness, "#D94A4A", true]].map(([label, before, after, color, lowerIsBetter]) => {
-                    const improved = lowerIsBetter ? after < before : after > before;
-                    const same = after === before;
-                    const dc = same ? "#4B5563" : improved ? "#4AD99A" : "#D94A4A";
-                    return (
-                      <div key={label} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
-                        <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 4 }}>{label}</div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{before}</span>
-                          <span style={{ color: dc }}>→</span>
-                          <span style={{ color: dc, fontSize: 18, fontWeight: 800 }}>{after}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            ) : (
-              <Card style={{ marginBottom: 16, textAlign: "center", padding: 32 }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🩺</div>
-                <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 700, marginBottom: 8 }}>No recovery session today</div>
-                <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 20 }}>Choose a template below to get started.</div>
-              </Card>
-            )}
-
-            <SectionLabel>Start a Session</SectionLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {RECOVERY_TEMPLATES.map((t, i) => (
-                <button key={i} onClick={() => startSession(t)}
-                  style={{ background: "#1A1D26", border: `1px solid ${t.color}44`, borderRadius: 10, padding: "14px 18px", cursor: "pointer", textAlign: "left", width: "100%" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 24 }}>{t.icon}</span>
-                      <div>
-                        <div style={{ color: t.color, fontWeight: 700, fontSize: 15 }}>{t.name}</div>
-                        <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{t.duration} · {t.items.length} exercises</div>
-                      </div>
-                    </div>
-                    <div style={{ color: t.color, fontSize: 20, fontWeight: 800 }}>→</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <Card>
-              <SectionLabel>Recent Sessions</SectionLabel>
-              {recentSessions.length === 0 ? (
-                <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {recentSessions.slice(0, 5).map((s, i) => {
-                    const rc = { better: "#4AD99A", neutral: "#E8A838", worse: "#D94A4A" }[s.result_rating] || "#4B5563";
-                    return (
-                      <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 600 }}>{new Date(s.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span>
-                          <span style={{ color: rc, fontSize: 12, fontWeight: 700 }}>{s.result_rating === "better" ? "✅" : s.result_rating === "neutral" ? "➡️" : "❌"}</span>
-                        </div>
-                        <div style={{ color: "#8B92A5", fontSize: 12 }}>{s.template_name} · {s.completed_count}/{s.total_count} items · {s.duration_minutes} min</div>
-                      </div>
-                    );
-                  })}
+      {/* RECOVER VIEW — Template cards + today's status */}
+      {view === "recover" && (
+        <div>
+          {/* Today's session status bar */}
+          {todaySession && (
+            <div style={{ background: "#4AD99A11", border: "1px solid #4AD99A33", borderRadius: 10, padding: "12px 20px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ color: "#4AD99A", fontWeight: 700, fontSize: 14 }}>✓ Session Complete Today</div>
+                <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{todaySession.template_name} · {todaySession.duration_minutes} min · {todaySession.completed_count}/{todaySession.total_count} items</div>
+              </div>
+              {todaySession.result_rating && (
+                <div style={{ background: todaySession.result_rating === "better" ? "#4AD99A22" : todaySession.result_rating === "neutral" ? "#E8A83822" : "#D94A4A22",
+                  color: todaySession.result_rating === "better" ? "#4AD99A" : todaySession.result_rating === "neutral" ? "#E8A838" : "#D94A4A",
+                  padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700 }}>
+                  {todaySession.result_rating === "better" ? "✅ Better" : todaySession.result_rating === "neutral" ? "➡️ Neutral" : "❌ Worse"}
                 </div>
               )}
-            </Card>
+            </div>
+          )}
+
+          {/* Template cards — full layout, these ARE the Recover tab */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {RECOVERY_TEMPLATES.map((t, i) => (
+              <Card key={i} style={{ border: `1px solid ${t.color}33` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <span style={{ fontSize: 28 }}>{t.icon}</span>
+                  <div>
+                    <div style={{ color: t.color, fontWeight: 800, fontSize: 16 }}>{t.name}</div>
+                    <div style={{ color: "#8B92A5", fontSize: 12 }}>{t.duration} · {t.items.length} exercises</div>
+                  </div>
+                </div>
+                <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 14, fontStyle: "italic" }}>{t.purpose}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+                  {t.items.map((item, ii) => (
+                    <div key={ii} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+                      <span style={{ color: "#C8CDD8", fontSize: 12 }}>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => startSession(t)}
+                  style={{ background: t.color, color: "#0F1117", border: "none", borderRadius: 9, height: 48, width: "100%", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                  Start Session
+                </button>
+              </Card>
+            ))}
           </div>
         </div>
       )}
@@ -3772,7 +3727,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {recentSessions.length === 0 ? (
             <Card style={{ textAlign: "center", padding: 40 }}>
-              <div style={{ color: "#3A3D4A", fontSize: 14 }}>No recovery sessions yet. Start one from the Today tab.</div>
+              <div style={{ color: "#3A3D4A", fontSize: 14 }}>No recovery sessions yet. Start one from the Recover tab.</div>
             </Card>
           ) : recentSessions.map((s, i) => (
             <RecoverySessionCard key={i} s={s} />
@@ -3780,8 +3735,8 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
         </div>
       )}
 
-      {/* TEMPLATES VIEW */}
-      {view === "templates" && (
+      {/* TEMPLATES — shown inside Recover tab */}
+      {view === "recover_extra_hidden" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {RECOVERY_TEMPLATES.map((t, i) => (
             <Card key={i} style={{ border: `1px solid ${t.color}33` }}>
@@ -3801,7 +3756,7 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
                   </div>
                 ))}
               </div>
-              <button onClick={() => { startSession(t); setView("today"); }}
+              <button onClick={() => { startSession(t); setView("recover"); }}
                 style={{ background: t.color, color: "#0F1117", border: "none", borderRadius: 9, height: 48, width: "100%", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
                 Start Session
               </button>
@@ -3831,7 +3786,33 @@ function RecoverySessionCard({ s }) {
       </button>
       {expanded && (
         <div style={{ padding: "0 20px 16px", borderTop: "1px solid #2A2D3A" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "16px 0" }}>
+
+          {/* Program + Exercises completed */}
+          <div style={{ marginTop: 14, marginBottom: 14 }}>
+            <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+              Program · {s.template_name}
+            </div>
+            {s.items && s.items.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {s.items.map((item, ii) => (
+                  <div key={ii} style={{ display: "flex", alignItems: "center", gap: 8, background: "#0F1117", borderRadius: 7, padding: "7px 12px" }}>
+                    <span style={{ fontSize: 12, flexShrink: 0 }}>{item.completed ? "✅" : "⬜"}</span>
+                    <span style={{ color: item.completed ? "#C8CDD8" : "#4B5563", fontSize: 12, fontWeight: item.completed ? 500 : 400 }}>{item.name}</span>
+                    {item.cue && item.completed && <span style={{ color: "#4B5563", fontSize: 11, marginLeft: "auto", fontStyle: "italic" }}>{item.cue}</span>}
+                  </div>
+                ))}
+                <div style={{ color: "#8B92A5", fontSize: 11, marginTop: 4 }}>
+                  {s.completed_count} of {s.total_count} exercises completed · {s.duration_minutes} min
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: "#4B5563", fontSize: 12 }}>{s.completed_count}/{s.total_count} exercises completed · {s.duration_minutes} min</div>
+            )}
+          </div>
+
+          {/* Feeling improvement metrics */}
+          <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Feeling Improvement</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
             {[["Energy", s.before_energy, s.after_energy, false],
               ["Soreness", s.before_soreness, s.after_soreness, true],
               ["Heel Pain", s.before_heel_pain, s.after_heel_pain, true],
