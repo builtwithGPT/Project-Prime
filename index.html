@@ -1680,6 +1680,193 @@ function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) 
 
 
 
+// ─── DEV DATA SEEDER ──────────────────────────────────────────────────────────
+// Only active when signed in as the dev account
+const DEV_EMAIL = "jdurham+dev@outlook.com";
+
+async function seedDevData(session, userId) {
+  const headers = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": "Bearer " + session,
+    "Content-Type": "application/json",
+    "Prefer": "return=minimal",
+  };
+  const post = async (table, rows) => {
+    const batch = Array.isArray(rows) ? rows : [rows];
+    await fetch(SUPABASE_URL + "/rest/v1/" + table, {
+      method: "POST", headers,
+      body: JSON.stringify(batch.map(r => ({ ...r, user_id: userId }))),
+    });
+  };
+
+  const today = new Date();
+  const phaseStart = new Date(today); phaseStart.setDate(today.getDate() - 84); // 12 weeks ago
+  const phaseEnd   = new Date(phaseStart); phaseEnd.setDate(phaseStart.getDate() + 84);
+  const dateStr = d => d.toLocaleDateString("en-CA");
+  const dayOffset = n => { const d = new Date(phaseStart); d.setDate(phaseStart.getDate() + n); return d; };
+
+  // ── 1. Phase ────────────────────────────────────────────────────────────────
+  await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
+    method: "POST", headers,
+    body: JSON.stringify([{
+      user_id: userId, type: "gain",
+      start_date: dateStr(phaseStart), end_date: dateStr(phaseEnd),
+      targets: { calories: 2650, protein: 191, carbs: 220, fat: 65 },
+      history: [],
+    }]),
+  });
+
+  // ── 2. Body logs — daily weight + weekly measurements ────────────────────
+  const bodyLogs = [];
+  let weight = 189.5;
+  for (let d = 0; d <= 84; d++) {
+    const day = dayOffset(d);
+    weight += (Math.random() * 0.15 - 0.03); // ~0.4 lbs/week gain trend
+    const isWeekly = d % 7 === 0;
+    bodyLogs.push({
+      user_id: userId,
+      date: day.toISOString(),
+      weight: +weight.toFixed(1),
+      waist:  isWeekly ? +(40.0 + d * 0.002 + (Math.random() * 0.1 - 0.05)).toFixed(1) : null,
+      chest:  isWeekly ? +(41.5 + d * 0.006 + (Math.random() * 0.1)).toFixed(1) : null,
+      arms:   isWeekly ? +(14.0 + d * 0.003 + (Math.random() * 0.05)).toFixed(1) : null,
+      glutes: isWeekly ? +(41.0 + d * 0.008 + (Math.random() * 0.1)).toFixed(1) : null,
+      thighs: isWeekly ? +(22.5 + d * 0.004 + (Math.random() * 0.1)).toFixed(1) : null,
+      hips:   isWeekly ? +(40.5 + d * 0.002).toFixed(1) : null,
+    });
+  }
+  // Insert in batches of 20
+  for (let i = 0; i < bodyLogs.length; i += 20) {
+    await fetch(SUPABASE_URL + "/rest/v1/body_logs", {
+      method: "POST", headers, body: JSON.stringify(bodyLogs.slice(i, i + 20)),
+    });
+  }
+
+  // ── 3. Workout logs — 3x/week, progressive overload ─────────────────────
+  // Workout days: Mon, Wed, Fri = day offsets 0,2,4 of each week
+  // Exercise sets rotate through muscle groups
+  const workoutDays = [];
+  for (let w = 0; w < 12; w++) {
+    for (const offset of [0, 2, 4]) {
+      const d = w * 7 + offset;
+      if (d <= 84) workoutDays.push(d);
+    }
+  }
+
+  // Progressive weights: week 1 baseline, +2.5 lbs every 2 weeks per exercise
+  const baseWeights = { 3: 20, 4: 15, 5: 25, 7: 10, 9: 45, 11: 20, 12: 15, 13: 15, 14: 20, 15: 25, 16: 15, 17: 15, 19: 15 };
+  const workoutLogs = [];
+  for (const d of workoutDays) {
+    const day = dayOffset(d);
+    const week = Math.floor(d / 7);
+    const progress = week * 2.5;
+    // Always log warmups (ex 1,2) + rotation of main lifts
+    const exIds = [1, 2]; // warmup always
+    // Alternate upper/lower
+    if (d % 14 < 7) {
+      exIds.push(...[3, 4, 5, 6, 7, 8]); // upper
+    } else {
+      exIds.push(...[9, 11, 14, 15, 16]); // lower + shoulders + arms
+    }
+    for (const exId of exIds) {
+      const ex = INITIAL_EXERCISES[exId - 1];
+      if (!ex) continue;
+      const sets = parseInt(ex.defaultSets) || 3;
+      const reps = parseInt(ex.defaultReps) || 10;
+      const baseW = baseWeights[exId] || 0;
+      const weight = ex.type === "weighted" ? Math.round((baseW + progress) / 2.5) * 2.5 : 0;
+      workoutLogs.push({
+        user_id: userId,
+        exercise_id: exId,
+        date: day.toISOString(),
+        sets, reps,
+        weight,
+        notes: "Set 1: " + reps + "r@" + weight + "lbs | Set 2: " + reps + "r@" + weight + "lbs | Set 3: " + reps + "r@" + weight + "lbs",
+      });
+    }
+  }
+  for (let i = 0; i < workoutLogs.length; i += 20) {
+    await fetch(SUPABASE_URL + "/rest/v1/workout_logs", {
+      method: "POST", headers, body: JSON.stringify(workoutLogs.slice(i, i + 20)),
+    });
+  }
+
+  // ── 4. Nutrition days — 6/7 days compliance, strong protein ────────────
+  const nutritionLogs = [];
+  for (let d = 0; d <= 84; d++) {
+    if (Math.random() < 0.14) continue; // ~1 skip per week
+    const day = dayOffset(d);
+    const hitProtein = Math.random() > 0.15;
+    const calories = 2580 + Math.round(Math.random() * 200 - 50);
+    const protein  = hitProtein ? 185 + Math.round(Math.random() * 20) : 140 + Math.round(Math.random() * 30);
+    const fat      = 60 + Math.round(Math.random() * 15);
+    const carbs    = Math.round((calories - protein * 4 - fat * 9) / 4);
+    nutritionLogs.push({
+      user_id: userId,
+      date: dateStr(day),
+      phase: "Gain Phase",
+      total_calories: calories,
+      total_protein: protein,
+      total_carbs: Math.max(carbs, 150),
+      total_fat: fat,
+      target_calories: 2650,
+      target_protein: 191,
+      target_carbs: 220,
+      target_fat: 65,
+      compliance: hitProtein ? "GOOD" : "NEEDS IMPROVEMENT",
+      notes: "Dev seeded data",
+    });
+  }
+  for (let i = 0; i < nutritionLogs.length; i += 20) {
+    await fetch(SUPABASE_URL + "/rest/v1/nutrition_days", {
+      method: "POST", headers, body: JSON.stringify(nutritionLogs.slice(i, i + 20)),
+    });
+  }
+
+  // ── 5. Recovery sessions — 5x/week ──────────────────────────────────────
+  const recovTemplates = ["Daily Maintenance", "Post-Lift Reset", "Full Body Recovery"];
+  const recoverySessions = [];
+  for (let d = 0; d <= 84; d++) {
+    if (Math.random() < 0.28) continue; // ~5/week
+    const day = dayOffset(d);
+    const template = recovTemplates[d % recovTemplates.length];
+    const beforeEnergy = 2 + Math.round(Math.random() * 2);
+    const afterEnergy  = Math.min(5, beforeEnergy + 1 + Math.round(Math.random()));
+    const beforeHeel   = Math.round(Math.random() * 3);
+    const afterHeel    = Math.max(0, beforeHeel - Math.round(Math.random() * 2));
+    recoverySessions.push({
+      user_id: userId,
+      date: dateStr(day),
+      template_name: template,
+      duration_minutes: 15 + Math.round(Math.random() * 20),
+      completed_count: 4 + Math.round(Math.random() * 2),
+      total_count: 6,
+      before_energy: beforeEnergy,
+      after_energy: afterEnergy,
+      before_soreness: 2 + Math.round(Math.random() * 2),
+      after_soreness: 1 + Math.round(Math.random()),
+      before_heel_pain: beforeHeel,
+      after_heel_pain: afterHeel,
+      before_low_back_tightness: Math.round(Math.random() * 2),
+      after_low_back_tightness: Math.round(Math.random()),
+      result_rating: afterEnergy > beforeEnergy ? "better" : "neutral",
+      items: [],
+    });
+  }
+  for (let i = 0; i < recoverySessions.length; i += 20) {
+    await fetch(SUPABASE_URL + "/rest/v1/recovery_sessions", {
+      method: "POST", headers, body: JSON.stringify(recoverySessions.slice(i, i + 20)),
+    });
+  }
+
+  return {
+    bodyLogs: bodyLogs.length,
+    workoutLogs: workoutLogs.length,
+    nutritionLogs: nutritionLogs.length,
+    recoverySessions: recoverySessions.length,
+  };
+}
+
 // ─── PROJECT PRIME SCORE ENGINE ───────────────────────────────────────────────
 
 function calcStrengthScore(workoutLogs, exercises, phase) {
@@ -4347,7 +4534,7 @@ function LoginScreen({ onLogin }) {
     });
     const data = await res.json();
     if (data.access_token) {
-      onLogin(data.access_token, data.user.id, data.refresh_token);
+      onLogin(data.access_token, data.user.id, data.refresh_token, data.user?.email || email.trim());
     } else {
       setError(data.error_description || data.msg || "Invalid email or password");
     }
@@ -4368,7 +4555,7 @@ function LoginScreen({ onLogin }) {
     if (data.id || data.user?.id || data.access_token) {
       // If email confirmation is disabled, log straight in
       if (data.access_token) {
-        onLogin(data.access_token, data.user.id, data.refresh_token);
+        onLogin(data.access_token, data.user.id, data.refresh_token, data.user?.email || email.trim());
       } else {
         setSignupDone(true);
       }
@@ -4462,6 +4649,10 @@ function App() {
   const [dbError, setDbError]       = useState(false);
   const [session, setSession]       = useState(null);
   const [userId, setUserId]         = useState(null);
+  const [userEmail, setUserEmail]   = useState(null);
+  const [seeding, setSeeding]       = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
+  const isDevUser = userEmail === DEV_EMAIL;
 
   // ── Session restore ────────────────────────────────────────────────────────
   // ── loadAll — fetches all data for user from Supabase ──────────────────────
@@ -4561,6 +4752,11 @@ function App() {
 
       setSession(token);
       setUserId(uid);
+      // Extract email from JWT
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        if (payload.email) setUserEmail(payload.email);
+      } catch {}
       loadAll(token, uid); // call directly with fresh token, don't wait for state
     };
     boot();
@@ -4818,11 +5014,19 @@ function App() {
   })() : null;
 
   // ── Screens ────────────────────────────────────────────────────────────────
-  if (!session) return <LoginScreen onLogin={(token, uid, refreshToken) => {
+  if (!session) return <LoginScreen onLogin={(token, uid, refreshToken, email) => {
     const data = JSON.stringify({ token, uid, refreshToken });
     localStorage.setItem("pp_session", data);
     sessionStorage.setItem("pp_session", data);
     setSession(token); setUserId(uid);
+    if (email) setUserEmail(email);
+    // Also fetch email from JWT if not passed
+    if (!email) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        setUserEmail(payload.email || null);
+      } catch {}
+    }
   }} />;
 
   if (loading) return (
@@ -4883,6 +5087,27 @@ function App() {
           </button>
         </div>
       </div>
+
+      {/* DEV BANNER — only visible when logged in as dev account */}
+      {isDevUser && (
+        <div style={{ background: "#E8A83811", borderBottom: "2px solid #E8A83866", padding: "8px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>🧪 DEV ACCOUNT</span>
+            {seedResult && <span style={{ color: "#4AD99A", fontSize: 11 }}>✓ Seeded: {seedResult.workoutLogs} workouts · {seedResult.bodyLogs} body logs · {seedResult.nutritionLogs} nutrition · {seedResult.recoverySessions} recovery</span>}
+          </div>
+          <button onClick={async () => {
+            if (!confirm("Seed 90 days of fake data into the dev account? This cannot be undone.")) return;
+            setSeeding(true); setSeedResult(null);
+            const result = await seedDevData(session, userId);
+            setSeedResult(result);
+            setSeeding(false);
+            loadAll(session, userId);
+          }} disabled={seeding}
+            style={{ background: seeding ? "#2A2D3A" : "#E8A838", color: seeding ? "#4B5563" : "#0F1117", border: "none", borderRadius: 7, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: seeding ? "default" : "pointer", flexShrink: 0 }}>
+            {seeding ? "Seeding..." : "🌱 Seed Dev Data"}
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 0", minHeight: 0, WebkitOverflowScrolling: "touch", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}>
