@@ -2173,46 +2173,41 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
 
-  // ── Score history (last 4 weeks) from localStorage ───────────────────────
+  // ── Score history (last 4 weeks) ───────────────────────────────────────
   const [scoreHistory, setScoreHistory] = useState([]);
 
-  useEffect(function() {
-    try {
-      const s = localStorage.getItem("pp_score_history");
-      if (s) setScoreHistory(JSON.parse(s));
-    } catch(err) {}
+  useEffect(() => {
+    const s = localStorage.getItem("pp_score_history");
+    const parsed = s ? JSON.parse(s) : [];
+    setScoreHistory(parsed);
   }, []);
 
-  useEffect(function() {
+  useEffect(() => {
     if (scoreState && scoreState.mode === "active" && primeScore) {
       const today = new Date().toLocaleDateString("en-CA");
-      setScoreHistory(function(prev) {
-        const filtered = prev.filter(function(e) { return e.date !== today; });
-        const updated  = filtered.concat([{ date: today, score: primeScore }]).slice(-28);
-        try { localStorage.setItem("pp_score_history", JSON.stringify(updated)); } catch(err2) {}
-        return updated;
-      });
+      const prev = scoreHistory.filter(e => e.date !== today);
+      const updated = prev.concat([{ date: today, score: primeScore }]).slice(-28);
+      localStorage.setItem("pp_score_history", JSON.stringify(updated));
+      setScoreHistory(updated);
     }
   }, [primeScore]);
 
-  const weeklyScoreTrend = (function() {
+  const buildWeeklyTrend = () => {
     const weeks = [];
     for (let i = 3; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i * 7);
-      const weekStart = new Date(d);
-      weekStart.setDate(d.getDate() - d.getDay());
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      const entries = scoreHistory.filter(function(e) {
-        const ed = new Date(e.date);
-        return ed >= weekStart && ed <= weekEnd;
-      });
-      const avg = entries.length ? Math.round(entries.reduce(function(s, e) { return s + e.score; }, 0) / entries.length) : null;
+      const ws = new Date(d);
+      ws.setDate(d.getDate() - d.getDay());
+      const we = new Date(ws);
+      we.setDate(ws.getDate() + 6);
+      const entries = scoreHistory.filter(e => new Date(e.date) >= ws && new Date(e.date) <= we);
+      const avg = entries.length ? Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length) : null;
       weeks.push({ label: i === 0 ? "This Week" : "Wk -" + i, score: avg });
     }
     return weeks;
-  }());
+  };
+  const weeklyScoreTrend = buildWeeklyTrend();
 
 
       {/* ── Log form modal ─────────────────────────────────────────────── */}
