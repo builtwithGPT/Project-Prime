@@ -1553,42 +1553,66 @@ function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) 
 // ─── PROJECT PRIME SCORE ENGINE ───────────────────────────────────────────────
 
 function calcStrengthScore(workoutLogs, exercises, phase) {
-  if (!phase?.startDate) return { score: null, pct: null, comparable: 0 };
+  if (!phase?.startDate) return { score: null, pct: null, comparable: 0, window: 0 };
   const phaseStart = new Date(phase.startDate);
+  const now        = new Date();
+  const daysSince  = Math.round((now - phaseStart) / 86400000);
 
-  // Group logs by exercise, sorted by date
+  // Choose rolling window: 28-day preferred, 14-day fallback for early phase
+  const windowDays = daysSince >= 28 ? 28 : 14;
+  const windowStart = new Date(now);
+  windowStart.setDate(now.getDate() - windowDays);
+
+  // Use phase start as baseline anchor (first 7 days) vs current window (last 14/28 days)
+  const baselineEnd = new Date(phaseStart);
+  baselineEnd.setDate(phaseStart.getDate() + 7);
+
+  const calcSF = (log, ex) => {
+    if (ex.type === "weighted")   return log.sets * log.reps * log.weight;
+    if (ex.type === "bodyweight") return log.sets * log.reps * 10;
+    return log.sets * log.reps; // banded
+  };
+
+  // Group all phase logs by exercise
   const byEx = {};
   workoutLogs.forEach(l => {
     const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
     if (!ex) return;
+    const d = new Date(l.date);
+    if (d < phaseStart) return;
     const key = Number(l.exerciseId);
-    if (!byEx[key]) byEx[key] = { ex, logs: [] };
-    byEx[key].logs.push({ ...l, _date: new Date(l.date) });
+    if (!byEx[key]) byEx[key] = { ex, baseline: [], current: [] };
+    // Baseline: first 7 days of phase
+    if (d <= baselineEnd) byEx[key].baseline.push({ sf: calcSF(l, ex), date: d });
+    // Current: within rolling window
+    if (d >= windowStart) byEx[key].current.push({ sf: calcSF(l, ex), date: d });
   });
 
-  const phaseLogs = {};
-  Object.entries(byEx).forEach(([id, { ex, logs }]) => {
-    const phase_logs = logs.filter(l => l._date >= phaseStart).sort((a, b) => a._date - b._date);
-    if (phase_logs.length >= 2) phaseLogs[id] = { ex, logs: phase_logs };
-  });
-
-  if (Object.keys(phaseLogs).length === 0) return { score: null, pct: null, comparable: 0 };
-
-  const calcSF = (log, ex) => {
-    if (ex.type === "weighted") return log.sets * log.reps * log.weight;
-    if (ex.type === "bodyweight") return log.sets * log.reps * 10;
-    return log.sets * log.reps; // banded / bodyweight-only
-  };
-
+  // For each exercise with both baseline and current data, compute like-for-like progress
   const progValues = [];
-  Object.values(phaseLogs).forEach(({ ex, logs }) => {
-    const first = logs[0], last = logs[logs.length - 1];
-    const sfFirst = calcSF(first, ex), sfLast = calcSF(last, ex);
-    if (sfFirst === 0) return;
-    progValues.push((sfLast - sfFirst) / sfFirst * 100);
+  Object.values(byEx).forEach(({ ex, baseline, current }) => {
+    if (baseline.length === 0 || current.length === 0) return;
+    // Use best SF in baseline period (peaked performance, not first-day only)
+    const sfBaseline = Math.max.apply(null, baseline.map(e => e.sf));
+    // Use best SF in current window
+    const sfCurrent  = Math.max.apply(null, current.map(e => e.sf));
+    if (sfBaseline === 0) return;
+    progValues.push((sfCurrent - sfBaseline) / sfBaseline * 100);
   });
 
-  if (progValues.length === 0) return { score: null, pct: null, comparable: 0 };
+  // Fallback: if baseline window has no data yet (phase too new),
+  // use first-vs-last for each exercise with 2+ sessions
+  if (progValues.length === 0) {
+    Object.values(byEx).forEach(({ ex, baseline, current }) => {
+      const allLogs = [...baseline, ...current].sort((a, b) => a.date - b.date);
+      if (allLogs.length < 2) return;
+      const sfFirst = allLogs[0].sf, sfLast = allLogs[allLogs.length - 1].sf;
+      if (sfFirst === 0) return;
+      progValues.push((sfLast - sfFirst) / sfFirst * 100);
+    });
+  }
+
+  if (progValues.length === 0) return { score: null, pct: null, comparable: 0, window: windowDays };
   const avgPct = progValues.reduce((s, v) => s + v, 0) / progValues.length;
 
   let score;
@@ -1601,7 +1625,7 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
   else if (avgPct >= -3.0) score = 50;
   else                      score = 25;
 
-  return { score, pct: +avgPct.toFixed(1), comparable: progValues.length };
+  return { score, pct: +avgPct.toFixed(1), comparable: progValues.length, window: windowDays };
 }
 
 function calcWaistScore(bodyLogs, phase) {
@@ -1684,22 +1708,22 @@ function scoreToBand(score) {
 }
 
 function calcPrimeScoreState(confidence, strengthResult, waistResult, weightResult) {
-  const { tier, weighIns, workoutDays, nutritionLogs, daysSince } = confidence;
+  const { tier, weighIns, workoutDays, nutritionLogs, waistSessions, daysSince } = confidence;
 
-  // Baseline Mode thresholds
-  const hasWeight    = weighIns     >= 7;
-  const hasWaist     = (waistResult.change !== null);
+  // Baseline thresholds — waist is weekly so only need 1 session to pass
+  const hasWeight    = weighIns      >= 7;
+  const hasWaist     = (waistSessions >= 1);
   const hasStrength  = strengthResult.comparable >= 2;
-  const hasNutrition = nutritionLogs >= 5;
+  const hasNutrition = nutritionLogs  >= 5;
 
   if (tier === "low" || daysSince < 7 || !hasStrength) {
     return {
       mode: "baseline",
       checklist: [
-        { label: "7 daily weigh-ins",      done: hasWeight,    current: weighIns,     target: 7 },
-        { label: "2 waist measurements",   done: hasWaist,     current: waistResult.change !== null ? 1 : 0, target: 1 },
-        { label: "2 comparable workouts",  done: hasStrength,  current: strengthResult.comparable, target: 2 },
-        { label: "5 nutrition days logged",done: hasNutrition, current: nutritionLogs, target: 5 },
+        { label: "7 daily weigh-ins",         done: hasWeight,    current: weighIns,      target: 7 },
+        { label: "1 weekly waist measurement", done: hasWaist,     current: waistSessions, target: 1 },
+        { label: "2 comparable workouts",      done: hasStrength,  current: strengthResult.comparable, target: 2 },
+        { label: "5 nutrition days logged",    done: hasNutrition, current: nutritionLogs, target: 5 },
       ],
     };
   }
@@ -1712,38 +1736,45 @@ function calcPrimeScoreState(confidence, strengthResult, waistResult, weightResu
 // Separates "what the data says" from "how much we trust the data"
 
 function calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays) {
-  if (!phase) return { tier: "none", score: 0, daysSinceStart: 0, reasons: [] };
+  if (!phase) return { tier: "none", score: 0, daysSince: 0, weighIns: 0, workoutDays: 0, nutritionLogs: 0, waistSessions: 0, reasons: [] };
 
-  const phaseStart   = new Date(phase.startDate);
-  const now          = new Date();
-  const daysSince    = Math.max(0, Math.round((now - phaseStart) / 86400000));
-  const phaseLogs    = bodyLogs.filter(l => new Date(l.date) >= phaseStart);
-  const weighIns     = phaseLogs.filter(l => l.weight).length;
-  const waistLogs    = phaseLogs.filter(l => l.waist).length;
-  const workoutDays  = [...new Set(
+  const phaseStart    = new Date(phase.startDate);
+  const now           = new Date();
+  const daysSince     = Math.max(0, Math.round((now - phaseStart) / 86400000));
+  const phaseLogs     = bodyLogs.filter(l => new Date(l.date) >= phaseStart);
+  const weighIns      = phaseLogs.filter(l => l.weight).length;
+  // Waist is weekly — count measurement sessions (unique dates with waist data)
+  const waistSessions = [...new Set(phaseLogs.filter(l => l.waist).map(l => l.date.split("T")[0]))].length;
+  const workoutDays   = [...new Set(
     workoutLogs.filter(l => new Date(l.date) >= phaseStart).map(l => l.date.split("T")[0])
   )].length;
   const nutritionLogs = nutritionDays.filter(d => new Date(d.date + "T12:00:00") >= phaseStart).length;
 
   // Score each dimension 0-25
-  const timeScore    = Math.min(25, (daysSince / 21) * 25);
-  const weightScore  = Math.min(25, (weighIns  / 8)  * 25);
-  const trainingScore = Math.min(25, (workoutDays / 6) * 25);
+  // Weight: daily — need 7 days for a full rolling window
+  const timeScore      = Math.min(25, (daysSince / 21) * 25);
+  const weightScore    = Math.min(25, (weighIns  / 7)  * 25);
+  const trainingScore  = Math.min(25, (workoutDays / 6) * 25);
   const nutritionScore = Math.min(25, (nutritionLogs / 7) * 25);
   const score = Math.round(timeScore + weightScore + trainingScore + nutritionScore);
 
+  // Tier logic — waist only needs 1 session for medium, 2 for high (weekly cadence)
   let tier;
-  if (score < 30 || daysSince < 7)       tier = "low";
-  else if (score < 65 || daysSince < 21) tier = "medium";
-  else                                    tier = "high";
+  if (score < 30 || daysSince < 7)        tier = "low";
+  else if (score < 65 || daysSince < 14)  tier = "medium";
+  else                                     tier = "high";
+
+  // High confidence requires at least 2 weekly waist sessions
+  if (tier === "high" && waistSessions < 2) tier = "medium";
 
   const reasons = [];
-  if (weighIns  < 5)        reasons.push(`${weighIns} weigh-in${weighIns !== 1 ? "s" : ""} (need 5+ for trend)`);
-  if (workoutDays < 3)      reasons.push(`${workoutDays} workout day${workoutDays !== 1 ? "s" : ""} logged`);
-  if (nutritionLogs < 5)    reasons.push(`${nutritionLogs} nutrition day${nutritionLogs !== 1 ? "s" : ""} logged`);
-  if (daysSince < 7)        reasons.push(`${daysSince} day${daysSince !== 1 ? "s" : ""} into phase`);
+  if (weighIns     < 7)  reasons.push(weighIns + " weigh-in" + (weighIns !== 1 ? "s" : "") + " (need 7 for rolling average)");
+  if (workoutDays  < 3)  reasons.push(workoutDays + " workout day" + (workoutDays !== 1 ? "s" : "") + " logged");
+  if (nutritionLogs < 5) reasons.push(nutritionLogs + " nutrition day" + (nutritionLogs !== 1 ? "s" : "") + " logged");
+  if (waistSessions < 1) reasons.push("No waist measurement yet (weekly cadence)");
+  if (daysSince    < 7)  reasons.push(daysSince + " day" + (daysSince !== 1 ? "s" : "") + " into phase");
 
-  return { tier, score, daysSince, weighIns, workoutDays, nutritionLogs, reasons };
+  return { tier, score, daysSince, weighIns, workoutDays, nutritionLogs, waistSessions, reasons };
 }
 
 // Derive the overall phase verdict using confidence tier + trend direction
@@ -1772,43 +1803,53 @@ function calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase) {
   return "yellow";
 }
 
-// Build the four-part coach narrative (Observation / Confidence / Interpretation / Action)
+// Build the four-part coach narrative — always references trends, not single data points
 function buildCoachNarrative(confidence, weightChange, wRate, waistChange, totalPFChange, verdict, phase, weeklyReview) {
-  // If we have a live AI review, use its executive summary
-  if (weeklyReview?.executive_summary && !weeklyReview.executive_summary.includes("error")) {
+  if (weeklyReview && weeklyReview.executive_summary && !weeklyReview.executive_summary.includes("error")) {
     return weeklyReview.executive_summary;
   }
-
   if (!phase) return "Set an active phase to unlock your coaching assessment.";
 
-  const { tier, daysSince, weighIns } = confidence;
-  const isGain = phase.type === "gain";
+  const tier    = confidence.tier;
+  const daysSince = confidence.daysSince || 0;
+  const weighIns  = confidence.weighIns  || 0;
+  const isGain  = phase.type === "gain";
 
   if (tier === "low") {
-    const wNote = weightChange !== null && weightChange > 0
-      ? `Body weight has increased ${weightChange} lbs since the start of the phase — this is expected from increased food volume, glycogen storage, and hydration, not fat gain. `
+    const wNote  = weightChange !== null && weightChange > 0
+      ? "Body weight has increased " + weightChange + " lbs since phase start. This likely reflects increased food volume, glycogen storage, and hydration — not fat gain. "
       : "";
     const pfNote = totalPFChange !== null && totalPFChange > 0
-      ? `Prime Factor is already showing a ${totalPFChange}% improvement — a strong early indicator. `
+      ? "Prime Factor is showing a " + totalPFChange + "% improvement — a strong early signal. "
       : "";
-    return `${wNote}${pfNote}Only ${daysSince} day${daysSince !== 1 ? "s" : ""} of data with ${weighIns} weigh-in${weighIns !== 1 ? "s" : ""} — not enough to identify a true trend. Focus on consistency. No adjustments recommended.`;
+    return wNote + pfNote + "Only " + daysSince + " day" + (daysSince !== 1 ? "s" : "") + " of data with " + weighIns + " weigh-in" + (weighIns !== 1 ? "s" : "") + " — not enough for a reliable trend. Focus on consistent daily logging. No adjustments recommended.";
   }
 
   if (tier === "medium") {
-    const wNote = wRate !== null ? `Weight is changing at ${wRate >= 0 ? "+" : ""}${wRate} lbs/week — ${isGain ? (wRate > 0.8 ? "slightly above target pace, continue monitoring" : wRate < 0.2 ? "below target pace, ensure calorie surplus is consistent" : "within the ideal range") : "on track"}. ` : "";
-    const waistNote = waistChange !== null ? `Waist has ${waistChange === 0 ? "remained stable" : (waistChange > 0 ? `increased ${waistChange}"` : `decreased ${Math.abs(waistChange)}"`)}, which is ${waistChange <= 0.5 ? "acceptable" : "worth monitoring over the next two weeks before any adjustment"}. ` : "";
-    const pfNote = totalPFChange !== null ? `Prime Factor is ${totalPFChange > 0 ? `up ${totalPFChange}%` : totalPFChange === 0 ? "flat" : `down ${Math.abs(totalPFChange)}%`} since phase start. ` : "";
-    return `${wNote}${waistNote}${pfNote}Trend is emerging but not yet confirmed. Continue collecting data before making any plan adjustments.`;
+    const wNote = wRate !== null
+      ? "The 7-day rolling weight average is trending at " + (wRate >= 0 ? "+" : "") + wRate + " lbs/week — " + (isGain ? (wRate > 0.8 ? "slightly above target pace, worth monitoring" : wRate < 0.2 ? "below target pace, check calorie surplus" : "within the ideal gain range") : "on track") + ". "
+      : "";
+    const waistNote = waistChange !== null
+      ? "Waist trend (rolling average) is " + (waistChange === 0 ? "stable" : (waistChange > 0 ? "up +" + waistChange + '"' : "down " + Math.abs(waistChange) + '"') + " from baseline") + ", which is " + (waistChange <= 0.5 ? "acceptable at this stage" : "worth monitoring — wait for 2+ more weekly measurements before adjusting") + ". "
+      : "";
+    const pfNote = totalPFChange !== null
+      ? "Prime Factor is " + (totalPFChange > 0 ? "up " + totalPFChange + "%" : "flat or declining") + " since phase start. "
+      : "";
+    return wNote + waistNote + pfNote + "Trends are emerging. Continue collecting data before making plan adjustments.";
   }
 
-  // High confidence
   if (verdict === "green") {
-    return `Phase is progressing as intended. Weight is moving at ${wRate !== null ? `${wRate >= 0 ? "+" : ""}${wRate} lbs/week` : "a controlled pace"}${waistChange !== null && waistChange <= 0.25 ? " and waist measurements remain stable, indicating lean muscle gain" : ""}${totalPFChange !== null && totalPFChange > 0 ? `. Prime Factor is up ${totalPFChange}% since phase start` : ""}. Continue the current plan.`;
+    const wTrend    = wRate !== null ? "Weight has been trending at " + (wRate >= 0 ? "+" : "") + wRate + " lbs/week (7-day rolling average)" : "Weight trend is controlled";
+    const waistNote = waistChange !== null && waistChange <= 0.25 ? " while the waist rolling average remains stable — indicating lean muscle gain" : "";
+    const pfNote    = totalPFChange !== null && totalPFChange > 0 ? ". Prime Factor is up " + totalPFChange + "% since phase start" : "";
+    return wTrend + waistNote + pfNote + ". Continue the current plan.";
   }
   if (verdict === "red") {
-    return `One or more key metrics require attention. ${wRate !== null && wRate > 0.8 ? `Weight is increasing at ${wRate} lbs/week — above the ideal 0.25–0.75 lbs/week range. ` : ""}${waistChange !== null && waistChange > 0.75 ? `Waist has increased ${waistChange}" which may indicate excess fat gain. ` : ""}Review nutrition and consider adjustments.`;
+    const wWarn    = wRate !== null && wRate > 0.8 ? "The 7-day rolling weight average is trending at " + wRate + " lbs/week — above the ideal 0.25-0.75 lbs/week range. " : "";
+    const waistWarn = waistChange !== null && waistChange > 0.75 ? "Waist rolling average has increased " + waistChange + '" from baseline — possible excess fat accumulation. ' : "";
+    return wWarn + waistWarn + "Review nutrition and training load. Confirm the trend holds over 7-10 more days before making significant changes.";
   }
-  return `Progress is mixed. Some metrics are on track but others need attention. Continue monitoring and avoid making large changes until trends are clearer.`;
+  return "Progress is mixed. Continue consistent logging and avoid large plan changes until trends are clearly confirmed over multiple weeks.";
 }
 
 function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, recoverySessions, phase, phaseInfo }) {
@@ -1840,16 +1881,30 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
   const latestWeight = latest.weight || null;
   const baseWeight   = baseline?.weight || null;
-  const weightChange = latestWeight && baseWeight ? +(latestWeight - baseWeight).toFixed(1) : null;
 
-  // Weekly rate of change (lbs/week) over last 4 entries
-  const wRate = (() => {
-    if (weightSeries.length < 2) return null;
-    const recent = weightSeries.slice(-4);
-    const days = (new Date(recent[recent.length-1].date) - new Date(recent[0].date)) / 86400000;
-    if (days < 1) return null;
-    return +((recent[recent.length-1].value - recent[0].value) / days * 7).toFixed(2);
-  })();
+  // 7-day rolling average — more stable than single weigh-in
+  const now7 = new Date();
+  const d7   = new Date(now7); d7.setDate(now7.getDate() - 7);
+  const d14  = new Date(now7); d14.setDate(now7.getDate() - 14);
+  const recentW7  = weightSeries.filter(e => new Date(e.date) >= d7);
+  const priorW7   = weightSeries.filter(e => new Date(e.date) >= d14 && new Date(e.date) < d7);
+  const avg7day   = recentW7.length  ? +(recentW7.reduce((s, e)  => s + e.value, 0) / recentW7.length).toFixed(1)  : null;
+  const avgPrior7 = priorW7.length   ? +(priorW7.reduce((s, e)   => s + e.value, 0) / priorW7.length).toFixed(1)   : null;
+
+  // Phase-total weight change uses rolling avg vs baseline
+  const weightChange = avg7day && baseWeight ? +(avg7day - baseWeight).toFixed(1) : null;
+
+  // Weekly rate: current 7d avg minus prior 7d avg
+  const wRate = avg7day !== null && avgPrior7 !== null
+    ? +(avg7day - avgPrior7).toFixed(2)
+    : (() => {
+        // Fallback: simple rate over all phase data when not enough for rolling windows
+        if (weightSeries.length < 2) return null;
+        const first = weightSeries[0], last = weightSeries[weightSeries.length - 1];
+        const days = (new Date(last.date) - new Date(first.date)) / 86400000;
+        if (days < 1) return null;
+        return +((last.value - first.value) / days * 7).toFixed(2);
+      })();
 
   // Weight KPI status (Gain phase: ideal +0.25–0.75/wk)
   const weightStatus = (() => {
@@ -1880,10 +1935,16 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     }
   })();
 
-  // Waist KPI
+  // Waist KPI — weekly measurement, use rolling avg of last 2-3 vs baseline
   const latestWaist = latest.waist || null;
   const baseWaist   = baseline?.waist || null;
-  const waistChange = latestWaist && baseWaist ? +(latestWaist - baseWaist).toFixed(1) : null;
+  const waistSorted = sorted.filter(l => l.waist);
+  const waistRolling = (() => {
+    if (waistSorted.length === 0) return null;
+    const last3 = waistSorted.slice(-3);
+    return +(last3.reduce((s, l) => s + l.waist, 0) / last3.length).toFixed(2);
+  })();
+  const waistChange = waistRolling !== null && baseWaist ? +(waistRolling - baseWaist).toFixed(2) : null;
   const waistStatus = waistChange === null ? "gray" : waistChange <= 0.25 ? "green" : waistChange <= 0.75 ? "yellow" : "red";
   const waistStatusLabel = waistStatus === "green" ? "🟢 Stable" : waistStatus === "yellow" ? "🟡 Slight Increase" : waistStatus === "red" ? "🔴 Increasing" : "No data";
 
@@ -2330,7 +2391,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
               {[
                 {
                   icon: "💪", color: "#4A90D9", bg: "#1E3A5F",
-                  label: "STRENGTH (50%)", sub: "Average Strength Progress (28d)",
+                  label: "STRENGTH (50%)", sub: "Average Strength Progress (" + (strengthResult.window || 14) + "d)",
                   detail: strengthResult.pct !== null ? (strengthResult.pct >= 0 ? "↑ +" : "↓ ") + Math.abs(strengthResult.pct) + "%" : "Building data...",
                   detailColor: strengthResult.pct !== null ? (strengthResult.pct >= 0 ? "#4AD99A" : "#D94A4A") : "#4B5563",
                   interp: strengthResult.score !== null
