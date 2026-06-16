@@ -259,6 +259,52 @@ function lsSet(key, data) {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 }
 
+// ─── DRAFT SESSION PERSISTENCE ────────────────────────────────────────────────
+const DRAFT_KEYS = { workout: "pp_draft_workout", recovery: "pp_draft_recovery" };
+
+function saveDraft(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      ...data,
+      savedAt: new Date().toISOString(),
+      date: new Date().toLocaleDateString("en-CA"),
+    }));
+  } catch {}
+}
+
+function clearDraft(key) {
+  try { localStorage.removeItem(key); } catch {}
+}
+
+function loadDraft(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function getDraftStatus(draft) {
+  if (!draft) return null;
+  const today = new Date().toLocaleDateString("en-CA");
+  const isToday = draft.date === today;
+  if (isToday) return "today";
+  const hasMeaningfulProgress = (() => {
+    if (draft.checklist) {
+      const anyDone = draft.checklist.some(function(i) { return i.completed; });
+      const bm = draft.beforeMetrics || {};
+      const am = draft.afterMetrics  || {};
+      const metricsChanged = am.energy !== 3 || am.soreness !== 3 || am.heel_pain !== 0 || am.low_back !== 0;
+      return anyDone || metricsChanged;
+    }
+    if (draft.completedSets) {
+      return Object.values(draft.completedSets).some(function(sets) { return sets.length > 0; });
+    }
+    return false;
+  })();
+  return hasMeaningfulProgress ? "stale-meaningful" : "stale-empty";
+}
+
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPABASE_URL      = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
@@ -445,6 +491,52 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
   const [saveStatus,      setSaveStatus]      = useState(null);
   const [jumpConfirm,     setJumpConfirm]     = useState(null); // {targetIdx}
   const [exerciseDone,    setExerciseDone]    = useState(false); // post-exercise completion moment
+  const [workoutDraftPrompt, setWorkoutDraftPrompt] = useState(null); // null | { status, draft }
+
+  // ── Draft persistence ────────────────────────────────────────────────────────
+  // Check for draft on mount
+  useEffect(() => {
+    if (activeMode) return; // don't interrupt active workout
+    const draft = loadDraft(DRAFT_KEYS.workout);
+    const status = getDraftStatus(draft);
+    if (status === "stale-empty") { clearDraft(DRAFT_KEYS.workout); return; }
+    if (status === "today" || status === "stale-meaningful") {
+      setWorkoutDraftPrompt({ status, draft });
+    }
+  }, []);
+
+  // Save draft whenever active workout state changes
+  useEffect(() => {
+    if (!activeMode) return;
+    saveDraft(DRAFT_KEYS.workout, {
+      currentIdx,
+      completedSets,
+      loggedIds: [...loggedIds],
+      currentSetNum,
+      currentSetWeight,
+      currentSetReps,
+      currentSetRpe,
+      exerciseDone,
+    });
+  }, [activeMode, currentIdx, completedSets, loggedIds, currentSetNum, currentSetWeight, currentSetReps, exerciseDone]);
+
+  const resumeWorkoutDraft = (draft) => {
+    setCurrentIdx(draft.currentIdx || 0);
+    setCompletedSets(draft.completedSets || {});
+    setLoggedIds(new Set([...workoutLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA")).map(l => l.exerciseId), ...(draft.loggedIds || [])]));
+    setCurrentSetNum(draft.currentSetNum || 1);
+    setCurrentSetWeight(draft.currentSetWeight || "0");
+    setCurrentSetReps(draft.currentSetReps || "10");
+    setCurrentSetRpe(draft.currentSetRpe || "");
+    setExerciseDone(draft.exerciseDone || false);
+    setWorkoutDraftPrompt(null);
+    setActiveMode(true);
+  };
+
+  const discardWorkoutDraft = () => {
+    clearDraft(DRAFT_KEYS.workout);
+    setWorkoutDraftPrompt(null);
+  };
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const todayKey2 = new Date().toLocaleDateString("en-CA");
@@ -600,6 +692,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
 
   // endWorkout accepts optional freshLogs — avoids stale closure when called right after a state update
   const endWorkout = (freshLogs) => {
+    clearDraft(DRAFT_KEYS.workout);
     const todayLocalKey = new Date().toLocaleDateString("en-CA");
     const allLogs = freshLogs || workoutLogs;
     const tLogs   = allLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === todayLocalKey);
@@ -697,6 +790,43 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
     return (
       <div>
         <WorkoutSummaryModal />
+
+        {/* Workout draft recovery prompt */}
+        {workoutDraftPrompt && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #4A90D944", padding: 32, maxWidth: 420, width: "100%" }}>
+              <div style={{ fontSize: 28, marginBottom: 12, textAlign: "center" }}>💪</div>
+              <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>
+                {workoutDraftPrompt.status === "today" ? "Resume previous workout?" : "Unfinished workout found"}
+              </div>
+              <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 16, textAlign: "center", lineHeight: 1.6 }}>
+                {workoutDraftPrompt.status === "today"
+                  ? "You have an unfinished workout from earlier today."
+                  : "Previous unfinished workout from " + new Date((workoutDraftPrompt.draft.date || new Date().toLocaleDateString("en-CA")) + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) + "."}
+              </div>
+              {workoutDraftPrompt.draft.completedSets && (
+                <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px", marginBottom: 20, textAlign: "center" }}>
+                  <div style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>
+                    {Object.values(workoutDraftPrompt.draft.completedSets).reduce(function(t, s) { return t + s.length; }, 0)} sets completed across {Object.keys(workoutDraftPrompt.draft.completedSets).filter(function(k) { return workoutDraftPrompt.draft.completedSets[k].length > 0; }).length} exercises
+                  </div>
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {workoutDraftPrompt.status === "today" && (
+                  <button onClick={() => resumeWorkoutDraft(workoutDraftPrompt.draft)}
+                    style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 10, height: 52, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+                    Resume Workout
+                  </button>
+                )}
+                <button onClick={discardWorkoutDraft}
+                  style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 10, height: 48, fontSize: 14, cursor: "pointer" }}>
+                  {workoutDraftPrompt.status === "today" ? "Discard & Start Fresh" : "Discard Old Workout"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
@@ -3363,6 +3493,47 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [lastSession, setLastSession] = useState(null);
+  const [draftPrompt, setDraftPrompt] = useState(null); // null | { status, draft }
+
+  // ── Check for draft on mount ───────────────────────────────────────────────
+  useEffect(() => {
+    const draft = loadDraft(DRAFT_KEYS.recovery);
+    const status = getDraftStatus(draft);
+    if (status === "stale-empty") { clearDraft(DRAFT_KEYS.recovery); return; }
+    if (status === "today" || status === "stale-meaningful") {
+      setDraftPrompt({ status, draft });
+    }
+  }, []);
+
+  // ── Save draft whenever meaningful state changes ───────────────────────────
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    saveDraft(DRAFT_KEYS.recovery, {
+      template: selectedTemplate,
+      checklist,
+      step: sessionStep,
+      beforeMetrics,
+      afterMetrics,
+      resultRating,
+      sessionStart: sessionStart ? sessionStart.toISOString() : null,
+    });
+  }, [selectedTemplate, checklist, sessionStep, beforeMetrics, afterMetrics, resultRating]);
+
+  const resumeDraft = (draft) => {
+    setSelectedTemplate(draft.template);
+    setChecklist(draft.checklist || []);
+    setSessionStep(draft.step || "before");
+    setBeforeMetrics(draft.beforeMetrics || { energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
+    setAfterMetrics(draft.afterMetrics  || { energy: 3, soreness: 3, heel_pain: 0, low_back: 0 });
+    setResultRating(draft.resultRating || null);
+    setSessionStart(draft.sessionStart ? new Date(draft.sessionStart) : new Date());
+    setDraftPrompt(null);
+  };
+
+  const discardDraft = () => {
+    clearDraft(DRAFT_KEYS.recovery);
+    setDraftPrompt(null);
+  };
 
   const safeSessions = recoverySessions || [];
   const today = new Date().toISOString().split("T")[0];
@@ -3405,14 +3576,22 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
       result_rating: resultRating,
       items: checklist,
     };
-    // Save to DB in background — don't block UI transition
-    onSaveSession(sessionData);
-    setLastSession({ ...sessionData, duration });
-    setSaving(false);
-    setSessionStep("summary");
+    const ok = await onSaveSession(sessionData);
+    if (ok !== false) {
+      // Success — clear draft, advance to summary
+      clearDraft(DRAFT_KEYS.recovery);
+      setLastSession({ ...sessionData, duration });
+      setSaving(false);
+      setSessionStep("summary");
+    } else {
+      // Save failed — keep draft, show error
+      setSaveError("Save failed. Your session progress is preserved. Try again.");
+      setSaving(false);
+    }
   };
 
   const endSession = () => {
+    clearDraft(DRAFT_KEYS.recovery);
     setSessionStep(null);
     setSelectedTemplate(null);
     setView("recover");
@@ -3656,6 +3835,43 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   // ── MAIN VIEWS ─────────────────────────────────────────────────────────────
   return (
     <div>
+      {/* Draft recovery prompt */}
+      {draftPrompt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #E8A83844", padding: 32, maxWidth: 420, width: "100%" }}>
+            <div style={{ fontSize: 28, marginBottom: 12, textAlign: "center" }}>🌿</div>
+            <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 700, marginBottom: 8, textAlign: "center" }}>
+              {draftPrompt.status === "today" ? "Resume previous session?" : "Unfinished session found"}
+            </div>
+            <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 6, textAlign: "center", lineHeight: 1.6 }}>
+              {draftPrompt.status === "today"
+                ? "You have an unfinished recovery session from earlier today."
+                : "Previous unfinished session from " + new Date(draftPrompt.draft.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) + "."}
+            </div>
+            {draftPrompt.draft.template && (
+              <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 14px", marginBottom: 20, textAlign: "center" }}>
+                <div style={{ color: "#4AD99A", fontSize: 13, fontWeight: 700 }}>{draftPrompt.draft.template.name}</div>
+                <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>
+                  {draftPrompt.draft.checklist ? draftPrompt.draft.checklist.filter(function(i) { return i.completed; }).length : 0} of {draftPrompt.draft.checklist ? draftPrompt.draft.checklist.length : 0} exercises completed
+                </div>
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {draftPrompt.status === "today" && (
+                <button onClick={() => resumeDraft(draftPrompt.draft)}
+                  style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, height: 52, fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+                  Resume Session
+                </button>
+              )}
+              <button onClick={discardDraft}
+                style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 10, height: 48, fontSize: 14, cursor: "pointer" }}>
+                {draftPrompt.status === "today" ? "Discard & Start Fresh" : "Discard Old Session"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Recovery</h2>
