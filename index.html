@@ -2613,23 +2613,45 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
 
   // Score history — simple localStorage read, no hooks needed in render
+  // Save today's score to localStorage
   const scoreHistoryRaw = localStorage.getItem("pp_score_history");
   const scoreHistoryData = scoreHistoryRaw ? JSON.parse(scoreHistoryRaw) : [];
-  // Save today's score
   if (scoreState && scoreState.mode === "active" && primeScore) {
     const today = new Date().toLocaleDateString("en-CA");
     const prev = scoreHistoryData.filter(e => e.date !== today);
     const updated = prev.concat([{ date: today, score: primeScore }]).slice(-28);
     localStorage.setItem("pp_score_history", JSON.stringify(updated));
   }
-  const liveHistory = scoreHistoryRaw ? JSON.parse(localStorage.getItem("pp_score_history") || "[]") : [];
-  const weeklyScoreTrend = [3,2,1,0].map(i => {
-    const d = new Date(); d.setDate(d.getDate() - i * 7);
-    const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
-    const we = new Date(ws); we.setDate(ws.getDate() + 6);
-    const entries = liveHistory.filter(e => new Date(e.date) >= ws && new Date(e.date) <= we);
-    const avg = entries.length ? Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length) : null;
-    return { label: i === 0 ? "This Week" : "Wk -" + i, score: avg };
+
+  // Build 4-week trend — compute directly from raw data for past weeks
+  // so trend populates immediately without needing historical localStorage entries
+  const weeklyScoreTrend = [3,2,1,0].map(function(i) {
+    const weekEnd = new Date();
+    weekEnd.setDate(weekEnd.getDate() - i * 7);
+    const weekStart = new Date(weekEnd);
+    weekStart.setDate(weekEnd.getDate() - 7);
+    const label = i === 0 ? "This Week" : "Wk -" + i;
+
+    if (i === 0) {
+      // Current week — use live primeScore
+      return { label, score: (scoreState && scoreState.mode !== "baseline" && primeScore) ? primeScore : null };
+    }
+
+    // Past weeks — recompute score from data available at that snapshot
+    if (!phase || !phase.startDate) return { label, score: null };
+    const phaseStart = new Date(phase.startDate);
+
+    const snapBody     = bodyLogs.filter(function(l) { const d = new Date(l.date); return d >= phaseStart && d <= weekEnd; });
+    const snapWorkouts = workoutLogs.filter(function(l) { const d = new Date(l.date); return d >= phaseStart && d <= weekEnd; });
+    const snapNutr     = nutritionDays.filter(function(d) { const nd = new Date(d.date + "T12:00:00"); return nd >= phaseStart && nd <= weekEnd; });
+
+    if (snapBody.length < 3 || snapWorkouts.length < 1) return { label, score: null };
+
+    const sStrength = calcStrengthScore(snapWorkouts, exercises, phase);
+    const sWaist    = calcWaistScore(snapBody, phase);
+    const sWeight   = calcWeightScore(snapBody, phase);
+    const sScore    = calcPrimeScore(sStrength.score, sWaist.score, sWeight.score);
+    return { label, score: sScore > 0 ? sScore : null };
   });
 
   return (
