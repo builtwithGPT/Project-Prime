@@ -4652,6 +4652,8 @@ function App() {
   const [userEmail, setUserEmail]   = useState(null);
   const [seeding, setSeeding]       = useState(false);
   const [seedResult, setSeedResult] = useState(null);
+  const [devModal, setDevModal]     = useState(null); // null | "seed" | "clear"
+  const [devConfirmText, setDevConfirmText] = useState("");
   const isDevUser = userEmail === DEV_EMAIL;
 
   // ── Session restore ────────────────────────────────────────────────────────
@@ -5087,23 +5089,89 @@ function App() {
 
       {/* DEV BANNER — only visible when logged in as dev account */}
       {isDevUser && (
-        <div style={{ background: "#E8A83811", borderBottom: "2px solid #E8A83866", padding: "8px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>🧪 DEV ACCOUNT</span>
-            {seedResult && <span style={{ color: "#4AD99A", fontSize: 11 }}>✓ Seeded: {seedResult.workoutLogs} workouts · {seedResult.bodyLogs} body logs · {seedResult.nutritionLogs} nutrition · {seedResult.recoverySessions} recovery</span>}
+        <>
+          {/* Dev modal */}
+          {devModal && (
+            <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+              <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #E8A83866", padding: 32, maxWidth: 440, width: "100%" }}>
+                <div style={{ color: "#E8A838", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 16 }}>
+                  {devModal === "seed" ? "🌱 DEV DATA SEEDING" : "🗑️ CLEAR DEV DATA"}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "#0F1117", borderRadius: 10, padding: "14px 16px", marginBottom: 20, fontSize: 13 }}>
+                  <div><span style={{ color: "#4B5563" }}>Signed in as: </span><span style={{ color: "#4AD99A", fontWeight: 700 }}>{userEmail}</span></div>
+                  <div><span style={{ color: "#4B5563" }}>Target user_id: </span><span style={{ color: "#8B92A5", fontFamily: "monospace", fontSize: 11 }}>{userId}</span></div>
+                  <div style={{ color: "#4B5563", fontSize: 12, borderTop: "1px solid #2A2D3A", paddingTop: 10, marginTop: 4 }}>
+                    {devModal === "seed"
+                      ? "This will insert 90 days of synthetic Project Prime data for this account only."
+                      : "This will permanently delete ALL data for this account. Real account is unaffected."}
+                  </div>
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>
+                    Type <strong style={{ color: devModal === "seed" ? "#E8A838" : "#D94A4A" }}>{devModal === "seed" ? "SEED" : "CLEAR"}</strong> to continue
+                  </label>
+                  <input autoFocus value={devConfirmText} onChange={e => setDevConfirmText(e.target.value.toUpperCase())}
+                    placeholder={devModal === "seed" ? "SEED" : "CLEAR"}
+                    style={{ ...inputStyle, fontSize: 15, fontWeight: 700, letterSpacing: "0.1em", textAlign: "center" }} />
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => { setDevModal(null); setDevConfirmText(""); }}
+                    style={{ flex: 1, background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 9, height: 48, fontSize: 14, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                  <button
+                    disabled={seeding || (devModal === "seed" ? devConfirmText !== "SEED" : devConfirmText !== "CLEAR")}
+                    onClick={async () => {
+                      if (devModal === "seed") {
+                        setSeeding(true); setDevModal(null); setDevConfirmText("");
+                        const result = await seedDevData(session, userId);
+                        setSeedResult(result); setSeeding(false);
+                        loadAll(session, userId);
+                      } else {
+                        setSeeding(true); setDevModal(null); setDevConfirmText("");
+                        // Clear all dev data for this user_id
+                        const h = { "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + session, "Content-Type": "application/json" };
+                        await Promise.all([
+                          fetch(SUPABASE_URL + "/rest/v1/workout_logs?user_id=eq." + userId,    { method: "DELETE", headers: h }),
+                          fetch(SUPABASE_URL + "/rest/v1/body_logs?user_id=eq." + userId,       { method: "DELETE", headers: h }),
+                          fetch(SUPABASE_URL + "/rest/v1/nutrition_days?user_id=eq." + userId,  { method: "DELETE", headers: h }),
+                          fetch(SUPABASE_URL + "/rest/v1/recovery_sessions?user_id=eq." + userId, { method: "DELETE", headers: h }),
+                          fetch(SUPABASE_URL + "/rest/v1/phase_data?user_id=eq." + userId,      { method: "DELETE", headers: h }),
+                        ]);
+                        setSeedResult(null); setSeeding(false);
+                        loadAll(session, userId);
+                      }
+                    }}
+                    style={{ flex: 1, background: seeding || (devModal === "seed" ? devConfirmText !== "SEED" : devConfirmText !== "CLEAR") ? "#2A2D3A" : devModal === "seed" ? "#E8A838" : "#D94A4A",
+                      color: seeding || (devModal === "seed" ? devConfirmText !== "SEED" : devConfirmText !== "CLEAR") ? "#4B5563" : "#0F1117",
+                      border: "none", borderRadius: 9, height: 48, fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                    {seeding ? "Working..." : devModal === "seed" ? "Seed Data" : "Clear All Data"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dev toolbar */}
+          <div style={{ background: "#E8A83811", borderBottom: "2px solid #E8A83866", padding: "7px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>🧪 DEV ACCOUNT</span>
+              <span style={{ color: "#4B5563", fontSize: 11, fontFamily: "monospace" }}>{userEmail}</span>
+              {seeding && <span style={{ color: "#8B92A5", fontSize: 11 }}>Working...</span>}
+              {seedResult && !seeding && <span style={{ color: "#4AD99A", fontSize: 11 }}>✓ {seedResult.workoutLogs} workouts · {seedResult.bodyLogs} body logs · {seedResult.nutritionLogs} nutrition · {seedResult.recoverySessions} recovery</span>}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { setDevModal("clear"); setDevConfirmText(""); }} disabled={seeding}
+                style={{ background: "#D94A4A22", color: "#D94A4A", border: "1px solid #D94A4A44", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: seeding ? "default" : "pointer" }}>
+                🗑️ Clear Dev Data
+              </button>
+              <button onClick={() => { setDevModal("seed"); setDevConfirmText(""); }} disabled={seeding}
+                style={{ background: seeding ? "#2A2D3A" : "#E8A838", color: seeding ? "#4B5563" : "#0F1117", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: seeding ? "default" : "pointer" }}>
+                🌱 Seed Dev Data
+              </button>
+            </div>
           </div>
-          <button onClick={async () => {
-            if (!confirm("Seed 90 days of fake data into the dev account? This cannot be undone.")) return;
-            setSeeding(true); setSeedResult(null);
-            const result = await seedDevData(session, userId);
-            setSeedResult(result);
-            setSeeding(false);
-            loadAll(session, userId);
-          }} disabled={seeding}
-            style={{ background: seeding ? "#2A2D3A" : "#E8A838", color: seeding ? "#4B5563" : "#0F1117", border: "none", borderRadius: 7, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: seeding ? "default" : "pointer", flexShrink: 0 }}>
-            {seeding ? "Seeding..." : "🌱 Seed Dev Data"}
-          </button>
-        </div>
+        </>
       )}
 
       {/* Main content */}
