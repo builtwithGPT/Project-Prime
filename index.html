@@ -1979,21 +1979,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   ];
   const activeTrendData = trendOptions.find(t => t.id === activeTrend);
 
-  // ── Project Prime Score ──────────────────────────────────────────────────
-  const strengthResult = calcStrengthScore(workoutLogs, exercises, phase);
-  const waistResult    = calcWaistScore(bodyLogs, phase);
-  const weightResult   = calcWeightScore(bodyLogs, phase);
-  const primeScore     = calcPrimeScore(strengthResult.score, waistResult.score, weightResult.score);
-  const scoreState     = calcPrimeScoreState(confidence, strengthResult, waistResult, weightResult);
-  const scoreBand      = scoreToBand(primeScore);
-
-  const scoreBandCoachNote = {
-    "ON TRACK":        "Strength is improving while waist remains controlled and weight is increasing within the target range. Continue current calories and training progression.",
-    "CAUTION":         "Progress is present but not optimal. Monitor waist and strength trends before making major changes.",
-    "ADJUST":          "Progress appears stalled or inefficient. Review calorie target, training progression, and recovery quality.",
-    "WRONG DIRECTION": "Weight and waist are increasing without sufficient strength improvement. The surplus is not productive. Make immediate adjustments.",
-  };
-
   // ── Generate Weekly Review ────────────────────────────────────────────────
   const generateReview = async () => {
     setGenerating(true);
@@ -2147,6 +2132,21 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const confidence = calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays);
   const verdict    = calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase);
   const coachNarrative = buildCoachNarrative(confidence, weightChange, wRate, waistChange, totalPFChange, verdict, phase, weeklyReview);
+
+  // ── Project Prime Score (after confidence is defined) ─────────────────────
+  const strengthResult = calcStrengthScore(workoutLogs, exercises, phase);
+  const waistResult    = calcWaistScore(bodyLogs, phase);
+  const weightResult   = calcWeightScore(bodyLogs, phase);
+  const primeScore     = calcPrimeScore(strengthResult.score, waistResult.score, weightResult.score);
+  const scoreState     = calcPrimeScoreState(confidence, strengthResult, waistResult, weightResult);
+  const scoreBand      = scoreToBand(primeScore);
+
+  const scoreBandCoachNote = {
+    "ON TRACK":        "Strength is improving while waist remains controlled and weight is increasing within the target range. Continue current calories and training progression.",
+    "CAUTION":         "Progress is present but not optimal. Monitor waist and strength trends before making major changes.",
+    "ADJUST":          "Progress appears stalled or inefficient. Review calorie target, training progression, and recovery quality.",
+    "WRONG DIRECTION": "Weight and waist are increasing without sufficient strength improvement. The surplus is not productive. Make immediate adjustments.",
+  };
 
   // KPI statuses respect confidence tier — low confidence suppresses red
   const confidentWeightStatus = confidence.tier === "low" ? "blue" : weightStatus;
