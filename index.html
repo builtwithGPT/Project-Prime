@@ -1436,7 +1436,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
                   {selStats.logs.length === 0 ? (
                     <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
-                  ) : [...selStats.logs].reverse().map((l, i) => (
+                  ) : [...selStats.logs].sort((a, b) => new Date(b.date) - new Date(a.date)).map((l, i) => (
                     <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
@@ -5081,7 +5081,6 @@ function App() {
 
   if (loading) return (
     <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-      <div style={{ fontSize: 11, color: "#4A90D9", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>DURHAM CAPITAL</div>
       <div style={{ fontSize: 32, fontWeight: 800, color: "#E8EAF0" }}>PROJECT PRIME</div>
       <div style={{ color: "#8B92A5", fontSize: 14 }}>Loading your data...</div>
     </div>
