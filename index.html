@@ -1549,6 +1549,165 @@ function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) 
 }
 
 
+
+// ─── PROJECT PRIME SCORE ENGINE ───────────────────────────────────────────────
+
+function calcStrengthScore(workoutLogs, exercises, phase) {
+  if (!phase?.startDate) return { score: null, pct: null, comparable: 0 };
+  const phaseStart = new Date(phase.startDate);
+
+  // Group logs by exercise, sorted by date
+  const byEx = {};
+  workoutLogs.forEach(l => {
+    const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+    if (!ex) return;
+    const key = Number(l.exerciseId);
+    if (!byEx[key]) byEx[key] = { ex, logs: [] };
+    byEx[key].logs.push({ ...l, _date: new Date(l.date) });
+  });
+
+  const phaseLogs = {};
+  Object.entries(byEx).forEach(([id, { ex, logs }]) => {
+    const phase_logs = logs.filter(l => l._date >= phaseStart).sort((a, b) => a._date - b._date);
+    if (phase_logs.length >= 2) phaseLogs[id] = { ex, logs: phase_logs };
+  });
+
+  if (Object.keys(phaseLogs).length === 0) return { score: null, pct: null, comparable: 0 };
+
+  const calcSF = (log, ex) => {
+    if (ex.type === "weighted") return log.sets * log.reps * log.weight;
+    if (ex.type === "bodyweight") return log.sets * log.reps * 10;
+    return log.sets * log.reps; // banded / bodyweight-only
+  };
+
+  const progValues = [];
+  Object.values(phaseLogs).forEach(({ ex, logs }) => {
+    const first = logs[0], last = logs[logs.length - 1];
+    const sfFirst = calcSF(first, ex), sfLast = calcSF(last, ex);
+    if (sfFirst === 0) return;
+    progValues.push((sfLast - sfFirst) / sfFirst * 100);
+  });
+
+  if (progValues.length === 0) return { score: null, pct: null, comparable: 0 };
+  const avgPct = progValues.reduce((s, v) => s + v, 0) / progValues.length;
+
+  let score;
+  if      (avgPct >= 5.0)  score = 100;
+  else if (avgPct >= 3.0)  score = 95;
+  else if (avgPct >= 2.0)  score = 90;
+  else if (avgPct >= 1.0)  score = 85;
+  else if (avgPct >= 0.0)  score = 75;
+  else if (avgPct >= -1.0) score = 65;
+  else if (avgPct >= -3.0) score = 50;
+  else                      score = 25;
+
+  return { score, pct: +avgPct.toFixed(1), comparable: progValues.length };
+}
+
+function calcWaistScore(bodyLogs, phase) {
+  if (!phase?.startDate) return { score: null, change: null };
+  const phaseStart = new Date(phase.startDate);
+  const phaseLogs  = [...bodyLogs].filter(l => l.waist && new Date(l.date) >= phaseStart).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (phaseLogs.length < 1) return { score: null, change: null };
+
+  const baseline = phaseLogs[0].waist;
+  // Use average of last 2 measurements to reduce noise
+  const recent = phaseLogs.slice(-2);
+  const current = recent.reduce((s, l) => s + l.waist, 0) / recent.length;
+  const change  = +(current - baseline).toFixed(2);
+
+  let score;
+  if      (change <= 0.00) score = 100;
+  else if (change <= 0.25) score = 95;
+  else if (change <= 0.50) score = 90;
+  else if (change <= 0.75) score = 80;
+  else if (change <= 1.00) score = 70;
+  else if (change <= 1.50) score = 50;
+  else                      score = 25;
+
+  return { score, change };
+}
+
+function calcWeightScore(bodyLogs, phase) {
+  if (!phase?.startDate) return { score: null, rate: null };
+  const phaseStart = new Date(phase.startDate);
+  const wLogs = [...bodyLogs].filter(l => l.weight && new Date(l.date) >= phaseStart).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (wLogs.length < 2) return { score: null, rate: null };
+
+  // 7-day rolling averages
+  const now   = new Date();
+  const d7ago = new Date(now); d7ago.setDate(d7ago.getDate() - 7);
+  const d14ago = new Date(now); d14ago.setDate(d14ago.getDate() - 14);
+
+  const recent = wLogs.filter(l => new Date(l.date) >= d7ago);
+  const prior  = wLogs.filter(l => new Date(l.date) >= d14ago && new Date(l.date) < d7ago);
+
+  if (recent.length === 0) {
+    // Fall back to simple rate over all data
+    const days = (new Date(wLogs[wLogs.length-1].date) - new Date(wLogs[0].date)) / 86400000;
+    if (days < 1) return { score: null, rate: null };
+    const rate = +((wLogs[wLogs.length-1].weight - wLogs[0].weight) / days * 7).toFixed(2);
+    return scoreFromRate(rate);
+  }
+
+  const avgRecent = recent.reduce((s, l) => s + l.weight, 0) / recent.length;
+  if (prior.length === 0) return { score: 75, rate: null }; // not enough prior data
+  const avgPrior  = prior.reduce((s, l)  => s + l.weight, 0) / prior.length;
+  const rate = +(avgRecent - avgPrior).toFixed(2);
+  return scoreFromRate(rate);
+}
+
+function scoreFromRate(rate) {
+  let score;
+  if      (rate >= 0.25 && rate <= 0.50) score = 100;
+  else if (rate >= 0.10 && rate <  0.25) score = 90;
+  else if (rate >  0.50 && rate <= 0.75) score = 85;
+  else if (rate >= 0.00 && rate <  0.10) score = 75;
+  else if (rate >  0.75 && rate <= 1.00) score = 70;
+  else if (rate <  0.00)                  score = 60;
+  else                                    score = 50; // > 1.00
+  return { score, rate };
+}
+
+function calcPrimeScore(strengthScore, waistScore, weightScore) {
+  const s = strengthScore ?? 50;
+  const w = waistScore    ?? 75;
+  const g = weightScore   ?? 75;
+  return Math.max(1, Math.min(100, Math.round(s * 0.50 + w * 0.30 + g * 0.20)));
+}
+
+function scoreToBand(score) {
+  if (score >= 90) return { label: "ON TRACK",        color: "#4AD99A", bg: "#4AD99A0D", border: "#4AD99A33" };
+  if (score >= 80) return { label: "CAUTION",         color: "#E8A838", bg: "#E8A8380D", border: "#E8A83833" };
+  if (score >= 70) return { label: "ADJUST",          color: "#E87D38", bg: "#E87D380D", border: "#E87D3833" };
+  return               { label: "WRONG DIRECTION", color: "#D94A4A", bg: "#D94A4A0D", border: "#D94A4A33" };
+}
+
+function calcPrimeScoreState(confidence, strengthResult, waistResult, weightResult) {
+  const { tier, weighIns, workoutDays, nutritionLogs, daysSince } = confidence;
+
+  // Baseline Mode thresholds
+  const hasWeight    = weighIns     >= 7;
+  const hasWaist     = (waistResult.change !== null);
+  const hasStrength  = strengthResult.comparable >= 2;
+  const hasNutrition = nutritionLogs >= 5;
+
+  if (tier === "low" || daysSince < 7 || !hasStrength) {
+    return {
+      mode: "baseline",
+      checklist: [
+        { label: "7 daily weigh-ins",      done: hasWeight,    current: weighIns,     target: 7 },
+        { label: "2 waist measurements",   done: hasWaist,     current: waistResult.change !== null ? 1 : 0, target: 1 },
+        { label: "2 comparable workouts",  done: hasStrength,  current: strengthResult.comparable, target: 2 },
+        { label: "5 nutrition days logged",done: hasNutrition, current: nutritionLogs, target: 5 },
+      ],
+    };
+  }
+
+  if (tier === "medium") return { mode: "preliminary" };
+  return { mode: "active" };
+}
+
 // ─── PROJECT PRIME CONFIDENCE ENGINE ──────────────────────────────────────────
 // Separates "what the data says" from "how much we trust the data"
 
@@ -1820,6 +1979,21 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   ];
   const activeTrendData = trendOptions.find(t => t.id === activeTrend);
 
+  // ── Project Prime Score ──────────────────────────────────────────────────
+  const strengthResult = calcStrengthScore(workoutLogs, exercises, phase);
+  const waistResult    = calcWaistScore(bodyLogs, phase);
+  const weightResult   = calcWeightScore(bodyLogs, phase);
+  const primeScore     = calcPrimeScore(strengthResult.score, waistResult.score, weightResult.score);
+  const scoreState     = calcPrimeScoreState(confidence, strengthResult, waistResult, weightResult);
+  const scoreBand      = scoreToBand(primeScore);
+
+  const scoreBandCoachNote = {
+    "ON TRACK":        "Strength is improving while waist remains controlled and weight is increasing within the target range. Continue current calories and training progression.",
+    "CAUTION":         "Progress is present but not optimal. Monitor waist and strength trends before making major changes.",
+    "ADJUST":          "Progress appears stalled or inefficient. Review calorie target, training progression, and recovery quality.",
+    "WRONG DIRECTION": "Weight and waist are increasing without sufficient strength improvement. The surplus is not productive. Make immediate adjustments.",
+  };
+
   // ── Generate Weekly Review ────────────────────────────────────────────────
   const generateReview = async () => {
     setGenerating(true);
@@ -2017,173 +2191,229 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 1 — EXECUTIVE PHASE ASSESSMENT (HERO)
+          SECTION 1 — PROJECT PRIME SCORE (ADAPTIVE HERO)
       ══════════════════════════════════════════════════════════════════ */}
-      <div style={{ background: verdictConfig.bg, border: `1px solid ${verdictConfig.border}`, borderRadius: 16, overflow: "hidden" }}>
+      <div style={{ background: scoreState.mode === "active" ? scoreBand.bg : scoreState.mode === "preliminary" ? "#E8A8380D" : "#4A90D90D",
+        border: `1px solid ${scoreState.mode === "active" ? scoreBand.border : scoreState.mode === "preliminary" ? "#E8A83833" : "#4A90D933"}`,
+        borderRadius: 16, overflow: "hidden" }}>
 
-        {/* Status banner */}
-        <div style={{ background: verdictConfig.color + "18", borderBottom: `1px solid ${verdictConfig.border}`, padding: "16px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 22 }}>{verdictConfig.emoji}</span>
-            <div>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>PROJECT PRIME STATUS</div>
-              <div style={{ color: verdictConfig.color, fontSize: 20, fontWeight: 800, letterSpacing: "-0.3px", marginTop: 1 }}>{verdictConfig.label}</div>
-              {confidenceBadge && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, background: confidenceBadge.color + "18", border: `1px solid ${confidenceBadge.color}44`, borderRadius: 4, padding: "2px 7px" }}>
-                  <span style={{ color: confidenceBadge.color, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{confidenceBadge.label}</span>
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Header row */}
+        <div style={{ background: "#0F1117", borderBottom: "1px solid #2A2D3A", padding: "14px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>PROJECT PRIME SCORE</div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <SaveStatus status={saveStatus} />
             <button onClick={() => setShowForm(true)}
-              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
               + Log Measurements
             </button>
           </div>
         </div>
 
-        <div style={{ padding: "20px 28px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div style={{ padding: "20px 28px", display: "grid", gridTemplateColumns: "auto 1fr", gap: 32, alignItems: "start" }}>
 
-          {/* Left — Current Phase + Key Results */}
-          <div>
-            <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>CURRENT PHASE</div>
-            <div style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
-              {phaseName || "No active phase"}
-              {phaseTotalWeeks && <span style={{ color: "#8B92A5", fontWeight: 400, fontSize: 14 }}> — Week {phaseWeek} of {phaseTotalWeeks}</span>}
-            </div>
-            {phase && <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 16 }}>{phaseInfo?.remaining || 0} days remaining</div>}
+          {/* ── LEFT: Score display (adaptive by mode) ── */}
+          <div style={{ minWidth: 220 }}>
 
-            <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>KEY RESULTS</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                {
-                  label: "Weight",
-                  value: latestWeight ? `${latestWeight} lbs` : "No data",
-                  sub: weightChange !== null ? `${weightChange >= 0 ? "+" : ""}${weightChange} lbs from phase start` : null,
-                  status: confidentWeightStatus,
-                },
-                {
-                  label: "Waist",
-                  value: latestWaist ? `${latestWaist}"` : "No data",
-                  sub: waistChange !== null ? (waistChange === 0 ? "No change" : `${waistChange >= 0 ? "+" : ""}${waistChange}" from baseline`) : null,
-                  status: confidentWaistStatus,
-                },
-                {
-                  label: "Prime Factor",
-                  value: totalPFChange !== null ? `${totalPFChange >= 0 ? "+" : ""}${totalPFChange}%` : "No data",
-                  sub: totalPFChange !== null ? `Upper ${upperPFChange !== null ? (upperPFChange >= 0 ? "+" : "") + upperPFChange + "%" : "—"} · Lower ${lowerPFChange !== null ? (lowerPFChange >= 0 ? "+" : "") + lowerPFChange + "%" : "—"}` : null,
-                  status: confidentPFStatus,
-                },
-                {
-                  label: "Training",
-                  value: recentWorkoutDays > 0 ? `${recentWorkoutDays} sessions` : "No data",
-                  sub: "last 7 days",
-                  status: recentWorkoutDays >= 3 ? "green" : recentWorkoutDays >= 2 ? "yellow" : "gray",
-                },
-                {
-                  label: "Nutrition",
-                  value: proteinCompliance !== null ? `Protein ${proteinCompliance}% of days` : "No data",
-                  sub: recentNutr.length > 0 ? `${recentNutr.length} days logged` : null,
-                  status: proteinCompliance === null ? "gray" : proteinCompliance >= 80 ? "green" : proteinCompliance >= 60 ? "yellow" : "red",
-                },
-                {
-                  label: "Recovery",
-                  value: recCompliance !== null ? `${recCompliance}% sessions improved` : "No data",
-                  sub: recentRec.length > 0 ? `${recentRec.length} sessions last week` : null,
-                  status: recCompliance === null ? "gray" : recCompliance >= 75 ? "green" : recCompliance >= 50 ? "yellow" : "red",
-                },
-              ].map(({ label, value, sub, status }) => {
-                const sc = { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563", blue: "#4A90D9" }[status] || "#4B5563";
-                const dot = { green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪", blue: "🔵" }[status] || "⚪";
-                return (
-                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 12, background: "#0F1117", borderRadius: 8, padding: "10px 14px" }}>
-                    <span style={{ fontSize: 13, flexShrink: 0 }}>{dot}</span>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}: </span>
-                      <span style={{ color: "#E8EAF0", fontSize: 13, fontWeight: 700 }}>{value}</span>
-                      {sub && <span style={{ color: "#4B5563", fontSize: 11, marginLeft: 8 }}>{sub}</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Right — Coach Assessment + AI Review */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-            {/* Static coach verdict based on data */}
-            <div>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>COACH ASSESSMENT</div>
-              {/* Four-part coach narrative — driven by confidence engine */}
-              <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", fontSize: 14, color: "#C8CDD8", lineHeight: 1.7, fontStyle: "italic" }}>
-                "{coachNarrative}"
-              </div>
-              {confidence.tier === "low" && confidence.reasons.length > 0 && (
-                <div style={{ background: "#4A90D90A", border: "1px solid #4A90D922", borderRadius: 8, padding: "8px 12px", marginTop: 8 }}>
-                  <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Why baseline status?</div>
-                  <div style={{ color: "#8B92A5", fontSize: 11, lineHeight: 1.6 }}>{confidence.reasons.join(" · ")}</div>
+            {/* BASELINE MODE */}
+            {scoreState.mode === "baseline" && (
+              <div>
+                <div style={{ color: "#4A90D9", fontSize: 28, fontWeight: 800, letterSpacing: "-0.5px", marginBottom: 4 }}>BASELINE MODE</div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#4A90D918", border: "1px solid #4A90D933", borderRadius: 6, padding: "3px 10px", marginBottom: 16 }}>
+                  <span style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    LOW CONFIDENCE · {confidence.daysSince}d of data
+                  </span>
                 </div>
-              )}
-            </div>
-
-            {/* Next Action */}
-            <div style={{ background: verdictConfig.color + "11", border: `1px solid ${verdictConfig.color}33`, borderRadius: 10, padding: "14px 16px" }}>
-              <div style={{ color: verdictConfig.color, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>NEXT ACTION</div>
-              {weeklyReview?.next_week_recommendations?.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {weeklyReview.next_week_recommendations.map((r, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8 }}>
-                      <span style={{ color: verdictConfig.color, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i+1}.</span>
-                      <span style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.5 }}>{r}</span>
+                <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+                  Collecting baseline data before activating score.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {scoreState.checklist.map(({ label, done, current, target }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, background: "#0F1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 14, flexShrink: 0 }}>{done ? "✅" : "⬜"}</span>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ color: done ? "#4AD99A" : "#8B92A5", fontSize: 12, fontWeight: done ? 700 : 400 }}>{label}</span>
+                      </div>
+                      <span style={{ color: done ? "#4AD99A" : "#4B5563", fontSize: 11, fontWeight: 700 }}>{current}/{target}</span>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div style={{ color: "#E8EAF0", fontSize: 14, fontWeight: 600 }}>{verdictConfig.action}</div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* AI Review generate button or wins */}
-            {weeklyReview?.major_wins?.length > 0 ? (
-              <div style={{ background: "#4AD99A0D", border: "1px solid #4AD99A33", borderRadius: 10, padding: "14px 16px" }}>
-                <div style={{ color: "#4AD99A", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>🏆 THIS WEEK'S WINS</div>
-                {weeklyReview.major_wins.map((w, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5 }}>
-                    <span style={{ color: "#4AD99A", fontSize: 12, flexShrink: 0 }}>✓</span>
-                    <span style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.5 }}>{w}</span>
+            {/* PRELIMINARY MODE */}
+            {scoreState.mode === "preliminary" && (
+              <div>
+                <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Preliminary Score</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 64, fontWeight: 900, color: "#E8A838", lineHeight: 1 }}>{primeScore}</span>
+                  <span style={{ color: "#4B5563", fontSize: 20, fontWeight: 700 }}>/100</span>
+                </div>
+                <div style={{ display: "inline-flex", background: "#E8A83818", border: "1px solid #E8A83833", borderRadius: 6, padding: "3px 10px", marginBottom: 12 }}>
+                  <span style={{ color: "#E8A838", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    MEDIUM CONFIDENCE · {confidence.daysSince}d of data
+                  </span>
+                </div>
+                <div style={{ color: "#4B5563", fontSize: 12, lineHeight: 1.6, marginBottom: 16 }}>
+                  Score may change as more waist, weight, and strength data is collected.
+                </div>
+                {/* Component bars */}
+                {[
+                  { label: "Strength", score: strengthResult.score, detail: strengthResult.pct !== null ? `${strengthResult.pct >= 0 ? "+" : ""}${strengthResult.pct}% avg progress` : null, weight: "50%", color: "#4A90D9" },
+                  { label: "Waist",    score: waistResult.score,    detail: waistResult.change !== null ? `${waistResult.change >= 0 ? "+" : ""}${waistResult.change}" change` : null,   weight: "30%", color: "#D94A4A" },
+                  { label: "Weight",   score: weightResult.score,   detail: weightResult.rate  !== null ? `${weightResult.rate >= 0 ? "+" : ""}${weightResult.rate} lbs/wk` : null,      weight: "20%", color: "#E8A838" },
+                ].map(({ label, score, detail, weight, color }) => (
+                  <div key={label} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ color: "#8B92A5", fontSize: 11 }}>{label} <span style={{ color: "#4B5563" }}>({weight})</span></span>
+                      <span style={{ color: score !== null ? color : "#4B5563", fontSize: 12, fontWeight: 700 }}>{score ?? "—"}</span>
+                    </div>
+                    <div style={{ height: 4, background: "#2A2D3A", borderRadius: 2 }}>
+                      <div style={{ height: "100%", background: color, borderRadius: 2, width: score !== null ? score + "%" : "0%", transition: "width 0.6s ease" }} />
+                    </div>
+                    {detail && <div style={{ color: "#4B5563", fontSize: 10, marginTop: 2 }}>{detail}</div>}
                   </div>
                 ))}
-                <button onClick={generateReview} disabled={generating}
-                  style={{ background: "none", border: "none", color: "#4B5563", fontSize: 11, cursor: "pointer", marginTop: 6, padding: 0, textDecoration: "underline" }}>
-                  {generating ? "Regenerating…" : "Regenerate review"}
+              </div>
+            )}
+
+            {/* ACTIVE SCORE MODE */}
+            {scoreState.mode === "active" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 80, fontWeight: 900, color: scoreBand.color, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{primeScore}</span>
+                  <span style={{ color: "#4B5563", fontSize: 24, fontWeight: 700 }}>/100</span>
+                </div>
+                <div style={{ display: "inline-flex", background: scoreBand.color + "18", border: `1px solid ${scoreBand.color}44`, borderRadius: 8, padding: "5px 12px", marginBottom: 16 }}>
+                  <span style={{ color: scoreBand.color, fontSize: 13, fontWeight: 800, letterSpacing: "0.04em" }}>{scoreBand.label}</span>
+                </div>
+                <div style={{ display: "inline-flex", marginLeft: 8, background: "#4AD99A18", border: "1px solid #4AD99A33", borderRadius: 6, padding: "3px 10px", marginBottom: 16 }}>
+                  <span style={{ color: "#4AD99A", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>HIGH CONFIDENCE</span>
+                </div>
+                {/* Component breakdown */}
+                {[
+                  { label: "Strength", score: strengthResult.score, detail: strengthResult.pct !== null ? `${strengthResult.pct >= 0 ? "+" : ""}${strengthResult.pct}% avg progress` : null, weight: "50%", color: "#4A90D9" },
+                  { label: "Waist",    score: waistResult.score,    detail: waistResult.change !== null ? `${waistResult.change >= 0 ? "+" : ""}${waistResult.change}" change` : null,   weight: "30%", color: "#D94A4A" },
+                  { label: "Weight",   score: weightResult.score,   detail: weightResult.rate  !== null ? `${weightResult.rate >= 0 ? "+" : ""}${weightResult.rate} lbs/wk` : null,      weight: "20%", color: "#E8A838" },
+                ].map(({ label, score, detail, weight, color }) => (
+                  <div key={label} style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 4 }}>
+                      <div>
+                        <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}</span>
+                        <span style={{ color: "#4B5563", fontSize: 10, marginLeft: 4 }}>({weight})</span>
+                      </div>
+                      <span style={{ color, fontSize: 18, fontWeight: 800 }}>{score ?? "—"}</span>
+                    </div>
+                    <div style={{ height: 5, background: "#2A2D3A", borderRadius: 3 }}>
+                      <div style={{ height: "100%", background: color, borderRadius: 3, width: score !== null ? score + "%" : "0%", transition: "width 0.6s ease" }} />
+                    </div>
+                    {detail && <div style={{ color: "#4B5563", fontSize: 10, marginTop: 2 }}>{detail}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── RIGHT: Phase + Key Results + Coach ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* Phase header */}
+            <div>
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>CURRENT PHASE</div>
+              <div style={{ color: "#E8EAF0", fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
+                {phaseName || "No active phase"}
+                {phaseTotalWeeks && <span style={{ color: "#8B92A5", fontWeight: 400, fontSize: 14 }}> — Week {phaseWeek} of {phaseTotalWeeks}</span>}
+              </div>
+              {phase && <div style={{ color: "#8B92A5", fontSize: 12 }}>{phaseInfo?.remaining || 0} days remaining</div>}
+            </div>
+
+            {/* Key Results */}
+            <div>
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>KEY RESULTS</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {[
+                  { label: "Weight",    value: latestWeight ? latestWeight + " lbs" : "No data",  sub: weightChange !== null ? (weightChange >= 0 ? "+" : "") + weightChange + " lbs from phase start" : null, status: confidentWeightStatus },
+                  { label: "Waist",     value: latestWaist  ? latestWaist + '"'      : "No data", sub: waistChange  !== null ? (waistChange === 0 ? "No change" : (waistChange >= 0 ? "+" : "") + waistChange + '" from baseline') : null, status: confidentWaistStatus },
+                  { label: "Prime Factor", value: totalPFChange !== null ? (totalPFChange >= 0 ? "+" : "") + totalPFChange + "%" : "No data", sub: totalPFChange !== null ? "Upper " + (upperPFChange !== null ? (upperPFChange >= 0 ? "+" : "") + upperPFChange + "%" : "—") + " · Lower " + (lowerPFChange !== null ? (lowerPFChange >= 0 ? "+" : "") + lowerPFChange + "%" : "—") : null, status: confidentPFStatus },
+                  { label: "Training",  value: recentWorkoutDays > 0 ? recentWorkoutDays + " sessions" : "No data", sub: "last 7 days", status: recentWorkoutDays >= 3 ? "green" : recentWorkoutDays >= 2 ? "yellow" : "gray" },
+                  { label: "Nutrition", value: proteinCompliance !== null ? "Protein " + proteinCompliance + "% of days" : "No data", sub: recentNutr.length > 0 ? recentNutr.length + " days logged" : null, status: proteinCompliance === null ? "gray" : proteinCompliance >= 80 ? "green" : proteinCompliance >= 60 ? "yellow" : "red" },
+                  { label: "Recovery",  value: recCompliance !== null ? recCompliance + "% sessions improved" : "No data", sub: recentRec.length > 0 ? recentRec.length + " sessions last week" : null, status: recCompliance === null ? "gray" : recCompliance >= 75 ? "green" : recCompliance >= 50 ? "yellow" : "red" },
+                ].map(({ label, value, sub, status }) => {
+                  const dot = { green: "🟢", yellow: "🟡", red: "🔴", gray: "⚪", blue: "🔵" }[status] || "⚪";
+                  return (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: 10, background: "#0F1117", borderRadius: 8, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 12, flexShrink: 0 }}>{dot}</span>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ color: "#8B92A5", fontSize: 12 }}>{label}: </span>
+                        <span style={{ color: "#E8EAF0", fontSize: 12, fontWeight: 700 }}>{value}</span>
+                        {sub && <span style={{ color: "#4B5563", fontSize: 11, marginLeft: 6 }}>{sub}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Coach Assessment */}
+            <div style={{ background: scoreState.mode === "active" ? scoreBand.color + "0A" : "#0F1117", border: scoreState.mode === "active" ? "1px solid " + scoreBand.border : "1px solid #2A2D3A", borderRadius: 10, padding: "12px 16px" }}>
+              <div style={{ color: scoreState.mode === "active" ? scoreBand.color : "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>COACH ASSESSMENT</div>
+              <div style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.7, fontStyle: "italic" }}>
+                "{scoreState.mode === "active"
+                  ? (scoreBandCoachNote[scoreBand.label] || coachNarrative)
+                  : coachNarrative}"
+              </div>
+            </div>
+
+            {/* AI Review / Next Action */}
+            {(weeklyReview?.next_week_recommendations?.length > 0 || weeklyReview?.major_wins?.length > 0) ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {weeklyReview.major_wins?.length > 0 && (
+                  <div style={{ background: "#4AD99A0D", border: "1px solid #4AD99A33", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ color: "#4AD99A", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>🏆 THIS WEEK'S WINS</div>
+                    {weeklyReview.major_wins.slice(0, 3).map((w, i) => (
+                      <div key={i} style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                        <span style={{ color: "#4AD99A", fontSize: 11, flexShrink: 0 }}>✓</span>
+                        <span style={{ color: "#C8CDD8", fontSize: 12, lineHeight: 1.5 }}>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {weeklyReview.next_week_recommendations?.length > 0 && (
+                  <div style={{ background: "#4A90D90A", border: "1px solid #4A90D933", borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>NEXT 7 DAYS</div>
+                    {weeklyReview.next_week_recommendations.slice(0, 3).map((r, i) => (
+                      <div key={i} style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                        <span style={{ color: "#4A90D9", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{i+1}.</span>
+                        <span style={{ color: "#C8CDD8", fontSize: 12, lineHeight: 1.5 }}>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button onClick={generateReview} disabled={generating} style={{ background: "none", border: "none", color: "#4B5563", fontSize: 11, cursor: "pointer", padding: 0, textDecoration: "underline", textAlign: "left" }}>
+                  {generating ? "Regenerating…" : "Regenerate AI review"}
                 </button>
               </div>
             ) : (
-              <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
-                <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 10 }}>Generate a full AI coaching review using your last 7 days of data.</div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ color: "#4B5563", fontSize: 12, marginBottom: 8 }}>Generate a full AI coaching review using your last 7 days of data.</div>
                 <button onClick={generateReview} disabled={generating || !phase}
-                  style={{ background: phase && !generating ? "#4A90D9" : "#2A2D3A",
-                    color: phase && !generating ? "#fff" : "#4B5563",
-                    border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 700, cursor: phase && !generating ? "pointer" : "default" }}>
+                  style={{ background: phase && !generating ? "#4A90D9" : "#2A2D3A", color: phase && !generating ? "#fff" : "#4B5563",
+                    border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: phase && !generating ? "pointer" : "default" }}>
                   {generating ? "Generating…" : "Generate AI Weekly Review"}
                 </button>
               </div>
             )}
+
+            {/* Monitor strip */}
+            {weeklyReview?.areas_to_monitor?.length > 0 && (
+              <div style={{ background: "#E8A8380A", border: "1px solid #E8A83833", borderRadius: 8, padding: "8px 14px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ color: "#E8A838", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", flexShrink: 0 }}>⚠ MONITOR</span>
+                {weeklyReview.areas_to_monitor.map((m, i) => (
+                  <span key={i} style={{ color: "#C8CDD8", fontSize: 12 }}>• {m}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Areas to monitor strip — only if present */}
-        {weeklyReview?.areas_to_monitor?.length > 0 && (
-          <div style={{ borderTop: `1px solid ${verdictConfig.border}`, padding: "12px 28px", background: "#E8A8380A", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ color: "#E8A838", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", flexShrink: 0 }}>⚠ MONITOR</span>
-            {weeklyReview.areas_to_monitor.map((m, i) => (
-              <span key={i} style={{ color: "#C8CDD8", fontSize: 12 }}>• {m}</span>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════
