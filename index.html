@@ -1700,8 +1700,8 @@ async function seedDevData(session, userId) {
   };
 
   const today = new Date();
-  const phaseStart = new Date(today); phaseStart.setDate(today.getDate() - 84); // 12 weeks ago
-  const phaseEnd   = new Date(phaseStart); phaseEnd.setDate(phaseStart.getDate() + 84);
+  const phaseStart = new Date(today); phaseStart.setDate(today.getDate() - 42); // 6 weeks ago — mid-phase
+  const phaseEnd   = new Date(phaseStart); phaseEnd.setDate(phaseStart.getDate() + 84); // 12 weeks from start
   const dateStr = d => d.toLocaleDateString("en-CA");
   const dayOffset = n => { const d = new Date(phaseStart); d.setDate(phaseStart.getDate() + n); return d; };
 
@@ -1732,7 +1732,7 @@ async function seedDevData(session, userId) {
   // ── 2. Body logs — daily weight + weekly measurements ────────────────────
   const bodyLogs = [];
   let weight = 189.5;
-  for (let d = 0; d <= 84; d++) {
+  for (let d = 0; d <= 42; d++) {
     const day = dayOffset(d);
     weight += (Math.random() * 0.15 - 0.03); // ~0.4 lbs/week gain trend
     const isWeekly = d % 7 === 0;
@@ -1759,7 +1759,7 @@ async function seedDevData(session, userId) {
   // Workout days: Mon, Wed, Fri = day offsets 0,2,4 of each week
   // Exercise sets rotate through muscle groups
   const workoutDays = [];
-  for (let w = 0; w < 12; w++) {
+  for (let w = 0; w < 6; w++) {
     for (const offset of [0, 2, 4]) {
       const d = w * 7 + offset;
       if (d <= 84) workoutDays.push(d);
@@ -1806,7 +1806,7 @@ async function seedDevData(session, userId) {
 
   // ── 4. Nutrition days — 6/7 days compliance, strong protein ────────────
   const nutritionLogs = [];
-  for (let d = 0; d <= 84; d++) {
+  for (let d = 0; d <= 42; d++) {
     if (Math.random() < 0.14) continue; // ~1 skip per week
     const day = dayOffset(d);
     const hitProtein = Math.random() > 0.15;
@@ -1839,7 +1839,7 @@ async function seedDevData(session, userId) {
   // ── 5. Recovery sessions — 5x/week ──────────────────────────────────────
   const recovTemplates = ["Daily Maintenance", "Post-Lift Reset", "Full Body Recovery"];
   const recoverySessions = [];
-  for (let d = 0; d <= 84; d++) {
+  for (let d = 0; d <= 42; d++) {
     if (Math.random() < 0.28) continue; // ~5/week
     const day = dayOffset(d);
     const template = recovTemplates[d % recovTemplates.length];
