@@ -4334,6 +4334,8 @@ function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
+  const [signupDone, setSignupDone] = useState(false);
 
   const signIn = async () => {
     if (!password.trim()) return;
@@ -4352,29 +4354,94 @@ function LoginScreen({ onLogin }) {
     setLoading(false);
   };
 
+  const signUp = async () => {
+    if (!password.trim() || password.trim().length < 6) {
+      setError("Password must be at least 6 characters."); return;
+    }
+    setLoading(true); setError("");
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), password: password.trim() }),
+    });
+    const data = await res.json();
+    if (data.id || data.user?.id || data.access_token) {
+      // If email confirmation is disabled, log straight in
+      if (data.access_token) {
+        onLogin(data.access_token, data.user.id, data.refresh_token);
+      } else {
+        setSignupDone(true);
+      }
+    } else {
+      setError(data.error_description || data.msg || data.message || "Sign up failed. Try a different email.");
+    }
+    setLoading(false);
+  };
+
+  if (signupDone) {
+    return (
+      <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 380, padding: 40, background: "#1A1D26", borderRadius: 16, border: "1px solid #4AD99A44", textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>✅</div>
+          <div style={{ color: "#4AD99A", fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Account Created!</div>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
+            Check your email for a confirmation link, then sign in below.
+          </div>
+          <button onClick={() => { setMode("signin"); setSignupDone(false); setPassword(""); }}
+            style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 9, padding: "12px 0", width: "100%", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+            Go to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0F1117", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: 380, padding: 40, background: "#1A1D26", borderRadius: 16, border: "1px solid #2A2D3A" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 11, color: "#4A90D9", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>DURHAM CAPITAL</div>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#E8EAF0", marginBottom: 6 }}>PROJECT PRIME</div>
-          <div style={{ fontSize: 13, color: "#4B5563" }}>Build the best version of you</div>
+          <div style={{ fontSize: 13, color: "#4B5563" }}>{mode === "signin" ? "Build the best version of you" : "Create a new account"}</div>
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && signIn()} style={{ ...inputStyle, fontSize: 15 }} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && (mode === "signin" ? signIn() : signUp())}
+            style={{ ...inputStyle, fontSize: 15 }} />
         </div>
         <div style={{ marginBottom: 20 }}>
-          <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && signIn()} placeholder="Enter your password" style={{ ...inputStyle, fontSize: 15 }} />
+          <label style={{ color: "#8B92A5", fontSize: 12, display: "block", marginBottom: 6 }}>Password{mode === "signup" ? " (min 6 characters)" : ""}</label>
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && (mode === "signin" ? signIn() : signUp())}
+            placeholder={mode === "signin" ? "Enter your password" : "Choose a password"} style={{ ...inputStyle, fontSize: 15 }} />
         </div>
         {error && <div style={{ color: "#D94A4A", fontSize: 12, marginBottom: 14 }}>{error}</div>}
-        <button onClick={signIn} disabled={loading || !password.trim()}
+        <button onClick={mode === "signin" ? signIn : signUp} disabled={loading || !password.trim()}
           style={{ width: "100%", background: loading || !password.trim() ? "#2A2D3A" : "#4A90D9",
             color: loading || !password.trim() ? "#4B5563" : "#fff",
             border: "none", borderRadius: 9, padding: "13px 0", fontSize: 15, fontWeight: 700, cursor: loading || !password.trim() ? "default" : "pointer" }}>
-          {loading ? "Signing in..." : "Sign In"}
+          {loading ? (mode === "signin" ? "Signing in..." : "Creating account...") : (mode === "signin" ? "Sign In" : "Create Account")}
         </button>
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          {mode === "signin" ? (
+            <span style={{ color: "#4B5563", fontSize: 12 }}>
+              Need a new account?{" "}
+              <button onClick={() => { setMode("signup"); setError(""); setEmail(""); setPassword(""); }}
+                style={{ background: "none", border: "none", color: "#4A90D9", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                Create account
+              </button>
+            </span>
+          ) : (
+            <span style={{ color: "#4B5563", fontSize: 12 }}>
+              Already have an account?{" "}
+              <button onClick={() => { setMode("signin"); setError(""); setPassword(""); }}
+                style={{ background: "none", border: "none", color: "#4A90D9", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                Sign in
+              </button>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
