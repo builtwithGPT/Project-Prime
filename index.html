@@ -1907,8 +1907,12 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       })();
 
   // Weight KPI status (Gain phase: ideal +0.25–0.75/wk)
+  // Weight status requires 7+ weigh-ins for a valid rolling trend
+  const phaseWeighIns = sorted.filter(l => l.weight && phaseStart && new Date(l.date) >= phaseStart).length;
+  const weightHasTrend = phaseWeighIns >= 7 && wRate !== null;
+
   const weightStatus = (() => {
-    if (wRate === null) return "gray";
+    if (!weightHasTrend) return "blue"; // collecting data
     const isGain = phase?.type === "gain";
     if (isGain) {
       if (wRate >= 0.2 && wRate <= 0.8) return "green";
@@ -1922,7 +1926,10 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   })();
 
   const weightStatusLabel = (() => {
-    if (wRate === null) return "No data";
+    if (!weightHasTrend) {
+      if (phaseWeighIns === 0) return "⚪ No Data";
+      return "🔵 Collecting Data (" + phaseWeighIns + "/7 weigh-ins)";
+    }
     const isGain = phase?.type === "gain";
     if (isGain) {
       if (weightStatus === "green") return "🟢 Ideal Gain Pace";
@@ -1935,18 +1942,37 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     }
   })();
 
-  // Waist KPI — weekly measurement, use rolling avg of last 2-3 vs baseline
+  // Waist KPI — weekly measurement, rolling avg of last 2-3 vs baseline
   const latestWaist = latest.waist || null;
   const baseWaist   = baseline?.waist || null;
-  const waistSorted = sorted.filter(l => l.waist);
+  const waistSorted = sorted.filter(l => l.waist && phaseStart && new Date(l.date) >= phaseStart);
   const waistRolling = (() => {
     if (waistSorted.length === 0) return null;
     const last3 = waistSorted.slice(-3);
     return +(last3.reduce((s, l) => s + l.waist, 0) / last3.length).toFixed(2);
   })();
+  // Need 2+ measurements (baseline + at least one follow-up) for a valid trend
+  const waistHasTrend = waistSorted.length >= 2 && waistRolling !== null && baseWaist !== null;
   const waistChange = waistRolling !== null && baseWaist ? +(waistRolling - baseWaist).toFixed(2) : null;
-  const waistStatus = waistChange === null ? "gray" : waistChange <= 0.25 ? "green" : waistChange <= 0.75 ? "yellow" : "red";
-  const waistStatusLabel = waistStatus === "green" ? "🟢 Stable" : waistStatus === "yellow" ? "🟡 Slight Increase" : waistStatus === "red" ? "🔴 Increasing" : "No data";
+
+  const waistStatus = (() => {
+    if (waistSorted.length === 0) return "gray";       // no data at all
+    if (!waistHasTrend)           return "blue";       // only baseline, awaiting follow-up
+    return waistChange <= 0.25 ? "green" : waistChange <= 0.75 ? "yellow" : "red";
+  })();
+
+  const waistStatusLabel = (() => {
+    if (waistSorted.length === 0) return "⚪ No Measurement";
+    if (!waistHasTrend)           return "🔵 Baseline Set · Awaiting Weekly Measurement";
+    return waistStatus === "green" ? "🟢 Stable" : waistStatus === "yellow" ? "🟡 Slight Increase" : "🔴 Increasing";
+  })();
+
+  // Sub-label for waist card — no "No change from baseline" unless trend is valid
+  const waistSubLabel = (() => {
+    if (waistSorted.length === 0) return null;
+    if (!waistHasTrend) return "Baseline: " + baseWaist + '"  ·  Next weekly measurement needed';
+    return waistChange === 0 ? "No change from baseline" : (waistChange > 0 ? "+" : "") + waistChange + '" from baseline';
+  })();
 
   // Prime Factor KPI
   const pfSince = (exerciseIds, since) => {
@@ -1990,8 +2016,33 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const upperPFChange = calcGroupPFChange(upperExIds);
   const lowerPFChange = calcGroupPFChange(lowerExIds);
 
-  const pfStatus = totalPFChange === null ? "gray" : totalPFChange >= 3 ? "green" : totalPFChange >= 0 ? "yellow" : "red";
-  const pfStatusLabel = pfStatus === "green" ? "🟢 Strength Increasing" : pfStatus === "yellow" ? "🟡 Plateau" : pfStatus === "red" ? "🔴 Declining" : "No data";
+  // PF status requires both: 2+ comparable workouts AND 14+ days
+  const pfDaysSince = phase?.startDate ? Math.round((new Date() - new Date(phase.startDate)) / 86400000) : 0;
+  const pfComparableCount = strengthResult?.comparable || 0;
+  const pfHasTrend = pfComparableCount >= 2 && pfDaysSince >= 14;
+  const pfEarlySignal = pfComparableCount >= 2 && pfDaysSince < 14;
+  const pfNeedData = pfComparableCount < 2;
+
+  const pfStatus = (() => {
+    if (pfNeedData)     return "gray";
+    if (pfEarlySignal)  return "blue";
+    if (totalPFChange === null) return "gray";
+    return totalPFChange >= 3 ? "green" : totalPFChange >= 0 ? "yellow" : "red";
+  })();
+
+  const pfStatusLabel = (() => {
+    if (pfNeedData)    return pfComparableCount === 0 ? "⚪ No Workouts Yet" : "⚪ Need Another Workout";
+    if (pfEarlySignal) return "🔵 Early Strength Signal";
+    if (totalPFChange === null) return "⚪ No data";
+    return pfStatus === "green" ? "🟢 Strength Increasing" : pfStatus === "yellow" ? "🟡 Plateau" : "🔴 Declining";
+  })();
+
+  // PF sub-label changes based on maturity
+  const pfSubLabel = (() => {
+    if (pfNeedData)    return "Log another workout session to enable comparison";
+    if (pfEarlySignal) return "Initial trend — active after 14 days of comparable data";
+    return "Active strength trend (" + pfDaysSince + "d of data)";
+  })();
 
   // Physique ratios
   const ratios = (() => {
@@ -2646,50 +2697,59 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
 
         {/* Weight */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A", blue: "#4A90D933" }[confidentWeightStatus] || "#2A2D3A"}`, padding: 18 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid " + ({ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", blue: "#4A90D933", gray: "#2A2D3A" }[weightStatus] || "#2A2D3A"), padding: 18 }}>
           <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Weight Progress</div>
           <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{latestWeight ?? "—"}</div>
           <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>lbs</div>
-          {weightChange !== null && <div style={{ color: "#4AD99A", fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{weightChange >= 0 ? "+" : ""}{weightChange} lbs from start</div>}
-          {wRate !== null && <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>{wRate >= 0 ? "+" : ""}{wRate} lbs/wk rate</div>}
-          <div style={{ background: { green: "#4AD99A22", yellow: "#E8A83822", red: "#D94A4A22", gray: "#2A2D3A" }[weightStatus], color: { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563" }[weightStatus], borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>
+          {weightChange !== null && <div style={{ color: "#4AD99A", fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{(weightChange >= 0 ? "+" : "") + weightChange} lbs from start</div>}
+          {weightHasTrend && wRate !== null
+            ? <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>{(wRate >= 0 ? "+" : "") + wRate} lbs/wk (7d avg)</div>
+            : <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 8 }}>Awaiting 7-day trend ({phaseWeighIns}/7 weigh-ins)</div>
+          }
+          <div style={{ background: ({ green: "#4AD99A22", yellow: "#E8A83822", red: "#D94A4A22", blue: "#4A90D922", gray: "#2A2D3A" }[weightStatus] || "#2A2D3A"), color: ({ green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", blue: "#4A90D9", gray: "#4B5563" }[weightStatus] || "#4B5563"), borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>
             {weightStatusLabel}
           </div>
           <div style={{ marginTop: 10 }}><MiniBarChart data={weightSeries.slice(-8)} color="#4A90D9" height={36} /></div>
         </div>
 
         {/* Waist */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A", blue: "#4A90D933" }[confidentWaistStatus] || "#2A2D3A"}`, padding: 18 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid " + ({ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", blue: "#4A90D933", gray: "#2A2D3A" }[waistStatus] || "#2A2D3A"), padding: 18 }}>
           <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Waist Control</div>
           <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", lineHeight: 1 }}>{latestWaist ?? "—"}</div>
           <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>inches</div>
-          {waistChange !== null && <div style={{ color: waistStatus === "green" ? "#4AD99A" : "#E8A838", fontSize: 12, fontWeight: 700, marginBottom: 2 }}>{waistChange === 0 ? "No change from baseline" : `${waistChange >= 0 ? "+" : ""}${waistChange}" from baseline`}</div>}
-          {waistChange !== null && <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>{waistChange <= 0.1 ? "Weight gain appears lean" : "Monitor fat accumulation"}</div>}
-          <div style={{ background: { green: "#4AD99A22", yellow: "#E8A83822", red: "#D94A4A22", gray: "#2A2D3A" }[waistStatus], color: { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563" }[waistStatus], borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>
+          {waistSubLabel && <div style={{ color: waistHasTrend ? (waistStatus === "green" ? "#4AD99A" : "#E8A838") : "#4B5563", fontSize: 12, fontWeight: 600, marginBottom: 6, lineHeight: 1.5 }}>{waistSubLabel}</div>}
+          {waistHasTrend && waistChange !== null && <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>{waistChange <= 0.1 ? "Weight gain appears lean" : "Monitor fat accumulation"}</div>}
+          <div style={{ background: ({ green: "#4AD99A22", yellow: "#E8A83822", red: "#D94A4A22", blue: "#4A90D922", gray: "#2A2D3A" }[waistStatus] || "#2A2D3A"), color: ({ green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", blue: "#4A90D9", gray: "#4B5563" }[waistStatus] || "#4B5563"), borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>
             {waistStatusLabel}
           </div>
           <div style={{ marginTop: 10 }}><MiniBarChart data={waistSeries.slice(-8)} color="#D94A4A" height={36} /></div>
         </div>
 
         {/* Prime Factor */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: `1px solid ${{ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", gray: "#2A2D3A" }[pfStatus]}`, padding: 18 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid " + ({ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", blue: "#4A90D933", gray: "#2A2D3A" }[pfStatus] || "#2A2D3A"), padding: 18 }}>
           <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Prime Factor</div>
-          <div style={{ fontSize: 34, fontWeight: 800, color: "#E8A838", lineHeight: 1 }}>{totalPFChange !== null ? `${totalPFChange >= 0 ? "+" : ""}${totalPFChange}%` : "—"}</div>
-          <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 8 }}>total growth</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-            {[["Upper Body", upperPFChange, "#4A90D9"], ["Lower Body", lowerPFChange, "#E87D38"]].map(([lbl, val, col]) => (
-              <div key={lbl} style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "#4B5563", fontSize: 11 }}>{lbl}</span>
-                <span style={{ color: val === null ? "#3A3D4A" : val >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 12, fontWeight: 700 }}>
-                  {val !== null ? `${val >= 0 ? "+" : ""}${val}%` : "—"}
-                </span>
-              </div>
-            ))}
+          <div style={{ fontSize: 34, fontWeight: 800, color: "#E8A838", lineHeight: 1 }}>{totalPFChange !== null ? (totalPFChange >= 0 ? "+" : "") + totalPFChange + "%" : "—"}</div>
+          <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 6 }}>
+            {pfHasTrend ? "active strength trend" : pfEarlySignal ? "early strength signal" : "phase change"}
           </div>
-          <div style={{ background: { green: "#4AD99A22", yellow: "#E8A83822", red: "#D94A4A22", gray: "#2A2D3A" }[pfStatus], color: { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563" }[pfStatus], borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>
+          {pfSubLabel && <div style={{ color: "#4B5563", fontSize: 11, marginBottom: 8, lineHeight: 1.5 }}>{pfSubLabel}</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+            {[["Upper Body", upperPFChange, "#4A90D9"], ["Lower Body", lowerPFChange, "#E87D38"]].map(function(row) {
+              return (
+                <div key={row[0]} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#4B5563", fontSize: 11 }}>{row[0]}</span>
+                  <span style={{ color: row[1] === null ? "#3A3D4A" : row[1] >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 12, fontWeight: 700 }}>
+                    {row[1] !== null ? (row[1] >= 0 ? "+" : "") + row[1] + "%" : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ background: ({ green: "#4AD99A22", yellow: "#E8A83822", red: "#D94A4A22", blue: "#4A90D922", gray: "#2A2D3A" }[pfStatus] || "#2A2D3A"), color: ({ green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", blue: "#4A90D9", gray: "#4B5563" }[pfStatus] || "#4B5563"), borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 700, display: "inline-block" }}>
             {pfStatusLabel}
           </div>
         </div>
+
 
         {/* Physique Development */}
         <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 18 }}>
