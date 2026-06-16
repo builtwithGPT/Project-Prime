@@ -1706,8 +1706,10 @@ async function seedDevData(session, userId) {
   const dayOffset = n => { const d = new Date(phaseStart); d.setDate(phaseStart.getDate() + n); return d; };
 
   // ── 1. Phase ────────────────────────────────────────────────────────────────
-  await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
-    method: "POST", headers,
+  // Insert phase — try with targets first, fall back without if column missing
+  const phaseRes = await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
+    method: "POST",
+    headers: { ...headers, "Prefer": "return=representation" },
     body: JSON.stringify([{
       user_id: userId, type: "gain",
       start_date: dateStr(phaseStart), end_date: dateStr(phaseEnd),
@@ -1715,6 +1717,17 @@ async function seedDevData(session, userId) {
       history: [],
     }]),
   });
+  if (!phaseRes.ok) {
+    // Retry without targets column in case it doesn't exist
+    await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
+      method: "POST", headers,
+      body: JSON.stringify([{
+        user_id: userId, type: "gain",
+        start_date: dateStr(phaseStart), end_date: dateStr(phaseEnd),
+        history: [],
+      }]),
+    });
+  }
 
   // ── 2. Body logs — daily weight + weekly measurements ────────────────────
   const bodyLogs = [];
@@ -4332,6 +4345,7 @@ function PhaseTracker({ phase, setPhase }) {
 
   const startPhase = () => {
     const start = new Date(setupStart);
+    if (isNaN(start.getTime())) return; // guard against invalid date
     const weeks = PHASE_CONFIG[setupType].weeks;
     const end = new Date(start);
     end.setDate(end.getDate() + weeks * 7);
@@ -4502,7 +4516,7 @@ function PhaseTracker({ phase, setPhase }) {
           <div style={{ background: "#0F1117", borderRadius: 8, padding: "12px 16px", marginBottom: 20 }}>
             <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 4 }}>Phase ends on</div>
             <div style={{ color: PHASE_CONFIG[setupType].color, fontSize: 18, fontWeight: 700 }}>
-              {(() => { const d = new Date(setupStart); d.setDate(d.getDate() + PHASE_CONFIG[setupType].weeks * 7); return fmtDateLong(d.toISOString()); })()}
+              {(() => { const d = new Date(setupStart); if (isNaN(d.getTime())) return "—"; d.setDate(d.getDate() + PHASE_CONFIG[setupType].weeks * 7); return fmtDateLong(d.toISOString()); })()}
             </div>
           </div>
           <button onClick={startPhase}
@@ -4792,9 +4806,21 @@ function App() {
   }, [userId]);
 
   const signOut = () => {
-    localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
-    setSession(null); setUserId(null); setTab("workout");
-    setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]); setRecoveryLogs([]); setRecoverySessions([]); setPhase(null);
+    // Clear session tokens
+    localStorage.removeItem("pp_session");
+    sessionStorage.removeItem("pp_session");
+    // Clear ALL local data caches so next user starts from DB only
+    Object.values(LS_KEYS).forEach(k => { try { localStorage.removeItem(k); } catch {} });
+    localStorage.removeItem("pp_weekly_review");
+    localStorage.removeItem("pp_score_history");
+    localStorage.removeItem("pp_nutrition_targets");
+    localStorage.removeItem("pp_workout_ended");
+    localStorage.removeItem("pp_draft_workout");
+    localStorage.removeItem("pp_draft_recovery");
+    // Clear all React state
+    setSession(null); setUserId(null); setUserEmail(null); setTab("workout");
+    setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]);
+    setRecoveryLogs([]); setRecoverySessions([]); setPhase(null);
   };
 
   // ── Workout handlers ───────────────────────────────────────────────────────
