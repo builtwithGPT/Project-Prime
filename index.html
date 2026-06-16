@@ -2169,46 +2169,29 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     none:   { label: "NO PHASE DATA", color: "#4B5563" },
   }[confidence.tier];
 
+
+  // Score history — simple localStorage read, no hooks needed in render
+  const scoreHistoryRaw = localStorage.getItem("pp_score_history");
+  const scoreHistoryData = scoreHistoryRaw ? JSON.parse(scoreHistoryRaw) : [];
+  // Save today's score
+  if (scoreState && scoreState.mode === "active" && primeScore) {
+    const today = new Date().toLocaleDateString("en-CA");
+    const prev = scoreHistoryData.filter(e => e.date !== today);
+    const updated = prev.concat([{ date: today, score: primeScore }]).slice(-28);
+    localStorage.setItem("pp_score_history", JSON.stringify(updated));
+  }
+  const liveHistory = scoreHistoryRaw ? JSON.parse(localStorage.getItem("pp_score_history") || "[]") : [];
+  const weeklyScoreTrend = [3,2,1,0].map(i => {
+    const d = new Date(); d.setDate(d.getDate() - i * 7);
+    const ws = new Date(d); ws.setDate(d.getDate() - d.getDay());
+    const we = new Date(ws); we.setDate(ws.getDate() + 6);
+    const entries = liveHistory.filter(e => new Date(e.date) >= ws && new Date(e.date) <= we);
+    const avg = entries.length ? Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length) : null;
+    return { label: i === 0 ? "This Week" : "Wk -" + i, score: avg };
+  });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-
-  // ── Score history (last 4 weeks) ───────────────────────────────────────
-  const [scoreHistory, setScoreHistory] = useState([]);
-
-  useEffect(() => {
-    const s = localStorage.getItem("pp_score_history");
-    const parsed = s ? JSON.parse(s) : [];
-    setScoreHistory(parsed);
-  }, []);
-
-  useEffect(() => {
-    if (scoreState && scoreState.mode === "active" && primeScore) {
-      const today = new Date().toLocaleDateString("en-CA");
-      const prev = scoreHistory.filter(e => e.date !== today);
-      const updated = prev.concat([{ date: today, score: primeScore }]).slice(-28);
-      localStorage.setItem("pp_score_history", JSON.stringify(updated));
-      setScoreHistory(updated);
-    }
-  }, [primeScore]);
-
-  const buildWeeklyTrend = () => {
-    const weeks = [];
-    for (let i = 3; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i * 7);
-      const ws = new Date(d);
-      ws.setDate(d.getDate() - d.getDay());
-      const we = new Date(ws);
-      we.setDate(ws.getDate() + 6);
-      const entries = scoreHistory.filter(e => new Date(e.date) >= ws && new Date(e.date) <= we);
-      const avg = entries.length ? Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length) : null;
-      weeks.push({ label: i === 0 ? "This Week" : "Wk -" + i, score: avg });
-    }
-    return weeks;
-  };
-  const weeklyScoreTrend = buildWeeklyTrend();
-
 
       {/* ── Log form modal ─────────────────────────────────────────────── */}
       {showForm && (
