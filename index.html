@@ -4064,10 +4064,25 @@ function PhaseTargetsCard({ phase, setPhase }) {
   const current = { ...defaults, ...(phase?.targets || {}) };
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(current);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);
 
-  const save = () => {
-    setPhase({ ...phase, targets: draft });
+  // Re-sync draft when phase.targets changes (e.g. after DB round-trip)
+  useEffect(() => {
+    if (!editing) {
+      const fresh = { calories: phase?.type === "cut" ? 1600 : 2650, protein: 191, carbs: 220, fat: 65, ...(phase?.targets || {}) };
+      setDraft(fresh);
+    }
+  }, [phase]);
+
+  const save = async () => {
+    setSaving(true); setSaveMsg(null);
+    const updated = { ...phase, targets: draft };
+    await setPhase(updated);
+    setSaving(false);
     setEditing(false);
+    setSaveMsg("Saved");
+    setTimeout(() => setSaveMsg(null), 2000);
   };
 
   const T = editing ? draft : current;
@@ -4077,17 +4092,20 @@ function PhaseTargetsCard({ phase, setPhase }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <SectionLabel style={{ margin: 0 }}>Daily Targets</SectionLabel>
         {!editing ? (
-          <button onClick={() => { setDraft(current); setEditing(true); }}
-            style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
-            Edit
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {saveMsg && <span style={{ color: "#4AD99A", fontSize: 11, fontWeight: 700 }}>{saveMsg}</span>}
+            <button onClick={() => { setDraft(current); setEditing(true); }}
+              style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+              Edit
+            </button>
+          </div>
         ) : (
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={save}
-              style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-              Save
+            <button onClick={save} disabled={saving}
+              style={{ background: saving ? "#2A2D3A" : "#4AD99A", color: saving ? "#8B92A5" : "#0F1117", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: saving ? "default" : "pointer" }}>
+              {saving ? "Saving…" : "Save"}
             </button>
-            <button onClick={() => setEditing(false)}
+            <button onClick={() => setEditing(false)} disabled={saving}
               style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
               Cancel
             </button>
