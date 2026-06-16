@@ -2174,40 +2174,46 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
 
   // ── Score history (last 4 weeks) from localStorage ───────────────────────
-  const [scoreHistory, setScoreHistory] = useState(() => {
+  const [scoreHistory, setScoreHistory] = useState([]);
+
+  useEffect(function() {
     try {
       const s = localStorage.getItem("pp_score_history");
-      return s ? JSON.parse(s) : [];
-    } catch(e) { return []; }
-  });
+      if (s) setScoreHistory(JSON.parse(s));
+    } catch(err) {}
+  }, []);
 
-  // Save this week's score
-  useEffect(() => {
-    if (scoreState?.mode === "active" && primeScore) {
-      const weekKey = new Date().toLocaleDateString("en-CA", { year: "numeric", week: "numeric" });
-      const today   = new Date().toLocaleDateString("en-CA");
-      setScoreHistory(prev => {
-        const filtered = prev.filter(e => e.date !== today);
-        const updated  = [...filtered, { date: today, score: primeScore, week: weekKey }].slice(-28);
-        try { localStorage.setItem("pp_score_history", JSON.stringify(updated)); } catch {}
+  useEffect(function() {
+    if (scoreState && scoreState.mode === "active" && primeScore) {
+      const today = new Date().toLocaleDateString("en-CA");
+      setScoreHistory(function(prev) {
+        const filtered = prev.filter(function(e) { return e.date !== today; });
+        const updated  = filtered.concat([{ date: today, score: primeScore }]).slice(-28);
+        try { localStorage.setItem("pp_score_history", JSON.stringify(updated)); } catch(err2) {}
         return updated;
       });
     }
-  }, [primeScore, scoreState?.mode]);
+  }, [primeScore]);
 
-  // Build 4-week trend from history
-  const weeklyScoreTrend = (() => {
+  const weeklyScoreTrend = (function() {
     const weeks = [];
     for (let i = 3; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i * 7);
-      const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay());
-      const weekEnd   = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
-      const entries   = scoreHistory.filter(e => { const ed = new Date(e.date); return ed >= weekStart && ed <= weekEnd; });
-      const avg       = entries.length ? Math.round(entries.reduce((s, e) => s + e.score, 0) / entries.length) : null;
-      weeks.push({ label: i === 0 ? "This Week" : `Wk -${i}`, score: avg });
+      const d = new Date();
+      d.setDate(d.getDate() - i * 7);
+      const weekStart = new Date(d);
+      weekStart.setDate(d.getDate() - d.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const entries = scoreHistory.filter(function(e) {
+        const ed = new Date(e.date);
+        return ed >= weekStart && ed <= weekEnd;
+      });
+      const avg = entries.length ? Math.round(entries.reduce(function(s, e) { return s + e.score; }, 0) / entries.length) : null;
+      weeks.push({ label: i === 0 ? "This Week" : "Wk -" + i, score: avg });
     }
     return weeks;
-  })();
+  }());
+
 
       {/* ── Log form modal ─────────────────────────────────────────────── */}
       {showForm && (
