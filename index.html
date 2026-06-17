@@ -339,12 +339,12 @@ async function sbPost(path, body, token) {
 
 async function sbPatch(path, body, token) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       method: "PATCH",
       headers: { ...sbHeaders(token), "Prefer": "return=minimal" },
       body: JSON.stringify(body),
     });
-    return true;
+    return res.ok;
   } catch { return false; }
 }
 
@@ -4379,6 +4379,13 @@ function PhaseTargetsCard({ phase, setPhase }) {
 
   const save = async () => {
     setSaving(true); setSaveMsg(null);
+    if (!phase?.id) {
+      console.error("PhaseTargetsCard: phase has no id — cannot save targets", phase);
+      setSaving(false);
+      setSaveMsg("Error — no phase ID");
+      setTimeout(() => setSaveMsg(null), 3000);
+      return;
+    }
     const updated = { ...phase, targets: draft };
     await setPhase(updated);
     setSaving(false);
@@ -5121,7 +5128,16 @@ function App() {
       targets: newPhase.targets || null,
     };
     if (newPhase?.id) {
-      await sbPatch(`phase_data?id=eq.${newPhase.id}`, payload, session);
+      const ok = await sbPatch(`phase_data?id=eq.${newPhase.id}`, payload, session);
+      if (!ok) {
+        console.error("savePhase PATCH failed — id:", newPhase.id, "payload:", payload);
+        // Attempt to re-fetch phase to confirm state
+        const refreshed = await sbGet(`phase_data?user_id=eq.${userId}&order=created_at.desc&limit=1`, session);
+        if (refreshed?.[0]) {
+          newPhase = { ...newPhase, id: refreshed[0].id };
+          await sbPatch(`phase_data?id=eq.${refreshed[0].id}`, payload, session);
+        }
+      }
     } else {
       const rows = await sbPost("phase_data", { ...payload, user_id: userId }, session);
       if (rows?.[0]) newPhase = { ...newPhase, id: rows[0].id };
