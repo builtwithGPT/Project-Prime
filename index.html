@@ -2260,6 +2260,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const [activeTrend, setActiveTrend] = useState("weight");
   const [weeklyReview, setWeeklyReview] = useState(null);
   const [generating, setGenerating]     = useState(false);
+  const [showAllWins, setShowAllWins]     = useState(false);
   const [reviewSaveStatus, setReviewSaveStatus] = useState(null);
   const setF = (k) => (e) => setFields(f => ({ ...f, [k]: e.target.value }));
 
@@ -3019,7 +3020,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
               <div style={{ color: "#C8CDD8", fontSize: 13, lineHeight: 1.7, fontStyle: "italic" }}>
                 {scoreState.mode === "baseline"
                   ? "\"We are still collecting enough data to evaluate this phase accurately. Early weight changes may reflect hydration, glycogen storage, food volume, and normal fluctuation. No course correction is recommended yet.\""
-                  : "\"" + (scoreState.mode === "active" ? scoreBandCoachNote[scoreBand.label] : coachNarrative) + "\""}
+                  : "\"" + (weeklyReview && weeklyReview.executive_summary && !weeklyReview.executive_summary.includes("error") ? weeklyReview.executive_summary : (scoreBandCoachNote[scoreBand.label] || coachNarrative)) + "\""}
               </div>
             </div>
 
@@ -3093,9 +3094,17 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
                     </div>
                   );
                 })}
-                <button onClick={generateReview} disabled={generating} style={{ background: "none", border: "none", color: "#4A90D9", fontSize: 11, cursor: "pointer", marginTop: 4, padding: 0, textDecoration: "underline" }}>
-                  {generating ? "Regenerating…" : "View all wins"}
+                <button onClick={function() { setShowAllWins(!showAllWins); }} style={{ background: "none", border: "none", color: "#4A90D9", fontSize: 11, cursor: "pointer", marginTop: 4, padding: 0, textDecoration: "underline" }}>
+                  {showAllWins ? "Show fewer" : "View all wins (" + weeklyReview.major_wins.length + ")"}
                 </button>
+                {showAllWins && weeklyReview.major_wins.slice(3).map(function(w, i) {
+                  return (
+                    <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5, marginTop: 5 }}>
+                      <span style={{ color: "#4AD99A", fontSize: 11, flexShrink: 0 }}>✓</span>
+                      <span style={{ color: "#C8CDD8", fontSize: 12, lineHeight: 1.5 }}>{w}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
