@@ -433,9 +433,8 @@ function Sparkline({ data, width = 120, height = 40 }) {
 
   return (
     <svg width={width} height={height}>
-      <line x1={0} y1={ty1} x2={width} y2={ty2} stroke={lc} strokeWidth={1.5} strokeOpacity={0.3} strokeDasharray="3 2" />
-      <polyline points={pts.join(" ")} fill="none" stroke={lc} strokeWidth={2} strokeLinejoin="round" />
-      <circle cx={pts[pts.length-1].split(",")[0]} cy={pts[pts.length-1].split(",")[1]} r={3.5} fill={lc} />
+      <line x1={0} y1={ty1} x2={width} y2={ty2} stroke={lc} strokeWidth={2} strokeLinecap="round" />
+      <circle cx={width} cy={ty2} r={3.5} fill={lc} />
     </svg>
   );
 }
