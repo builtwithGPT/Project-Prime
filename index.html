@@ -907,7 +907,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
       <JumpConfirmModal />
 
       {/* ── MAIN PANEL ───────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
 
         {/* Header bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1153,7 +1153,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
       </div>
 
       {/* ── SIDEBAR ──────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
 
         {/* Workout Plan */}
         <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto" }}>
