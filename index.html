@@ -5120,10 +5120,12 @@ function App() {
 
   // ── Phase handlers ─────────────────────────────────────────────────────────
   const savePhase = async (newPhase) => {
+    // Supabase date columns require YYYY-MM-DD format — strip any timestamp suffix
+    const toDateStr = (d) => d ? d.split("T")[0] : d;
     const payload = {
       type: newPhase.type,
-      start_date: newPhase.startDate,
-      end_date: newPhase.endDate,
+      start_date: toDateStr(newPhase.startDate),
+      end_date: toDateStr(newPhase.endDate),
       history: newPhase.history || [],
       targets: newPhase.targets || null,
     };
