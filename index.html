@@ -1234,7 +1234,13 @@ function ProgressTab({ exercises, workoutLogs }) {
 
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
-    const pfSeries = logs.map(l => ({ value: calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality), date: l.date }));
+    // Sort by date ascending, deduplicate same-day entries keeping highest PF
+    const byDate = {};
+    logs.forEach(l => {
+      const pf = calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
+      if (!byDate[l.date] || pf > byDate[l.date]) byDate[l.date] = pf;
+    });
+    const pfSeries = Object.keys(byDate).sort().map(date => ({ value: byDate[date], date }));
     const first = pfSeries[0]?.value, last = pfSeries[pfSeries.length - 1]?.value;
     const prev  = pfSeries[pfSeries.length - 2]?.value;
     const totalGain   = first && last  ? ((last  - first) / first * 100) : null;
