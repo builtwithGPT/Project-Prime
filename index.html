@@ -1251,19 +1251,19 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                       </div>
                     )}
                   </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ textAlign: "left", flexShrink: 0, width: 150, paddingLeft: 8 }}>
                     <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last</div>
                     <div style={{ color: "#8B92A5", fontSize: 12, fontWeight: 600 }}>
                       {lastE ? `${lastE.sets}×${lastE.reps}${lastE.weight ? ` @ ${lastE.weight} lbs` : ""}` : "No history"}
                     </div>
                   </div>
-                  <div style={{ textAlign: "right", flexShrink: 0, minWidth: 110 }}>
+                  <div style={{ textAlign: "right", flexShrink: 0, width: 150 }}>
                     <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>Suggested</div>
                     <div style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>
                       {suggestedText(primary, lastE)}
                     </div>
                   </div>
-                  <span style={{ color: "#3A3D4A", fontSize: 16 }}>›</span>
+                  <span style={{ color: "#3A3D4A", fontSize: 16, width: 12, flexShrink: 0, textAlign: "center" }}>›</span>
                 </div>
               );
             })}
@@ -1333,8 +1333,10 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{calcPF(1, s.reps, s.weight, reviewEx.type, reviewEx.laterality).toLocaleString()} PF</span>
-                            <button onClick={() => { const init = { inMemory: false, logId: reviewLog.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" }; setEditingSet(init); setEditDraft(init); }}
-                              style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", fontSize: 13, padding: 2 }} title="Edit set">✎</button>
+                            <button onClick={() => { if (!reviewLog.id) return; const init = { inMemory: false, logId: reviewLog.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" }; setEditingSet(init); setEditDraft(init); }}
+                              disabled={!reviewLog.id}
+                              style={{ background: "none", border: "none", color: reviewLog.id ? "#4B5563" : "#2A2D3A", cursor: reviewLog.id ? "pointer" : "not-allowed", fontSize: 13, padding: 2 }}
+                              title={reviewLog.id ? "Edit set" : "Still syncing — try again in a moment"}>✎</button>
                           </div>
                         </div>
                       ))}
@@ -5379,6 +5381,8 @@ function App() {
 
       if (pData?.[0]) {
         setPhase({ id: pData[0].id, type: pData[0].type, startDate: pData[0].start_date, endDate: pData[0].end_date, history: pData[0].history || [], targets: pData[0].targets || null });
+      } else {
+        setPhase(null);
       }
     } catch (e) { setDbError(true); }
     setLoading(false);
@@ -5498,14 +5502,27 @@ function App() {
 
     // Then sync to DB
     try {
-      const rows = await sbPost("workout_logs", payload, session);
-      if (Array.isArray(rows) && rows[0]?.id) {
-        const synced = optimistic.map(l => l === localEntry ? { ...entry, id: rows[0].id, exerciseId } : l);
-        setWorkoutLogs(synced); lsSet(LS_KEYS.workout, synced);
-        return { ok: true, freshLogs: synced };
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/workout_logs`, {
+        method: "POST",
+        headers: { ...sbHeaders(session), "Prefer": "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.error("[addWorkoutLog] POST failed:", res.status, errText, "payload:", payload);
+      } else {
+        const rows = await res.json();
+        if (Array.isArray(rows) && rows[0]?.id) {
+          const synced = optimistic.map(l => l === localEntry ? { ...entry, id: rows[0].id, exerciseId } : l);
+          setWorkoutLogs(synced); lsSet(LS_KEYS.workout, synced);
+          return { ok: true, freshLogs: synced };
+        }
       }
-    } catch {}
-    // DB failed but local entry exists — still report ok so UI advances
+    } catch (e) {
+      console.error("[addWorkoutLog] POST threw:", e);
+    }
+    // DB failed but local entry exists — still report ok so UI advances (offline-friendly),
+    // but the local entry has no real id, so it can't be edited at the set level until it syncs.
     return { ok: true, freshLogs: optimistic };
   };
 
@@ -5832,6 +5849,8 @@ function App() {
                     onClick={async () => {
                       if (devModal === "seed") {
                         setSeeding(true); setDevModal(null); setDevConfirmText("");
+                        localStorage.removeItem("pp_draft_workout");
+                        localStorage.removeItem("pp_draft_recovery");
                         const result = await seedDevData(session, userId);
                         setSeedResult(result); setSeeding(false);
                         loadAll(session, userId);
@@ -5852,6 +5871,8 @@ function App() {
                         localStorage.removeItem("pp_weekly_review");
                         localStorage.removeItem("pp_score_history");
                         localStorage.removeItem("pp_workout_ended");
+                        localStorage.removeItem("pp_draft_workout");
+                        localStorage.removeItem("pp_draft_recovery");
                         setSeedResult(null); setSeeding(false);
                         loadAll(session, userId);
                       }
