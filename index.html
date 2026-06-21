@@ -1085,6 +1085,10 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   };
 
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // LIST VIEW (pre-workout)
+  // ─────────────────────────────────────────────────────────────────────────────
+  if (!activeMode) {
     // Group consecutive entries that share a groupLabel (Arms Superset, Core Circuit)
     // into a single display row, while keeping each underlying exercise as its own object.
     const displayRows = [];
