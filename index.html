@@ -1639,7 +1639,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", minHeight: 0 }}>
 
         {/* Workout Plan */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto", minHeight: 140 }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, height: 320, flexShrink: 0, display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <div style={{ fontSize: 10, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Workout Plan</div>
             <div style={{ color: "#8B92A5", fontSize: 11 }}>{active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)).length}/{active.length}</div>
@@ -1649,7 +1649,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
             <div style={{ height: "100%", background: "#4AD99A", borderRadius: 2, transition: "width 0.3s",
               width: `${(active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)).length / active.length) * 100}%` }} />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, overflowY: "auto", flex: 1, minHeight: 0 }}>
             {active.map((e, i) => {
               const isActive = i === currentIdx && !reviewExerciseId;
               const isDone   = loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id);
@@ -5514,14 +5514,19 @@ function App() {
   // Returns { ok, freshLogs }.
   const editWorkoutSet = async (logId, setNum, updatedFields) => {
     const log = workoutLogs.find(l => l.id === logId);
-    if (!log || !log.setDetails) return { ok: false };
+    console.log("[editWorkoutSet] logId:", logId, "setNum:", setNum, "updatedFields:", updatedFields);
+    console.log("[editWorkoutSet] found log:", log);
+    if (!log || !log.setDetails) { console.log("[editWorkoutSet] ABORT — no log or no setDetails"); return { ok: false }; }
     const newSetDetails = log.setDetails.map(s => s.setNum === setNum ? { ...s, ...updatedFields } : s);
+    console.log("[editWorkoutSet] old setDetails:", log.setDetails, "new setDetails:", newSetDetails);
     const totalReps = Math.round(newSetDetails.reduce((s, x) => s + x.reps, 0) / newSetDetails.length);
     const avgWeight = Math.round(newSetDetails.reduce((s, x) => s + x.weight, 0) / newSetDetails.length * 10) / 10;
     const notes = newSetDetails.map(s => `Set ${s.setNum}: ${s.reps}r@${s.weight}lbs${s.rir !== null && s.rir !== undefined ? ` RIR${s.rir}` : ""}`).join(" | ");
-    return addWorkoutLog(log.exerciseId, {
+    const result = await addWorkoutLog(log.exerciseId, {
       sets: newSetDetails.length, reps: totalReps, weight: avgWeight, notes, date: log.date, setDetails: newSetDetails,
     }, logId);
+    console.log("[editWorkoutSet] addWorkoutLog result:", result);
+    return result;
   };
 
   // ── Body handlers ──────────────────────────────────────────────────────────
