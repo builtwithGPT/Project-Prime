@@ -785,6 +785,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   // ── Review mode — viewing/editing a COMPLETED exercise without disturbing the active one ──
   const [reviewExerciseId, setReviewExerciseId] = useState(null);
   const [editingSet, setEditingSet] = useState(null); // { logId, setNum, reps, weight, rir, notes } | null
+  const [editDraft, setEditDraft] = useState(null); // working copy of editingSet's fields while modal is open — lives here, not inside the nested modal component, so the 1s elapsed-time re-render doesn't reset it
 
   // ── Complete a single set ───────────────────────────────────────────────────
   const completeSet = () => {
@@ -1000,21 +1001,23 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
 
   // ── Edit Set modal — handles both in-progress (in-memory) sets and persisted log sets ──
   const EditSetModal = () => {
-    if (!editingSet) return null;
-    const [reps, setReps]     = useState(editingSet.reps);
-    const [weight, setWeight] = useState(editingSet.weight);
-    const [rir, setRir]       = useState(editingSet.rir === null || editingSet.rir === undefined ? "" : String(editingSet.rir));
-    const [notes, setNotes]   = useState(editingSet.notes || "");
+    if (!editingSet || !editDraft) return null;
+    const exMeta = editingSet.inMemory
+      ? exercises.find(x => x.id === editingSet.exerciseId)
+      : exercises.find(x => x.id === Number(workoutLogs.find(l => l.id === editingSet.logId)?.exerciseId));
+    const isBodyweightLike = exMeta?.type === "bodyweight" || exMeta?.type === "banded";
     const [saving, setSaving] = useState(false);
+
+    const setField = (k) => (v) => setEditDraft(prev => ({ ...prev, [k]: v }));
 
     const save = async () => {
       setSaving(true);
+      const reps = editDraft.reps, weight = isBodyweightLike ? 0 : editDraft.weight, rir = editDraft.rir, notes = editDraft.notes;
       if (editingSet.inMemory) {
         // Edit a set still in React state (current exercise, not yet saved to Supabase)
         setCompletedSets(prev => {
           const list = (prev[editingSet.exerciseId] || []).map(s => {
             if (s.setNum !== editingSet.setNum) return s;
-            const exMeta = exercises.find(x => x.id === editingSet.exerciseId);
             return { ...s, reps: +reps, weight: +weight, rir: rir === "" ? null : rir, notes,
               pf: calcPF(1, +reps, +weight, exMeta?.type, exMeta?.laterality) };
           });
@@ -1022,41 +1025,53 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
         });
         setSaving(false);
         setEditingSet(null);
+        setEditDraft(null);
       } else {
         // Edit a set already persisted to a workout_logs row — recalculate aggregate via onEditSet
         const result = await onEditSet(editingSet.logId, editingSet.setNum, { reps: +reps, weight: +weight, rir: rir === "" ? null : rir, notes });
         setSaving(false);
-        if (result?.ok) setEditingSet(null);
+        if (result?.ok) { setEditingSet(null); setEditDraft(null); }
       }
     };
 
+    const cancel = () => { setEditingSet(null); setEditDraft(null); };
+
     return (
       <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-        onClick={() => !saving && setEditingSet(null)}>
+        onClick={() => !saving && cancel()}>
         <div style={{ background: "#1A1D26", borderRadius: 16, border: "1px solid #2A2D3A", padding: 28, maxWidth: 380, width: "100%" }}
           onClick={e => e.stopPropagation()}>
           <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 17, marginBottom: 20 }}>Edit Set {editingSet.setNum}</div>
 
           <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            {!isBodyweightLike && (
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Weight (lbs)</div>
+                <input type="number" value={editDraft.weight} onChange={e => setField("weight")(e.target.value)}
+                  style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, padding: "10px 12px", color: "#E8EAF0", fontSize: 15 }} />
+              </div>
+            )}
             <div style={{ flex: 1 }}>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Weight (lbs)</div>
-              <input type="number" value={weight} onChange={e => setWeight(e.target.value)}
-                style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, padding: "10px 12px", color: "#E8EAF0", fontSize: 15 }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Reps</div>
-              <input type="number" value={reps} onChange={e => setReps(e.target.value)}
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                {exMeta?.laterality === "unilateral" ? "Reps (per side)" : "Reps"}
+              </div>
+              <input type="number" value={editDraft.reps} onChange={e => setField("reps")(e.target.value)}
                 style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, padding: "10px 12px", color: "#E8EAF0", fontSize: 15 }} />
             </div>
           </div>
+          {isBodyweightLike && (
+            <div style={{ color: "#4B5563", fontSize: 11, marginTop: -10, marginBottom: 16 }}>
+              {exMeta?.type === "banded" ? "Banded exercise — no weight to track." : "Bodyweight exercise — no weight to track."}
+            </div>
+          )}
 
           <div style={{ marginBottom: 16 }}>
             <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>RIR</div>
             <div style={{ display: "flex", gap: 6 }}>
               {["0","1","2","3","4","5+"].map(r => (
-                <button key={r} onClick={() => setRir(r)}
+                <button key={r} onClick={() => setField("rir")(r)}
                   style={{ flex: 1, height: 36, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer",
-                    background: rir === r ? "#4A90D9" : "#2A2D3A", color: rir === r ? "#fff" : "#4B5563" }}>
+                    background: editDraft.rir === r ? "#4A90D9" : "#2A2D3A", color: editDraft.rir === r ? "#fff" : "#4B5563" }}>
                   {r}
                 </button>
               ))}
@@ -1065,12 +1080,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
 
           <div style={{ marginBottom: 24 }}>
             <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Notes</div>
-            <input value={notes} onChange={e => setNotes(e.target.value)}
+            <input value={editDraft.notes} onChange={e => setField("notes")(e.target.value)}
               style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, padding: "10px 12px", color: "#E8EAF0", fontSize: 13 }} />
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setEditingSet(null)} disabled={saving}
+            <button onClick={cancel} disabled={saving}
               style={{ flex: 1, background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 10, height: 46, fontSize: 14, cursor: "pointer" }}>
               Cancel
             </button>
@@ -1318,7 +1333,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{calcPF(1, s.reps, s.weight, reviewEx.type, reviewEx.laterality).toLocaleString()} PF</span>
-                            <button onClick={() => setEditingSet({ inMemory: false, logId: reviewLog.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" })}
+                            <button onClick={() => { const init = { inMemory: false, logId: reviewLog.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" }; setEditingSet(init); setEditDraft(init); }}
                               style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", fontSize: 13, padding: 2 }} title="Edit set">✎</button>
                           </div>
                         </div>
@@ -1598,7 +1613,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{s.pf.toLocaleString()} PF</span>
-                        <button onClick={() => setEditingSet({ inMemory: true, exerciseId: ex.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" })}
+                        <button onClick={() => { const init = { inMemory: true, exerciseId: ex.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" }; setEditingSet(init); setEditDraft(init); }}
                           style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", fontSize: 13, padding: 2 }} title="Edit set">✎</button>
                       </div>
                     </div>
@@ -1621,10 +1636,10 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       </div>
 
       {/* ── SIDEBAR ──────────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", minHeight: 0 }}>
 
         {/* Workout Plan */}
-        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto" }}>
+        <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flex: 1, overflowY: "auto", minHeight: 140 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <div style={{ fontSize: 10, color: "#4B5563", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Workout Plan</div>
             <div style={{ color: "#8B92A5", fontSize: 11 }}>{active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)).length}/{active.length}</div>
