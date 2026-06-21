@@ -962,9 +962,21 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
         )}
 
         {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
-          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · Choose your session</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
+            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · Choose your session</div>
+          </div>
+          <button onClick={startWorkout}
+            style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+            {(() => {
+              if (todayLogs.length === 0) return "Start Workout";
+              if (workoutEnded) return "Amend Today\'s Workout";
+              const allDone = active.length > 0 && active.every(e => todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
+              if (allDone) return "Amend Today\'s Workout";
+              return "Resume Workout";
+            })()}
+          </button>
         </div>
 
         {/* Session cards */}
@@ -972,13 +984,14 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
           {WORKOUT_TEMPLATES.map(t => {
             const isSelected = t.id === selectedTemplateId;
             return (
-              <div key={t.id} style={{
+              <div key={t.id} onClick={() => setSelectedTemplateId(t.id)} style={{
                 background: "#1A1D26",
                 borderRadius: 14,
                 border: isSelected ? `1px solid ${t.color}88` : "1px solid #2A2D3A",
                 boxShadow: isSelected ? `0 0 0 1px ${t.color}44` : "none",
                 padding: 20,
                 display: "flex", flexDirection: "column", gap: 6,
+                cursor: "pointer",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: t.color, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em" }}>{t.duration}</span>
@@ -990,7 +1003,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
                 </div>
                 <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 800, marginTop: 2 }}>{t.label}</div>
                 <div style={{ color: "#8B92A5", fontSize: 12.5, lineHeight: 1.5, marginBottom: 10, minHeight: 36 }}>{t.description}</div>
-                <button onClick={() => setSelectedTemplateId(t.id)}
+                <button onClick={(e) => { e.stopPropagation(); setSelectedTemplateId(t.id); }}
                   style={{
                     background: isSelected ? t.color : "transparent",
                     color: isSelected ? "#0F1117" : t.color,
@@ -1056,20 +1069,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
               );
             })}
           </div>
-        </div>
-
-        {/* Start Workout */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button onClick={startWorkout}
-            style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-            {(() => {
-              if (todayLogs.length === 0) return "Start Workout";
-              if (workoutEnded) return "Amend Today\'s Workout";
-              const allDone = active.length > 0 && active.every(e => todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
-              if (allDone) return "Amend Today\'s Workout";
-              return "Resume Workout";
-            })()}
-          </button>
         </div>
       </div>
     );
