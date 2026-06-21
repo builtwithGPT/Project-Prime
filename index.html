@@ -68,6 +68,7 @@ const EXERCISE_LIST = [
   { name: "Single-Leg Dumbbell RDL",    muscleGroup: "Hamstrings", type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "8",  flag: "⚠️ Each side" },
   { name: "Bulgarian Split Squat",      muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Heel elevation if needed" },
   { name: "Seated Overhead Press",      muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: "⚠️ Seated only" },
+  { name: "Lateral Raise",              muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null },
   { name: "Bicep Curl",                 muscleGroup: "Arms",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null },
   { name: "Tricep Extension",           muscleGroup: "Arms",       type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null },
   { name: "Leg Raise",                  muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null },
@@ -114,6 +115,101 @@ const MUSCLE_COLORS = {
   "Legs": "#E8A838", "Glutes": "#E87D38", "Hamstrings": "#D9844A",
   "Shoulders": "#4AD9A0", "Arms": "#D94A7A", "Core": "#4AD9D9",
 };
+
+// ── WORKOUT_TEMPLATES — defines the 30/60/90 min session builders ─────────────
+// exerciseNames are matched against EXERCISE_LIST by name, in order.
+// groupLabel (optional, per-name) lets multiple underlying exercises display
+// together as one row in the UI (e.g. "Arms Superset") while still logging
+// as fully separate exercise records with their own Strength Factor.
+const WORKOUT_TEMPLATES = [
+  {
+    id: "express",
+    duration: "30 MIN",
+    label: "Express Workout",
+    description: "Essential movements. Maximum efficiency.",
+    color: "#4A90D9",
+    badge: null,
+    exerciseNames: [
+      "Banded Clamshell",
+      "Incline Dumbbell Press",
+      "Pull-up / Chin-up",
+      "Hip Thrust",
+      "Lateral Raise",
+      { group: "Arms Superset", names: ["Bicep Curl", "Tricep Extension"] },
+    ],
+  },
+  {
+    id: "full",
+    duration: "60 MIN",
+    label: "Full Body Workout",
+    description: "Balanced full body training. Build muscle and strength.",
+    color: "#4AD99A",
+    badge: "Recommended",
+    exerciseNames: [
+      "Banded Clamshell",
+      "Glute Bridge",
+      "Incline Dumbbell Press",
+      "Pull-up / Chin-up",
+      "Dumbbell Row",
+      "Hip Thrust",
+      "Dumbbell RDL",
+      "Lateral Raise",
+      { group: "Arms Superset", names: ["Bicep Curl", "Tricep Extension"] },
+      { group: "Core Circuit", names: ["Leg Raise", "Core Rotation", "Dead Bug"] },
+    ],
+  },
+  {
+    id: "extended",
+    duration: "90 MIN",
+    label: "Extended Workout",
+    description: "Maximum volume. Complete development.",
+    color: "#7B68EE",
+    badge: null,
+    exerciseNames: [
+      "Banded Clamshell",
+      "Glute Bridge",
+      "Incline Dumbbell Press",
+      "Flat Dumbbell Press",
+      "Dips",
+      "Pull-up / Chin-up",
+      "Dumbbell Row",
+      "Hip Thrust",
+      "Dumbbell RDL",
+      "Bulgarian Split Squat",
+      "Lateral Raise",
+      { group: "Arms Superset", names: ["Bicep Curl", "Tricep Extension"] },
+      { group: "Core Circuit", names: ["Leg Raise", "Core Rotation", "Dead Bug"] },
+    ],
+  },
+];
+
+// Flattens a template's exerciseNames (resolving grouped entries) into an
+// ordered list of { name, groupLabel } so callers can map to live exercise objects.
+function flattenTemplate(template) {
+  const out = [];
+  template.exerciseNames.forEach(entry => {
+    if (typeof entry === "string") {
+      out.push({ name: entry, groupLabel: null });
+    } else {
+      entry.names.forEach(n => out.push({ name: n, groupLabel: entry.group }));
+    }
+  });
+  return out;
+}
+
+// Bodyweight/banded exercises with no history show their default prescription
+// instead of "Set starting weight" since there's no weight to set.
+function suggestedText(ex, lastE) {
+  if (lastE) {
+    return `${ex.defaultSets}×${ex.defaultReps}`;
+  }
+  if (ex.type === "weighted") return "Set starting weight";
+  if (ex.type === "banded")   return `${ex.defaultSets}×${ex.defaultReps} each side`;
+  if (ex.name.toLowerCase().includes("pull") || ex.name.toLowerCase().includes("chin")) {
+    return "Bodyweight to technical failure";
+  }
+  return `${ex.defaultSets}×${ex.defaultReps}`;
+}
 
 const NAV = [
   { id: "workout",  label: "Workout",   icon: "💪" },
@@ -460,7 +556,22 @@ function MacroRing({ pct, color, label, val, target, unit }) {
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
 function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, session, userId }) {
-  const active = exercises.filter(e => e.active);
+  // ── Session template selection — default Full Body (60 min) ────────────────
+  const [selectedTemplateId, setSelectedTemplateId] = useState("full");
+  const selectedTemplate = WORKOUT_TEMPLATES.find(t => t.id === selectedTemplateId) || WORKOUT_TEMPLATES[1];
+
+  // active — the ordered, resolved exercise list for the CURRENTLY SELECTED session.
+  // This drives both the pre-workout preview list and (via startWorkout/loadExercise)
+  // the active workout navigation, sidebar, and progress bar — so swapping templates
+  // automatically reshapes the whole session without touching downstream logic.
+  // groupLabel travels alongside each resolved exercise for UI grouping (Arms Superset etc.)
+  // but each entry remains its own full exercise object/log — no combined PF entities.
+  const active = flattenTemplate(selectedTemplate)
+    .map(entry => {
+      const match = exercises.find(e => e.name === entry.name && e.active);
+      return match ? { ...match, groupLabel: entry.groupLabel } : null;
+    })
+    .filter(Boolean);
 
   // ── Top-level mode ──────────────────────────────────────────────────────────
   const [activeMode, setActiveMode]     = useState(false);
@@ -794,10 +905,21 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
   // LIST VIEW (pre-workout)
   // ─────────────────────────────────────────────────────────────────────────────
   if (!activeMode) {
-    const GROUP_ORDER = ["Warm-up", "Chest", "Back", "Glutes", "Hamstrings", "Legs", "Shoulders", "Arms", "Core"];
-    const byGroup = {};
-    GROUP_ORDER.forEach(g => { byGroup[g] = []; });
-    active.forEach(e => { (byGroup[e.muscleGroup] = byGroup[e.muscleGroup] || []).push(e); });
+    // Group consecutive entries that share a groupLabel (Arms Superset, Core Circuit)
+    // into a single display row, while keeping each underlying exercise as its own object.
+    const displayRows = [];
+    active.forEach(e => {
+      if (e.groupLabel) {
+        const lastRow = displayRows[displayRows.length - 1];
+        if (lastRow && lastRow.groupLabel === e.groupLabel) {
+          lastRow.exercises.push(e);
+        } else {
+          displayRows.push({ groupLabel: e.groupLabel, exercises: [e] });
+        }
+      } else {
+        displayRows.push({ groupLabel: null, exercises: [e] });
+      }
+    });
 
     return (
       <div>
@@ -839,57 +961,116 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onSaveSummary, sess
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
-            <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · {todayLogs.length} exercises logged</div>
+        {/* Header */}
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
+          <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · Choose your session</div>
+        </div>
+
+        {/* Session cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 28 }}>
+          {WORKOUT_TEMPLATES.map(t => {
+            const isSelected = t.id === selectedTemplateId;
+            return (
+              <div key={t.id} style={{
+                background: "#1A1D26",
+                borderRadius: 14,
+                border: isSelected ? `1px solid ${t.color}88` : "1px solid #2A2D3A",
+                boxShadow: isSelected ? `0 0 0 1px ${t.color}44` : "none",
+                padding: 20,
+                display: "flex", flexDirection: "column", gap: 6,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: t.color, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em" }}>{t.duration}</span>
+                  {t.badge && (
+                    <span style={{ background: t.color + "22", color: t.color, padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" }}>
+                      ★ {t.badge.toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 800, marginTop: 2 }}>{t.label}</div>
+                <div style={{ color: "#8B92A5", fontSize: 12.5, lineHeight: 1.5, marginBottom: 10, minHeight: 36 }}>{t.description}</div>
+                <button onClick={() => setSelectedTemplateId(t.id)}
+                  style={{
+                    background: isSelected ? t.color : "transparent",
+                    color: isSelected ? "#0F1117" : t.color,
+                    border: isSelected ? "none" : `1px solid ${t.color}66`,
+                    borderRadius: 9, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                  }}>
+                  {isSelected ? "✓ Selected" : "Choose This Workout"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Selected session exercise list */}
+        <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 20, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: selectedTemplate.color }} />
+            <div style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>
+              {selectedTemplate.label} ({selectedTemplate.duration.replace(" MIN", " Min")})
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {todayLogs.length > 0 && <div style={{ color: "#E8A838", fontSize: 14, fontWeight: 700 }}>Session PF {sessionPF.toLocaleString()}</div>}
-            <button onClick={startWorkout}
-              style={{ background: "#4AD99A", color: "#0F1117", border: "none", borderRadius: 10, padding: "12px 28px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              {(() => {
-                if (todayLogs.length === 0) return "Start Workout";
-                if (workoutEnded) return "Amend Today\'s Workout";
-                // If all active exercises are logged today, treat as complete even without the flag
-                const allDone = active.length > 0 && active.every(e => todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
-                if (allDone) return "Amend Today\'s Workout";
-                return "Resume Workout";
-              })()}
-            </button>
+          <div style={{ color: "#8B92A5", fontSize: 12.5, marginBottom: 16, marginLeft: 16 }}>{selectedTemplate.description}</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {displayRows.map((row, i) => {
+              const isMulti = row.exercises.length > 1 || row.groupLabel;
+              const primary = row.exercises[0];
+              const lastE = lastEntry(primary.id);
+              return (
+                <div key={i} style={{ background: "#0F1117", borderRadius: 10, border: "1px solid #2A2D3A", padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 12, color: "#8B92A5", fontWeight: 700 }}>
+                    {i + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 14 }}>
+                        {row.groupLabel || primary.name}
+                      </span>
+                      <span style={{ background: (MUSCLE_COLORS[primary.muscleGroup] || "#4B5563") + "22", color: MUSCLE_COLORS[primary.muscleGroup] || "#4B5563", padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                        {primary.muscleGroup}
+                      </span>
+                    </div>
+                    {isMulti && (
+                      <div style={{ color: "#4B5563", fontSize: 11.5, marginTop: 2 }}>
+                        {row.exercises.map(e => e.name).join(" + ")}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>Last</div>
+                    <div style={{ color: "#8B92A5", fontSize: 12, fontWeight: 600 }}>
+                      {lastE ? `${lastE.sets}×${lastE.reps}${lastE.weight ? ` @ ${lastE.weight} lbs` : ""}` : "No history"}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0, minWidth: 110 }}>
+                    <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em" }}>Suggested</div>
+                    <div style={{ color: "#E8A838", fontSize: 12, fontWeight: 700 }}>
+                      {suggestedText(primary, lastE)}
+                    </div>
+                  </div>
+                  <span style={{ color: "#3A3D4A", fontSize: 16 }}>›</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-        {GROUP_ORDER.filter(g => byGroup[g]?.length > 0).map(group => (
-          <div key={group} style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 3, height: 16, background: MUSCLE_COLORS[group] || "#4B5563", borderRadius: 2 }} />
-              <span style={{ color: MUSCLE_COLORS[group] || "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{group}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {byGroup[group].map(e => {
-                const lastE = lastEntry(e.id);
-                const logged = todayLogs.some(l => l.exerciseId === e.id);
-                return (
-                  <div key={e.id} style={{ background: "#1A1D26", borderRadius: 10, border: logged ? "1px solid #4AD99A44" : "1px solid #2A2D3A", padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: logged ? "#4AD99A" : "#2A2D3A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, color: logged ? "#0F1117" : "#4B5563", fontWeight: 700 }}>
-                      {logged ? "✓" : ""}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, color: "#E8EAF0", fontSize: 14 }}>{e.name}
-                        {e.laterality === "unilateral" && <span style={{ background: "#7B68EE22", color: "#7B68EE", padding: "1px 6px", borderRadius: 4, fontSize: 10, fontWeight: 700, marginLeft: 8 }}>UNI</span>}
-                      </div>
-                      {lastE ? (
-                        <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>Last: {lastE.sets}×{lastE.reps}{lastE.weight ? ` @ ${lastE.weight} lbs` : ""} — PF {calcPF(lastE.sets, lastE.reps, lastE.weight, e.type, e.laterality).toLocaleString()}</div>
-                      ) : <div style={{ color: "#3A3D4A", fontSize: 12, marginTop: 2 }}>No previous sessions</div>}
-                    </div>
-                    <div style={{ color: "#4B5563", fontSize: 11 }}>{e.defaultSets}×{e.defaultReps}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
 
+        {/* Start Workout */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={startWorkout}
+            style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+            {(() => {
+              if (todayLogs.length === 0) return "Start Workout";
+              if (workoutEnded) return "Amend Today\'s Workout";
+              const allDone = active.length > 0 && active.every(e => todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
+              if (allDone) return "Amend Today\'s Workout";
+              return "Resume Workout";
+            })()}
+          </button>
+        </div>
       </div>
     );
   }
@@ -4813,7 +4994,7 @@ function App() {
         return [...remote, ...pending];
       };
 
-      const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date }));
+      const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date })).sort((a, b) => new Date(a.date) - new Date(b.date));
       const bLogs = merged(bData, lsBody).map(r => ({ id: r.id, weight: r.weight, chest: r.chest, waist: r.waist, hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date }));
 
       // Load nutrition entries for each day
