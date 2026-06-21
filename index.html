@@ -739,6 +739,15 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     return h.length ? calcPF(h[h.length-1].sets, h[h.length-1].reps, h[h.length-1].weight, ex.type, ex.laterality) : null;
   })() : null;
 
+  // bestEverPF — highest Strength Factor ever logged for this exercise, across ALL history.
+  // This is the true PR baseline (per Project Prime spec), distinct from lastExPF
+  // which only reflects the most recent session and is used for "vs Last Session".
+  const bestEverPF = ex ? (() => {
+    const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id));
+    if (!h.length) return null;
+    return h.reduce((best, l) => Math.max(best, calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality)), 0);
+  })() : null;
+
   // ── Rest timer logic ────────────────────────────────────────────────────────
   const startRest = (seconds = 60) => {
     setRestSeconds(seconds); setRestTotal(seconds); setResting(true);
@@ -855,6 +864,67 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       loadExercise(nextIdx, true);
     } else {
       endWorkout(fresh);
+    }
+  };
+
+  // ── Complete the FINAL set of an exercise — logs the set AND finishes the exercise
+  // in one action. No rest timer, no separate "Finish Exercise" tap required.
+  // If this is also the last exercise of the workout, skips the Exercise Complete
+  // screen entirely and goes straight to Workout Complete.
+  const completeFinalSet = async () => {
+    if (!ex) return;
+    const finalSetData = {
+      setNum:  currentSetNum,
+      reps:    +currentSetReps,
+      weight:  +currentSetWeight,
+      rir:     currentSetRir !== "" ? currentSetRir : null,
+      notes:   currentSetNotes || "",
+      pf:      calcPF(1, +currentSetReps, +currentSetWeight, ex.type, ex.laterality),
+      ts:      new Date().toISOString(),
+    };
+    const finalExSets = [...exSets, finalSetData];
+    setCompletedSets(prev => ({ ...prev, [ex.id]: finalExSets }));
+    setCurrentSetRir(""); setCurrentSetNotes("");
+
+    setSaveStatus("saving");
+    const totalReps = Math.round(finalExSets.reduce((s, x) => s + x.reps, 0) / finalExSets.length);
+    const avgWeight = Math.round(finalExSets.reduce((s, x) => s + x.weight, 0) / finalExSets.length * 10) / 10;
+    const entry = {
+      sets:   finalExSets.length,
+      reps:   totalReps,
+      weight: avgWeight,
+      notes:  finalExSets.map(s => `Set ${s.setNum}: ${s.reps}r@${s.weight}lbs${s.rir !== null && s.rir !== undefined && s.rir !== "" ? ` RIR${s.rir}` : ""}`).join(" | "),
+      date:   new Date().toISOString(),
+      setDetails: finalExSets.map(s => ({ setNum: s.setNum, reps: s.reps, weight: s.weight, rir: s.rir ?? null, notes: s.notes || "" })),
+    };
+
+    const existingToday = todayLogs.find(l => Number(l.exerciseId) === Number(ex.id));
+    const result = await onLogExercise(ex.id, entry, existingToday?.id || null);
+    const ok = result?.ok ?? result;
+    const freshLogs = result?.freshLogs || null;
+    if (!ok) {
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus(null), 4000);
+      return;
+    }
+    setSaveStatus("saved");
+    const newLoggedIds = new Set([...loggedIds, ex.id]);
+    setLoggedIds(newLoggedIds);
+    stopRest();
+    latestLogsRef.current = freshLogs;
+
+    // Determine if this was the last exercise of the workout
+    const freshToday = freshLogs
+      ? freshLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA"))
+      : todayLogs;
+    const nextIdx = active.findIndex((e, i) => i > currentIdx && !newLoggedIds.has(e.id) && !freshToday.some(l => Number(l.exerciseId) === Number(e.id)));
+
+    if (nextIdx === -1) {
+      // Last exercise of the workout — skip Exercise Complete, go straight to Workout Complete
+      endWorkout(freshLogs);
+    } else {
+      // More exercises remain — show Exercise Complete moment
+      setExerciseDone(true);
     }
   };
 
@@ -1417,10 +1487,11 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
           <div style={{ background: "#4AD99A0D", border: "1px solid #4AD99A44", borderRadius: 16, padding: 28, textAlign: "center", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
             <div style={{ fontSize: 48 }}>✅</div>
             <div style={{ color: "#4AD99A", fontSize: 26, fontWeight: 800, letterSpacing: "0.02em" }}>EXERCISE COMPLETE</div>
+            <div style={{ color: "#E8EAF0", fontSize: 20, fontWeight: 700, marginTop: -8 }}>{ex.name}</div>
             <div style={{ display: "flex", gap: 24, justifyContent: "center" }}>
               <div style={{ textAlign: "center" }}>
                 <div style={{ color: "#E8A838", fontSize: 32, fontWeight: 800 }}>{exAccumPF.toLocaleString()}</div>
-                <div style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Exercise PF</div>
+                <div style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Strength Factor</div>
               </div>
               {lastExPF && (
                 <div style={{ textAlign: "center" }}>
@@ -1430,21 +1501,34 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                   <div style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>vs Last Session</div>
                 </div>
               )}
+              <div style={{ textAlign: "center" }}>
+                <div style={{ color: "#E8EAF0", fontSize: 32, fontWeight: 800 }}>{exSets.length}</div>
+                <div style={{ color: "#4B5563", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em" }}>Sets Completed</div>
+              </div>
             </div>
-            {exAccumPF > (lastExPF || 0) && lastExPF && (
+            {/* True PR: highest Strength Factor ever achieved for this exercise, not just vs last session */}
+            {bestEverPF !== null && exAccumPF > bestEverPF && (
               <div style={{ background: "#FFD70022", border: "1px solid #FFD70044", borderRadius: 8, padding: "8px 20px", color: "#FFD700", fontSize: 14, fontWeight: 700 }}>
                 🏆 NEW PERSONAL RECORD
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", maxWidth: 340, marginTop: 8 }}>
-              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Set Log</div>
+              <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Sets Completed</div>
               {exSets.map(s => (
-                <div key={s.setNum} style={{ display: "flex", justifyContent: "space-between", background: "#0F1117", borderRadius: 6, padding: "6px 12px" }}>
+                <div key={s.setNum} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1117", borderRadius: 6, padding: "6px 12px" }}>
                   <span style={{ color: "#8B92A5", fontSize: 12 }}>Set {s.setNum}</span>
-                  <span style={{ color: "#E8EAF0", fontSize: 12, fontWeight: 600 }}>{s.reps} reps @ {s.weight} lbs</span>
+                  <span style={{ color: "#E8EAF0", fontSize: 12, fontWeight: 600 }}>{s.reps} reps {s.weight > 0 ? `@ ${s.weight} lbs` : ""}</span>
+                  {s.rir !== null && s.rir !== undefined && s.rir !== "" && <span style={{ background: "#4A90D922", color: "#4A90D9", fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 700 }}>RIR {s.rir}</span>}
                   <span style={{ color: "#E8A838", fontSize: 12 }}>{s.pf.toLocaleString()} PF</span>
                 </div>
               ))}
+              {exSets.some(s => s.notes) && (
+                <div style={{ marginTop: 4, textAlign: "left" }}>
+                  {exSets.filter(s => s.notes).map(s => (
+                    <div key={s.setNum} style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>Set {s.setNum}: "{s.notes}"</div>
+                  ))}
+                </div>
+              )}
             </div>
             <button onClick={advanceToNext}
               style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 14, height: 68, width: "100%", maxWidth: 380, fontSize: 20, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", marginTop: 8 }}>
@@ -1586,19 +1670,34 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                 style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, padding: "10px 12px", color: "#E8EAF0", fontSize: 13 }} />
             </div>
 
-            {/* COMPLETE SET button — the hero */}
-            {!isLastSet ? (
-              <button onClick={completeSet}
-                style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 22, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4A90D944" }}>
-                ✓ COMPLETE SET {Math.min(currentSetNum, targetSets)}
-              </button>
-            ) : (
-              <button onClick={completeExercise} disabled={saveStatus === "saving" || exSets.length === 0}
-                style={{ background: saveStatus === "saving" ? "#2A2D3A" : "#4AD99A", color: saveStatus === "saving" ? "#4B5563" : "#0F1117",
-                  border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 22, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4AD99A44" }}>
-                {saveStatus === "saving" ? "Saving..." : saveStatus === "error" ? "⚠ Sync failed — saved locally" : exSets.length === 0 ? "Complete at least one set" : "✓ FINISH EXERCISE"}
-              </button>
-            )}
+            {/* COMPLETE SET button — the hero. On the final set, this single tap both
+                logs the set AND finishes the exercise (and the workout, if applicable) —
+                no separate "Finish Exercise" tap required. */}
+            {(() => {
+              const isFinalSetOfExercise = currentSetNum >= targetSets;
+              if (!isFinalSetOfExercise) {
+                return (
+                  <button onClick={completeSet}
+                    style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 22, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4A90D944" }}>
+                    ✓ COMPLETE SET {currentSetNum}
+                  </button>
+                );
+              }
+              // Determine whether this is also the last remaining exercise of the workout,
+              // to decide between "& Finish Exercise" vs "& Finish Workout" labeling.
+              const remainingAfterThis = active.filter((e, i) => i !== currentIdx && !loggedIds.has(e.id) && !todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
+              const isLastExerciseOfWorkout = remainingAfterThis.length === 0;
+              const label = saveStatus === "saving" ? "Saving…"
+                : saveStatus === "error" ? "⚠ Sync failed — saved locally"
+                : `✓ COMPLETE SET ${currentSetNum} & FINISH ${isLastExerciseOfWorkout ? "WORKOUT" : "EXERCISE"}`;
+              return (
+                <button onClick={completeFinalSet} disabled={saveStatus === "saving"}
+                  style={{ background: saveStatus === "saving" ? "#2A2D3A" : "#4AD99A", color: saveStatus === "saving" ? "#4B5563" : "#0F1117",
+                    border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 19, fontWeight: 800, cursor: "pointer", letterSpacing: "0.02em", boxShadow: "0 4px 24px #4AD99A44" }}>
+                  {label}
+                </button>
+              );
+            })()}
 
             {/* Completed sets log */}
             {exSets.length > 0 && (
