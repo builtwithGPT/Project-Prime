@@ -37,7 +37,7 @@ const FORM_GUIDES = {
   "Dumbbell Row": "Plant one knee and hand on bench. Pull dumbbell to hip, elbow close to body. Squeeze shoulder blade at top — hold 1 second. Lower with full control. Back flat. SUPERSET with Incline Press.",
   "Pull-up / Chin-up": "Hang fully extended — decompresses lumbar spine. Pull-up: palms away, wider grip, targets lats. Chin-up: palms toward you, more bicep. Pull until chin clears bar. Lower slowly. SUPERSET with Flat Press.",
   "Hip Thrust": "Upper back on bench edge. Feet flat, hip-width. Drive hips up squeezing glutes — not arching lower back. Hold 1-2 seconds at top. Lower slowly. Zero spinal compression.",
-  "Single-Leg Hip Thrust": "Same setup as hip thrust but one leg extended. Drive through planted heel, squeeze glute hard. Keep hips level — don't let non-working side drop. Enter reps per side — app doubles for Prime Factor.",
+  "Single-Leg Hip Thrust": "Same setup as hip thrust but one leg extended. Drive through planted heel, squeeze glute hard. Keep hips level — don't let non-working side drop. Enter reps per side — app doubles for Strength Factor.",
   "Dumbbell RDL": "Stand, dumbbells in front of thighs. Soft knee bend throughout. Hinge at hips, push them backward as dumbbells lower along legs. Feel hamstring stretch. Neutral spine — no rounding. 3 seconds down.",
   "Prone Dumbbell Hamstring Curl": "Lie face down on bench, legs hanging off. Hold dumbbell between feet. Curl heels toward glutes. Lower slowly — 3-4 second eccentric. Keep hips flat on bench.",
   "Single-Leg Dumbbell RDL": "Stand on one leg, slight knee bend. Hold dumbbell in opposite hand. Hinge at hip, free leg goes back — body forms a T. Feel hamstring stretch in standing leg. Drive through heel to return. Hips square. Enter reps per side.",
@@ -79,7 +79,7 @@ const EXERCISE_LIST = [
 
 const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({ id: i + 1, ...e, active: true }));
 
-// ─── PRIME FACTOR ─────────────────────────────────────────────────────────────
+// ─── STRENGTH FACTOR ──────────────────────────────────────────────────────────
 function calcPF(sets, reps, weight, type, laterality) {
   const mult = laterality === "unilateral" ? 2 : 1;
   if (type === "bodyweight") return sets * reps * 10 * mult;
@@ -1020,7 +1020,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
             {[
               ["Exercises", `${completed}/${total}`, "#E8EAF0"],
-              ["Session PF", (sPF||0).toLocaleString(), "#E8A838"],
+              ["Session SF", (sPF||0).toLocaleString(), "#E8A838"],
               ["vs Last", pfChange !== null ? `${pfChange >= 0 ? "+" : ""}${pfChange.toFixed(1)}%` : "First", pfChange === null ? "#4B5563" : pfChange >= 0 ? "#4AD99A" : "#D94A4A"],
               isPreview ? ["Status", completed === total ? "Complete" : "In Progress", completed === total ? "#4AD99A" : "#E8A838"] : ["New PRs", prs, prs > 0 ? "#FFD700" : "#4B5563"],
             ].map(([label, val, color]) => (
@@ -1388,7 +1388,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                     <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Today's Sets</div>
                     <div style={{ color: "#E8A838", fontSize: 14, fontWeight: 700 }}>
-                      {calcPF(reviewLog.sets, reviewLog.reps, reviewLog.weight, reviewEx.type, reviewEx.laterality).toLocaleString()} PF total
+                      {calcPF(reviewLog.sets, reviewLog.reps, reviewLog.weight, reviewEx.type, reviewEx.laterality).toLocaleString()} SF total
                     </div>
                   </div>
 
@@ -1402,7 +1402,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                             {s.rir !== null && s.rir !== undefined && s.rir !== "" && <span style={{ background: "#4A90D922", color: "#4A90D9", fontSize: 11, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>RIR {s.rir}</span>}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{calcPF(1, s.reps, s.weight, reviewEx.type, reviewEx.laterality).toLocaleString()} PF</span>
+                            <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{calcPF(1, s.reps, s.weight, reviewEx.type, reviewEx.laterality).toLocaleString()} SF</span>
                             <button onClick={() => { if (!reviewLog.id) return; const init = { inMemory: false, logId: reviewLog.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" }; setEditingSet(init); setEditDraft(init); }}
                               disabled={!reviewLog.id}
                               style={{ background: "none", border: "none", color: reviewLog.id ? "#4B5563" : "#2A2D3A", cursor: reviewLog.id ? "pointer" : "not-allowed", fontSize: 13, padding: 2 }}
@@ -1450,7 +1450,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
           {[
             ["Elapsed Time", workoutStartedAt ? `${String(Math.floor(elapsedSeconds / 3600)).padStart(2,"0")}:${String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2,"0")}:${String(elapsedSeconds % 60).padStart(2,"0")}` : "00:00:00", "#E8EAF0"],
             ["Exercises Completed", `${active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).length}/${active.length}`, "#4AD99A"],
-            ["Session Prime Factor", sessionPF.toLocaleString(), "#E8A838"],
+            ["Session Strength Factor", sessionPF.toLocaleString(), "#E8A838"],
           ].map(([label, val, color]) => (
             <div key={label} style={{ background: "#1A1D26", borderRadius: 10, border: "1px solid #2A2D3A", padding: "10px 14px" }}>
               <div style={{ color: "#4B5563", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{label}</div>
@@ -1477,7 +1477,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
             <div style={{ background: "#0F1117", borderRadius: 10, padding: "10px 16px", border: "1px solid #2A2D3A", textAlign: "right", flexShrink: 0, marginLeft: 16 }}>
               <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Last — {fmtDate(last.date)}</div>
               <div style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{last.weight ? `${last.weight} lbs` : "BW"} · {last.sets}×{last.reps}</div>
-              <div style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>PF {calcPF(last.sets, last.reps, last.weight, ex.type, ex.laterality).toLocaleString()}</div>
+              <div style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>SF {calcPF(last.sets, last.reps, last.weight, ex.type, ex.laterality).toLocaleString()}</div>
             </div>
           )}
         </div>
@@ -1519,7 +1519,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                   <span style={{ color: "#8B92A5", fontSize: 12 }}>Set {s.setNum}</span>
                   <span style={{ color: "#E8EAF0", fontSize: 12, fontWeight: 600 }}>{s.reps} reps {s.weight > 0 ? `@ ${s.weight} lbs` : ""}</span>
                   {s.rir !== null && s.rir !== undefined && s.rir !== "" && <span style={{ background: "#4A90D922", color: "#4A90D9", fontSize: 10, padding: "1px 5px", borderRadius: 4, fontWeight: 700 }}>RIR {s.rir}</span>}
-                  <span style={{ color: "#E8A838", fontSize: 12 }}>{s.pf.toLocaleString()} PF</span>
+                  <span style={{ color: "#E8A838", fontSize: 12 }}>{s.pf.toLocaleString()} SF</span>
                 </div>
               ))}
               {exSets.some(s => s.notes) && (
@@ -1633,7 +1633,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
               </div>
             </div>
 
-            {/* RIR (Reps In Reserve) + live PF */}
+            {/* RIR (Reps In Reserve) + live SF */}
             <div>
               <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, textAlign: "center" }}>
                 Reps In Reserve (RIR)
@@ -1658,7 +1658,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{stagedPF.toLocaleString()}</div>
-                <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Set PF</div>
+                <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Set SF</div>
               </div>
             </div>
 
@@ -1713,7 +1713,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                         {s.rir !== null && s.rir !== undefined && s.rir !== "" && <span style={{ background: "#4A90D922", color: "#4A90D9", fontSize: 11, padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>RIR {s.rir}</span>}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{s.pf.toLocaleString()} PF</span>
+                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>{s.pf.toLocaleString()} SF</span>
                         <button onClick={() => { const init = { inMemory: true, exerciseId: ex.id, setNum: s.setNum, reps: String(s.reps), weight: String(s.weight), rir: s.rir ?? "", notes: s.notes || "" }; setEditingSet(init); setEditDraft(init); }}
                           style={{ background: "none", border: "none", color: "#4B5563", cursor: "pointer", fontSize: 13, padding: 2 }} title="Edit set">✎</button>
                       </div>
@@ -1721,7 +1721,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 14px" }}>
                     <span style={{ color: "#4B5563", fontSize: 12 }}>Exercise total</span>
-                    <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 800 }}>{exAccumPF.toLocaleString()} PF
+                    <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 800 }}>{exAccumPF.toLocaleString()} SF
                       {lastExPF && <span style={{ color: exAccumPF >= lastExPF ? "#4AD99A" : "#D94A4A", fontSize: 11, marginLeft: 8 }}>
                         ({exAccumPF >= lastExPF ? "+" : ""}{(((exAccumPF - lastExPF) / lastExPF) * 100).toFixed(1)}%)
                       </span>}
@@ -1817,9 +1817,9 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                   ))}
                 </div>
               )}
-              {/* Session PF compact */}
+              {/* Session SF compact */}
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #2A2D3A", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Session PF</span>
+                <span style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Session SF</span>
                 <span style={{ color: "#E8A838", fontSize: 16, fontWeight: 800 }}>{sessionPF.toLocaleString()}</span>
               </div>
             </div>
@@ -1924,7 +1924,7 @@ function ProgressTab({ exercises, workoutLogs }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Prime Factor Dashboard</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Strength Factor Dashboard</h2>
           <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Normalized progress across all exercises</div>
         </div>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
@@ -1942,7 +1942,7 @@ function ProgressTab({ exercises, workoutLogs }) {
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 20, marginBottom: 20 }}>
             <Card style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, border: `1px solid ${trendColor}44` }}>
-              <div style={{ color: "#8B92A5", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Overall Prime Factor Score</div>
+              <div style={{ color: "#8B92A5", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Overall Strength Factor Score</div>
               {overallScore !== null ? (
                 <>
                   <div style={{ color: trendColor, fontSize: 52, fontWeight: 800, lineHeight: 1 }}>
@@ -1958,7 +1958,7 @@ function ProgressTab({ exercises, workoutLogs }) {
             </Card>
 
             <Card>
-              <SectionLabel>Prime Factor by Muscle Group</SectionLabel>
+              <SectionLabel>Strength Factor by Muscle Group</SectionLabel>
               {groupAvgs.length === 0 ? (
                 <div style={{ color: "#3A3D4A", fontSize: 13 }}>No data yet</div>
               ) : (
@@ -2051,7 +2051,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                   <div>
                     <div style={{ fontSize: 17, fontWeight: 700, color: "#E8EAF0" }}>{selStats.ex.name}</div>
                     <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
-                      {selStats.ex.laterality === "unilateral" ? "Unilateral — PF = sets × reps × weight × 2" : "Bilateral — PF = sets × reps × weight"}
+                      {selStats.ex.laterality === "unilateral" ? "Unilateral — SF = sets × reps × weight × 2" : "Bilateral — SF = sets × reps × weight"}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 16 }}>
@@ -2066,7 +2066,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                     {selStats.peak && (
                       <div style={{ textAlign: "right" }}>
                         <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{selStats.peak.toLocaleString()}</div>
-                        <div style={{ color: "#4B5563", fontSize: 11 }}>peak PF</div>
+                        <div style={{ color: "#4B5563", fontSize: 11 }}>peak SF</div>
                       </div>
                     )}
                   </div>
@@ -2154,7 +2154,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                     <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
-                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>PF {calcPF(l.sets, l.reps, l.weight, selStats.ex.type, selStats.ex.laterality).toLocaleString()}</span>
+                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>SF {calcPF(l.sets, l.reps, l.weight, selStats.ex.type, selStats.ex.laterality).toLocaleString()}</span>
                       </div>
                       <div style={{ color: "#C8CDD8", fontSize: 13, marginTop: 2 }}>
                         {l.sets}×{l.reps}{l.weight ? ` @ ${l.weight} lbs` : ""}
@@ -2202,7 +2202,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{dayPF.toLocaleString()}</div>
-                      <div style={{ color: "#4B5563", fontSize: 11 }}>session PF</div>
+                      <div style={{ color: "#4B5563", fontSize: 11 }}>session SF</div>
                       {change !== null && (
                         <div style={{ color: change >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 12, fontWeight: 700 }}>
                           {change >= 0 ? "+" : ""}{change.toFixed(1)}% vs prev
@@ -2217,7 +2217,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                       return (
                         <div key={j} style={{ background: "#0F1117", borderRadius: 6, padding: "6px 10px", border: "1px solid #2A2D3A" }}>
                           <div style={{ color: "#C8CDD8", fontSize: 12, fontWeight: 600 }}>{ex?.name}</div>
-                          <div style={{ color: "#8B92A5", fontSize: 11 }}>{l.sets}×{l.reps}{l.weight ? ` @ ${l.weight}lbs` : ""} · <span style={{ color: "#E8A838" }}>PF {pf.toLocaleString()}</span></div>
+                          <div style={{ color: "#8B92A5", fontSize: 11 }}>{l.sets}×{l.reps}{l.weight ? ` @ ${l.weight}lbs` : ""} · <span style={{ color: "#E8A838" }}>SF {pf.toLocaleString()}</span></div>
                         </div>
                       );
                     })}
@@ -2864,7 +2864,7 @@ function buildCoachNarrative(confidence, weightChange, wRate, waistChange, total
       ? "Body weight has increased " + weightChange + " lbs since phase start. This likely reflects increased food volume, glycogen storage, and hydration — not fat gain. "
       : "";
     const pfNote = totalPFChange !== null && totalPFChange > 0
-      ? "Prime Factor is showing a " + totalPFChange + "% improvement — a strong early signal. "
+      ? "Strength Factor is showing a " + totalPFChange + "% improvement — a strong early signal. "
       : "";
     return wNote + pfNote + "Only " + daysSince + " day" + (daysSince !== 1 ? "s" : "") + " of data with " + weighIns + " weigh-in" + (weighIns !== 1 ? "s" : "") + " — not enough for a reliable trend. Focus on consistent daily logging. No adjustments recommended.";
   }
@@ -2877,7 +2877,7 @@ function buildCoachNarrative(confidence, weightChange, wRate, waistChange, total
       ? "Waist trend (rolling average) is " + (waistChange === 0 ? "stable" : (waistChange > 0 ? "up +" + waistChange + '"' : "down " + Math.abs(waistChange) + '"') + " from baseline") + ", which is " + (waistChange <= 0.5 ? "acceptable at this stage" : "worth monitoring — wait for 2+ more weekly measurements before adjusting") + ". "
       : "";
     const pfNote = totalPFChange !== null
-      ? "Prime Factor is " + (totalPFChange > 0 ? "up " + totalPFChange + "%" : "flat or declining") + " since phase start. "
+      ? "Strength Factor is " + (totalPFChange > 0 ? "up " + totalPFChange + "%" : "flat or declining") + " since phase start. "
       : "";
     return wNote + waistNote + pfNote + "Trends are emerging. Continue collecting data before making plan adjustments.";
   }
@@ -2885,7 +2885,7 @@ function buildCoachNarrative(confidence, weightChange, wRate, waistChange, total
   if (verdict === "green") {
     const wTrend    = wRate !== null ? "Weight has been trending at " + (wRate >= 0 ? "+" : "") + wRate + " lbs/week (7-day rolling average)" : "Weight trend is controlled";
     const waistNote = waistChange !== null && waistChange <= 0.25 ? " while the waist rolling average remains stable — indicating lean muscle gain" : "";
-    const pfNote    = totalPFChange !== null && totalPFChange > 0 ? ". Prime Factor is up " + totalPFChange + "% since phase start" : "";
+    const pfNote    = totalPFChange !== null && totalPFChange > 0 ? ". Strength Factor is up " + totalPFChange + "% since phase start" : "";
     return wTrend + waistNote + pfNote + ". Continue the current plan.";
   }
   if (verdict === "red") {
@@ -3019,7 +3019,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     return waistChange === 0 ? "No change from baseline" : (waistChange > 0 ? "+" : "") + waistChange + '" from baseline';
   })();
 
-  // Prime Factor KPI
+  // Strength Factor KPI
   const pfSince = (exerciseIds, since) => {
     const sinceDate = since ? new Date(since) : null;
     const relevant = workoutLogs.filter(l => !sinceDate || new Date(l.date) >= sinceDate);
@@ -3128,7 +3128,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const trendOptions = [
     { id: "weight", label: "Weight",       data: weightSeries, color: "#4A90D9", unit: "lbs", ...trendVerdict(weightSeries, phase?.type !== "cut") },
     { id: "waist",  label: "Waist",        data: waistSeries,  color: "#D94A4A", unit: "in",  ...trendVerdict(waistSeries,  false) },
-    { id: "pf",     label: "Prime Factor", data: pfByDay,      color: "#E8A838", unit: "PF",  ...trendVerdict(pfByDay,      true) },
+    { id: "pf",     label: "Strength Factor", data: pfByDay,      color: "#E8A838", unit: "SF",  ...trendVerdict(pfByDay,      true) },
     { id: "chest",  label: "Chest",        data: chestSeries,  color: "#4A90D9", unit: "in",  ...trendVerdict(chestSeries,  true) },
     { id: "arms",   label: "Arms",         data: armsSeries,   color: "#D94A7A", unit: "in",  ...trendVerdict(armsSeries,   true) },
     { id: "glutes", label: "Glutes",       data: glutesSeries, color: "#E87D38", unit: "in",  ...trendVerdict(glutesSeries, true) },
@@ -3163,7 +3163,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       weight: { current: latestWeight, baseline: baseWeight, change: weightChange, weeklyRate: wRate },
       waist: { current: latestWaist, baseline: baseWaist, change: waistChange },
       measurements: { chest: latest.chest, arms: latest.arms, thighs: latest.thighs, glutes: latest.glutes },
-      primeFactorChange: { total: totalPFChange, upper: upperPFChange, lower: lowerPFChange },
+      strengthFactorChange: { total: totalPFChange, upper: upperPFChange, lower: lowerPFChange },
       nutrition: { avgCalories: avgCals, target: getTargets(phase).calories, avgProtein: avgProt, proteinTarget: getTargets(phase).protein, daysLogged: recentNutrition.length },
       recovery: { sessionsCompleted: recentRecovery.length, avgEnergy, avgHeelPain: heelTrend, avgLowBack: backTrend },
       workoutDays: [...new Set(recentWorkouts.map(l => l.date.split("T")[0]))].length,
@@ -3205,7 +3205,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       "\n\nProject Prime success criteria for a " + phaseType + " Phase:\n" +
       "- Weight " + weightCriteria + "\n" +
       "- Waist " + waistCriteria + "\n" +
-      "- Prime Factor " + pfCriteria + "\n" +
+      "- Strength Factor " + pfCriteria + "\n" +
       "- Protein target hit consistently\n" +
       "- Recovery sessions improving\n\n" +
       "Return ONLY this JSON:\n{\n" +
@@ -3800,9 +3800,9 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
           <div style={{ marginTop: 10 }}><MiniBarChart data={waistSeries.slice(-8)} color="#D94A4A" height={36} /></div>
         </div>
 
-        {/* Prime Factor */}
+        {/* Strength Factor */}
         <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid " + ({ green: "#4AD99A33", yellow: "#E8A83833", red: "#D94A4A33", blue: "#4A90D933", gray: "#2A2D3A" }[pfStatus] || "#2A2D3A"), padding: 18 }}>
-          <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Prime Factor</div>
+          <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Strength Factor</div>
           <div style={{ fontSize: 34, fontWeight: 800, color: "#E8A838", lineHeight: 1 }}>{totalPFChange !== null ? (totalPFChange >= 0 ? "+" : "") + totalPFChange + "%" : "—"}</div>
           <div style={{ color: "#8B92A5", fontSize: 11, marginBottom: 6 }}>
             {pfHasTrend ? "active strength trend" : pfEarlySignal ? "early strength signal" : "phase change"}
