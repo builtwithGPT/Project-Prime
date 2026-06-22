@@ -1311,6 +1311,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     const fullyCompletedTemplate = WORKOUT_TEMPLATES.find(t => isTemplateCompleted(t));
     const completedTemplateName = fullyCompletedTemplate?.label || endedTemplateName || null;
 
+    // isTemplateEndedOrCompleted — broader check used for card badges and button labels.
+    // True if: all exercises done (strict), OR workoutEnded today and this template
+    // matches the inferred template from today's logs.
+    const isTemplateEndedOrCompleted = (t) =>
+      isTemplateCompleted(t) || (workoutEnded && endedTemplate?.id === t.id);
+
     return (
       <div>
         {renderWorkoutSummaryModal()}
@@ -1412,7 +1418,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 28 }}>
           {WORKOUT_TEMPLATES.map(t => {
             const isSelected = t.id === selectedTemplateId;
-            const tCompleted = isTemplateCompleted(t);
+            const tCompleted = isTemplateEndedOrCompleted(t);
             const handleSelect = () => {
               // Just select the template — confirmation fires only when user taps Start Workout
               setSelectedTemplateId(t.id);
