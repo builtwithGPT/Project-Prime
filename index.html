@@ -2121,6 +2121,7 @@ function ProgressTab({ exercises, workoutLogs }) {
   const [view, setView] = useState("dashboard");
   const [baselines, setBaselines] = useState(() => getBaselines());
   const [showBaselineConfirm, setShowBaselineConfirm] = useState(false);
+  const [prSort, setPrSort] = useState("recent"); // "recent" | "group" | "gain" — lifted from PR IIFE (Rules of Hooks)
 
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
@@ -2589,7 +2590,6 @@ function ProgressTab({ exercises, workoutLogs }) {
         }).filter(Boolean).sort((a, b) => new Date(b.best.log.date) - new Date(a.best.log.date));
 
         // Group by muscle group for optional grouping
-        const [prSort, setPrSort] = React.useState("recent"); // "recent" | "group" | "gain"
         const sorted = [...prRecords].sort((a, b) => {
           if (prSort === "group")  return a.ex.muscleGroup.localeCompare(b.ex.muscleGroup);
           if (prSort === "gain")   return (b.delta ?? -Infinity) - (a.delta ?? -Infinity);
