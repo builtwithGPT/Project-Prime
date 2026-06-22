@@ -755,11 +755,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   }, 0);
 
   const lastEntry = (id) => {
-    // Exclude today's logs so this always returns the most recent PRIOR session entry.
-    // workoutLogs is updated immediately when a set is saved, so without this filter
-    // the Last box, lastExPF, and bestEverPF all pick up today's entry and show stale/zero comparisons.
-    const todayStr = new Date().toLocaleDateString("en-CA");
-    const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id) && new Date(x.date).toLocaleDateString("en-CA") !== todayStr);
+    // Returns the most recent log for this exercise across ALL history (including today).
+    // Used in the pre-workout list view "Last" column — should always show the most recent
+    // actual session, including one completed earlier today.
+    // Note: lastExPF and bestEverPF (used on the Exercise Complete screen) have their own
+    // inline today-exclusion so comparisons don't compare a session against itself.
+    const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id));
     return logs.length ? logs[logs.length - 1] : null;
   };
 
