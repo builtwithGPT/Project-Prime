@@ -1270,6 +1270,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     return (
       <div>
         {renderWorkoutSummaryModal()}
+        {renderEditSetModal()}
 
         {/* Workout draft recovery prompt */}
         {workoutDraftPrompt && (
@@ -1336,17 +1337,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
             <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · Choose your session</div>
           </div>
-          {selectedTemplateCompleted ? (
-            <button onClick={startWorkout}
-              style={{ background: "#2A2D3A", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              Edit Workout
-            </button>
-          ) : todayLogs.length === 0 ? (
+          {todayLogs.length === 0 ? (
             <button onClick={startWorkout}
               style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
               Start Workout
             </button>
-          ) : (
+          ) : selectedTemplateCompleted ? null : (
             <button onClick={startWorkout}
               style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
               Resume Workout
@@ -1360,10 +1356,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
             const isSelected = t.id === selectedTemplateId;
             const tCompleted = isTemplateCompleted(t);
             const handleSelect = () => {
+              // Just select the template — confirmation fires only when user taps Start Workout
               setSelectedTemplateId(t.id);
-              if (!tCompleted && completedTemplateName) {
-                setAdditionalWorkoutConfirm({ completedTemplateName });
-              }
             };
             return (
               <div key={t.id} onClick={handleSelect} style={{
@@ -1522,7 +1516,18 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                 );
               })}
             </div>
-          </div>
+          {/* Start Workout button inside the exercise preview panel — triggers confirmation if another workout already done today */}
+          <button onClick={() => {
+              if (completedTemplateName) {
+                setAdditionalWorkoutConfirm({ completedTemplateName });
+              } else {
+                startWorkout();
+              }
+            }}
+            style={{ marginTop: 16, width: "100%", background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 12, height: 56, fontSize: 17, fontWeight: 800, cursor: "pointer" }}>
+            {completedTemplateName ? "Start Additional Workout" : "Start Workout"}
+          </button>
+        </div>
         )}
       </div>
     );
