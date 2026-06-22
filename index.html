@@ -1337,17 +1337,27 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
             <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#E8EAF0" }}>Today's Workout</h2>
             <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>{fmtDateLong(new Date())} · Choose your session</div>
           </div>
-          {todayLogs.length === 0 ? (
-            <button onClick={startWorkout}
-              style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              Start Workout
-            </button>
-          ) : selectedTemplateCompleted ? null : (
-            <button onClick={startWorkout}
-              style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
-              Resume Workout
-            </button>
-          )}
+          {(() => {
+            // Has the selected template been started (any of its exercises logged today)?
+            const selectedHasLogsToday = active.some(e => todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
+            if (selectedTemplateCompleted) return null; // editing via pencil icons only
+            if (selectedHasLogsToday) {
+              // In progress — Resume goes straight in, no confirmation needed
+              return (
+                <button onClick={startWorkout}
+                  style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+                  Resume Workout
+                </button>
+              );
+            }
+            // Not started — Start; if another template already done today, show confirmation first
+            return (
+              <button onClick={() => { if (completedTemplateName) { setAdditionalWorkoutConfirm({ completedTemplateName }); } else { startWorkout(); } }}
+                style={{ background: selectedTemplate.color, color: "#0F1117", border: "none", borderRadius: 10, padding: "13px 32px", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>
+                Start Workout
+              </button>
+            );
+          })()}
         </div>
 
         {/* Session cards */}
