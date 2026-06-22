@@ -2171,7 +2171,7 @@ function ProgressTab({ exercises, workoutLogs }) {
           <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Normalized progress across all exercises</div>
         </div>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-          {[["dashboard", "Dashboard"], ["detail", "Exercise Detail"], ["history", "Workout History"]].map(([id, label]) => (
+          {[["dashboard", "Dashboard"], ["detail", "Exercise Detail"], ["history", "Workout History"], ["prs", "🏆 PRs"]].map(([id, label]) => (
             <button key={id} onClick={() => setView(id)}
               style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
                 border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
@@ -2567,6 +2567,126 @@ function ProgressTab({ exercises, workoutLogs }) {
           })()}
         </div>
       )}
+      {view === "prs" && (() => {
+        // Build PR record for each active exercise with at least 1 session
+        // PR = highest SF ever recorded; also track when it was set and delta vs prior best
+        const prRecords = exercises.filter(e => e.active).map(ex => {
+          const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
+          if (!logs.length) return null;
+          // Build all SF values with their source log
+          const entries = logs.map(l => ({
+            sf: calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality),
+            log: l,
+          })).filter(e => e.sf > 0).sort((a, b) => b.sf - a.sf);
+          if (!entries.length) return null;
+          const best = entries[0];
+          const prior = entries.find(e => {
+            // Prior best: highest SF from a different date than the PR session
+            return new Date(e.log.date).toLocaleDateString("en-CA") !== new Date(best.log.date).toLocaleDateString("en-CA");
+          });
+          const delta = prior ? ((best.sf - prior.sf) / prior.sf * 100) : null;
+          return { ex, best, prior, delta };
+        }).filter(Boolean).sort((a, b) => new Date(b.best.log.date) - new Date(a.best.log.date));
+
+        // Group by muscle group for optional grouping
+        const [prSort, setPrSort] = React.useState("recent"); // "recent" | "group" | "gain"
+        const sorted = [...prRecords].sort((a, b) => {
+          if (prSort === "group")  return a.ex.muscleGroup.localeCompare(b.ex.muscleGroup);
+          if (prSort === "gain")   return (b.delta ?? -Infinity) - (a.delta ?? -Infinity);
+          return new Date(b.best.log.date) - new Date(a.best.log.date); // recent
+        });
+
+        return (
+          <div>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div>
+                <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 700 }}>Personal Records</div>
+                <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 2 }}>Best Strength Factor ever recorded per exercise</div>
+              </div>
+              <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
+                {[["recent", "Most Recent"], ["group", "By Muscle"], ["gain", "Biggest Gain"]].map(([id, label]) => (
+                  <button key={id} onClick={() => setPrSort(id)}
+                    style={{ background: prSort === id ? "#4A90D9" : "none", color: prSort === id ? "#fff" : "#8B92A5",
+                      border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: prSort === id ? 600 : 400, cursor: "pointer" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {sorted.length === 0 ? (
+              <Card style={{ textAlign: "center", padding: 48 }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🏆</div>
+                <div style={{ color: "#3A3D4A", fontSize: 14 }}>No PRs yet. Complete your first workout to start tracking records.</div>
+              </Card>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {sorted.map(({ ex, best, prior, delta }) => {
+                  const color = MUSCLE_COLORS[ex.muscleGroup] || "#4B5563";
+                  const l = best.log;
+                  return (
+                    <div key={ex.id} style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #FFD70033", padding: "16px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+
+                        {/* Left: trophy + exercise info */}
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#FFD70022", border: "1px solid #FFD70044",
+                            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+                            🏆
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{ex.name}</span>
+                              <span style={{ background: color + "22", color, padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{ex.muscleGroup}</span>
+                              <span style={{ background: "#FFD70022", color: "#FFD700", padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" }}>🏆 PR</span>
+                            </div>
+                            {delta !== null && (
+                              <div style={{ color: "#FFD700", fontSize: 12, fontWeight: 700, marginTop: 4 }}>
+                                +{delta.toFixed(1)}% vs previous best ({prior.sf.toLocaleString()} SF)
+                              </div>
+                            )}
+                            <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3 }}>
+                              Set {fmtDateLong(new Date(l.date))}
+                              {ex.laterality === "unilateral" && <span style={{ color: "#7B68EE", marginLeft: 6 }}>per side</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right: SF + weight × reps */}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ color: "#E8A838", fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{best.sf.toLocaleString()}</div>
+                          <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>SF</div>
+                          <div style={{ color: "#C8CDD8", fontSize: 13, fontWeight: 600, marginTop: 6 }}>
+                            {l.weight ? `${l.reps} reps @ ${l.weight} lbs` : `${l.reps} reps`}
+                          </div>
+                          <div style={{ color: "#4B5563", fontSize: 11 }}>{l.sets} sets</div>
+                        </div>
+                      </div>
+
+                      {/* Progress bar: best SF vs prior best */}
+                      {prior && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #2A2D3A" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>vs Previous Best</span>
+                            <span style={{ color: "#8B92A5", fontSize: 10 }}>{prior.sf.toLocaleString()} SF → {best.sf.toLocaleString()} SF</span>
+                          </div>
+                          <div style={{ background: "#0F1117", borderRadius: 4, height: 5 }}>
+                            <div style={{ width: `${Math.min(100, (prior.sf / best.sf) * 100)}%`, height: "100%", background: "#4B5563", borderRadius: 4 }} />
+                          </div>
+                          <div style={{ background: "#0F1117", borderRadius: 4, height: 5, marginTop: 2, position: "relative" }}>
+                            <div style={{ width: "100%", height: "100%", background: "#FFD700", borderRadius: 4 }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
