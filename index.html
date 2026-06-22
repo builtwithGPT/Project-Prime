@@ -198,6 +198,25 @@ function flattenTemplate(template) {
   return out;
 }
 
+// inferTemplateName — given a set of exerciseIds logged on a day, returns the best-matching
+// template label (e.g. "Express Workout") by counting how many of that template's exercises
+// appear in the logged set. The template with the highest overlap wins.
+// Used in Workout History to display the workout name without requiring it to be stored.
+function inferTemplateName(loggedExerciseIds) {
+  const idSet = new Set(loggedExerciseIds.map(Number));
+  let bestTemplate = null, bestScore = 0;
+  WORKOUT_TEMPLATES.forEach(t => {
+    const tIds = flattenTemplate(t).map(e => {
+      const match = INITIAL_EXERCISES.find(x => x.name === e.name);
+      return match ? Number(match.id) : null;
+    }).filter(Boolean);
+    const overlap = tIds.filter(id => idSet.has(id)).length;
+    const score = tIds.length > 0 ? overlap / tIds.length : 0;
+    if (score > bestScore) { bestScore = score; bestTemplate = t; }
+  });
+  return bestTemplate ? bestTemplate.label : null;
+}
+
 // Bodyweight/banded exercises with no history show their default prescription
 // instead of "Set starting weight" since there's no weight to set.
 function suggestedText(ex, lastE) {
@@ -1015,7 +1034,16 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     });
 
     const uniqueCompleted = new Set(tLogs.map(l => Number(l.exerciseId))).size;
-    const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId };
+    const durationMinutes = workoutStartedAt ? Math.round((Date.now() - workoutStartedAt) / 60000) : null;
+    // Persist duration keyed by date so Workout History can read it back after page reload
+    if (durationMinutes !== null) {
+      try {
+        const durStore = JSON.parse(localStorage.getItem("pp_workout_durations") || "{}");
+        durStore[todayLocalKey] = durationMinutes;
+        localStorage.setItem("pp_workout_durations", JSON.stringify(durStore));
+      } catch {}
+    }
+    const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId, durationMinutes };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
     localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true }));
@@ -2236,11 +2264,18 @@ function ProgressTab({ exercises, workoutLogs }) {
                 return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
               }, 0) : null;
               const change = prevPF ? ((dayPF - prevPF) / prevPF * 100) : null;
+              const dayKey = new Date(day).toLocaleDateString("en-CA");
+              const workoutName = inferTemplateName(logs.map(l => l.exerciseId));
+              const durStore = (() => { try { return JSON.parse(localStorage.getItem("pp_workout_durations") || "{}"); } catch { return {}; } })();
+              const storedDuration = durStore[dayKey] || null;
               return (
                 <Card key={day} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                     <div>
                       <div style={{ color: "#E8EAF0", fontWeight: 700, fontSize: 15 }}>{fmtDateLong(new Date(day))}</div>
+                      {workoutName && (
+                        <div style={{ color: "#4A90D9", fontSize: 13, fontWeight: 700, marginTop: 2 }}>{workoutName}{storedDuration ? ` · ${storedDuration} min` : ""}</div>
+                      )}
                       <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>{logs.length} exercise{logs.length !== 1 ? "s" : ""} logged</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -5837,6 +5872,8 @@ function App() {
         exercises_completed: summary.completed, exercises_total: summary.total,
         session_pf: summary.sessionPF, previous_session_pf: summary.prevPF,
         pf_change_pct: summary.pfChange, personal_records: summary.prs,
+        template_id: summary.templateId || null,
+        duration_minutes: summary.durationMinutes || null,
       }, session);
     } catch {}
   };
