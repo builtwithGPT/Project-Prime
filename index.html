@@ -669,6 +669,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   useEffect(() => {
     if (!activeMode) return;
     saveDraft(DRAFT_KEYS.workout, {
+      selectedTemplateId,
       currentIdx,
       completedSets,
       loggedIds: [...loggedIds],
@@ -691,6 +692,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   }, [activeMode, workoutStartedAt]);
 
   const resumeWorkoutDraft = (draft) => {
+    if (draft.selectedTemplateId) setSelectedTemplateId(draft.selectedTemplateId);
     setCurrentIdx(draft.currentIdx || 0);
     setCompletedSets(draft.completedSets || {});
     setLoggedIds(new Set([...workoutLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA")).map(l => l.exerciseId), ...(draft.loggedIds || [])]));
@@ -718,7 +720,11 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   }, 0);
 
   const lastEntry = (id) => {
-    const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id));
+    // Exclude today's logs so this always returns the most recent PRIOR session entry.
+    // workoutLogs is updated immediately when a set is saved, so without this filter
+    // the Last box, lastExPF, and bestEverPF all pick up today's entry and show stale/zero comparisons.
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id) && new Date(x.date).toLocaleDateString("en-CA") !== todayStr);
     return logs.length ? logs[logs.length - 1] : null;
   };
 
@@ -733,17 +739,20 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const stagedPF = ex ? calcPF(1, +currentSetReps, +currentSetWeight, ex.type, ex.laterality) : 0;
   // PF accumulated for this exercise so far
   const exAccumPF = exSets.reduce((s, set) => s + (set.pf || 0), 0);
-  // Last session PF for this exercise
+  // Last session PF for this exercise — excludes today so "vs Last Session" always compares
+  // against a prior session, not the entry that was just saved moments ago.
   const lastExPF = ex ? (() => {
-    const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id));
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id) && new Date(x.date).toLocaleDateString("en-CA") !== todayStr);
     return h.length ? calcPF(h[h.length-1].sets, h[h.length-1].reps, h[h.length-1].weight, ex.type, ex.laterality) : null;
   })() : null;
 
-  // bestEverPF — highest Strength Factor ever logged for this exercise, across ALL history.
-  // This is the true PR baseline (per Project Prime spec), distinct from lastExPF
-  // which only reflects the most recent session and is used for "vs Last Session".
+  // bestEverPF — highest Strength Factor ever logged for this exercise, across ALL PRIOR history.
+  // Excludes today so the PR badge on the Exercise Complete screen compares the current session
+  // against historical bests, not against itself (which would always be false).
   const bestEverPF = ex ? (() => {
-    const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id));
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id) && new Date(x.date).toLocaleDateString("en-CA") !== todayStr);
     if (!h.length) return null;
     return h.reduce((best, l) => Math.max(best, calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality)), 0);
   })() : null;
@@ -947,7 +956,9 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     setLoggedIds(new Set(todayLogs.map(l => l.exerciseId)));
     setWorkoutEnded(false); setWorkoutSummary(null);
     setCompletedSets({});
-    setWorkoutStartedAt(Date.now());
+    // Preserve workoutStartedAt if a session is already live (i.e. user tapped "Back to Workout"
+    // and is now resuming). Only stamp a new start time for a genuinely fresh session.
+    if (!workoutStartedAt) setWorkoutStartedAt(Date.now());
     // Remove ended flag — allow amend on same day
     localStorage.removeItem("pp_workout_ended");
     // Start from first incomplete exercise (or exercise 0 for fresh start)
@@ -961,23 +972,50 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     clearDraft(DRAFT_KEYS.workout);
     const todayLocalKey = new Date().toLocaleDateString("en-CA");
     const allLogs = freshLogs || workoutLogs;
-    const tLogs   = allLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === todayLocalKey);
-    const prevDayLogs  = allLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey);
-    const prevDates    = [...new Set(prevDayLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))].sort((a, b) => new Date(b) - new Date(a));
-    const prevSessLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0]) : [];
-    const prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+
+    // The exercise IDs that belong to the current template (e.g. Express, Full Body, Extended).
+    // All comparisons are scoped to this set so "VS Last" always means
+    // "last time I did this same template", not "last workout day regardless of type".
+    const activeExIds = new Set(active.map(e => Number(e.id)));
+
+    // Today's logs, scoped to the current template's exercises
+    const tLogs = allLogs.filter(x =>
+      new Date(x.date).toLocaleDateString("en-CA") === todayLocalKey &&
+      activeExIds.has(Number(x.exerciseId))
+    );
+
+    // All prior logs scoped to the current template's exercises
+    const prevAllLogs = allLogs.filter(x =>
+      new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey &&
+      activeExIds.has(Number(x.exerciseId))
+    );
+
+    // Find the most recent prior day that has at least one of this template's exercises —
+    // this is the "last time this template was run" anchor for the VS Last comparison.
+    const prevDates = [...new Set(prevAllLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))]
+      .sort((a, b) => new Date(b) - new Date(a));
+    const prevSessLogs = prevDates.length
+      ? prevAllLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0])
+      : [];
+
     const curPF  = tLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+    const prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
     const pfChange = prevPF > 0 ? ((curPF - prevPF) / prevPF * 100) : null;
+
+    // PRs: for each exercise in the current template completed today, check if today's SF
+    // beats the best SF ever recorded for that exercise on any prior day.
     let prs = 0;
     tLogs.forEach(l => {
       const e = exercises.find(x => x.id === l.exerciseId); if (!e) return;
       const thisPF = calcPF(l.sets, l.reps, l.weight, e.type, e.laterality);
-      const bestPrev = prevDayLogs.filter(x => x.exerciseId === l.exerciseId)
+      const bestPrev = prevAllLogs
+        .filter(x => Number(x.exerciseId) === Number(l.exerciseId))
         .reduce((best, x) => Math.max(best, calcPF(x.sets, x.reps, x.weight, e.type, e.laterality)), 0);
       if (thisPF > bestPrev && bestPrev > 0) prs++;
     });
+
     const uniqueCompleted = new Set(tLogs.map(l => Number(l.exerciseId))).size;
-    const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs };
+    const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
     localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true }));
@@ -996,18 +1034,23 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       ({ completed, total, sessionPF: sPF, prevPF, pfChange, prs } = workoutSummary);
       isPreview = false;
     } else {
-      // Live preview — recompute from current todayLogs, same logic as endWorkout uses
+      // Live preview — recompute from current todayLogs scoped to the current template,
+      // matching the same logic as endWorkout so the mid-workout summary is consistent.
       isPreview = true;
       total = active.length;
       completed = active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).length;
       sPF = sessionPF;
       const todayLocalKey = new Date().toLocaleDateString("en-CA");
-      const prevDayLogs  = workoutLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey);
-      const prevDates    = [...new Set(prevDayLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))].sort((a, b) => new Date(b) - new Date(a));
-      const prevSessLogs = prevDates.length ? prevDayLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0]) : [];
+      const activeExIdsPreview = new Set(active.map(e => Number(e.id)));
+      const prevAllLogsPreview = workoutLogs.filter(x =>
+        new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey &&
+        activeExIdsPreview.has(Number(x.exerciseId))
+      );
+      const prevDates = [...new Set(prevAllLogsPreview.map(l => new Date(l.date).toLocaleDateString("en-CA")))].sort((a, b) => new Date(b) - new Date(a));
+      const prevSessLogs = prevDates.length ? prevAllLogsPreview.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0]) : [];
       prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
       pfChange = prevPF > 0 ? ((sPF - prevPF) / prevPF * 100) : null;
-      prs = 0; // PR detection is a heavier check normally done at completion — omitted from live preview for simplicity/speed
+      prs = 0; // PR detection omitted from live preview for simplicity/speed
     }
 
     return (
