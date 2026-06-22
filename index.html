@@ -1279,6 +1279,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     });
 
     // Determine which templates are fully completed today
+    // isTemplateCompleted — a template is "all exercises done" only (strict 100% check).
+    // Used for the "✓ Done Today" badge on templates where every exercise was logged.
     const isTemplateCompleted = (t) => {
       const tExIds = flattenTemplate(t).map(entry => {
         const match = exercises.find(e => e.name === entry.name && e.active);
@@ -1286,8 +1288,28 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       }).filter(Boolean);
       return tExIds.length > 0 && tExIds.every(id => todayLogs.some(l => Number(l.exerciseId) === id));
     };
-    const selectedTemplateCompleted = isTemplateCompleted(selectedTemplate);
-    const completedTemplateName = WORKOUT_TEMPLATES.find(t => isTemplateCompleted(t))?.label || null;
+
+    // A workout session is considered "ended" if the user tapped End Workout today
+    // (workoutEnded=true), regardless of how many exercises were completed.
+    // In that case, infer which template was run from today's exercise count.
+    // This handles partial sessions — user ends early due to time, skips, etc.
+    const todayExIds = todayLogs.map(l => Number(l.exerciseId));
+    const endedTemplateName = workoutEnded && todayLogs.length > 0
+      ? inferTemplateName(todayExIds)
+      : null;
+    const endedTemplate = endedTemplateName
+      ? WORKOUT_TEMPLATES.find(t => t.label === endedTemplateName) || null
+      : null;
+
+    // selectedTemplateCompleted: true if ALL exercises done (strict), OR if workoutEnded
+    // and the selected template matches what was inferred from today's logs.
+    const selectedTemplateCompleted = isTemplateCompleted(selectedTemplate) ||
+      (workoutEnded && endedTemplate?.id === selectedTemplateId);
+
+    // completedTemplateName: the name of the template considered done today.
+    // Priority: fully-completed template first, then ended-early template.
+    const fullyCompletedTemplate = WORKOUT_TEMPLATES.find(t => isTemplateCompleted(t));
+    const completedTemplateName = fullyCompletedTemplate?.label || endedTemplateName || null;
 
     return (
       <div>
