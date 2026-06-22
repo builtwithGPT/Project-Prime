@@ -400,6 +400,27 @@ function lsSet(key, data) {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 }
 
+// ── Exercise baseline storage ─────────────────────────────────────────────────
+// Baselines are stored as { [exerciseId]: { date, sf, setAt } }
+// Multiple baselines can be set over time; the most recent is always the active one.
+// History of all baselines is kept in the "history" array on each entry.
+const BASELINES_KEY = "pp_exercise_baselines";
+function getBaselines() {
+  try { return JSON.parse(localStorage.getItem(BASELINES_KEY) || "{}"); } catch { return {}; }
+}
+function getBaseline(exerciseId) {
+  return getBaselines()[String(exerciseId)] || null;
+}
+function setBaseline(exerciseId, date, sf) {
+  const all = getBaselines();
+  const key = String(exerciseId);
+  const prev = all[key] || null;
+  const history = prev ? [...(prev.history || []), { date: prev.date, sf: prev.sf, setAt: prev.setAt }] : [];
+  all[key] = { date, sf, setAt: new Date().toISOString(), history };
+  try { localStorage.setItem(BASELINES_KEY, JSON.stringify(all)); } catch {}
+  return all[key];
+}
+
 // ─── DRAFT SESSION PERSISTENCE ────────────────────────────────────────────────
 const DRAFT_KEYS = { workout: "pp_draft_workout", recovery: "pp_draft_recovery" };
 
@@ -2097,6 +2118,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
 function ProgressTab({ exercises, workoutLogs }) {
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("dashboard");
+  const [baselines, setBaselines] = useState(() => getBaselines());
+  const [showBaselineConfirm, setShowBaselineConfirm] = useState(false);
 
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
@@ -2107,12 +2130,20 @@ function ProgressTab({ exercises, workoutLogs }) {
       if (!byDate[l.date] || pf > byDate[l.date]) byDate[l.date] = pf;
     });
     const pfSeries = Object.keys(byDate).sort().map(date => ({ value: byDate[date], date }));
-    const first = pfSeries[0]?.value, last = pfSeries[pfSeries.length - 1]?.value;
+
+    // Baseline: use the active recalibration baseline if one exists for this exercise,
+    // otherwise fall back to the first recorded session.
+    const baseline = baselines[String(ex.id)] || null;
+    const baselineEntry = baseline
+      ? pfSeries.find(p => p.date >= baseline.date) || pfSeries[0]
+      : pfSeries[0];
+    const first = baselineEntry?.value;
+    const last  = pfSeries[pfSeries.length - 1]?.value;
     const prev  = pfSeries[pfSeries.length - 2]?.value;
     const totalGain   = first && last  ? ((last  - first) / first * 100) : null;
     const sessionGain = last  && prev  ? ((last  - prev)  / prev  * 100) : null;
     const peak = pfSeries.length ? Math.max(...pfSeries.map(d => d.value)) : null;
-    return { ex, logs, pfSeries, first, last, prev, totalGain, sessionGain, peak };
+    return { ex, logs, pfSeries, first, last, prev, totalGain, sessionGain, peak, baseline, baselineEntry };
   });
 
   const scored = exStats.filter(s => s.totalGain !== null);
@@ -2215,7 +2246,7 @@ function ProgressTab({ exercises, workoutLogs }) {
                       {totalGain !== null ? (
                         <>
                           <div style={{ color: gainColor, fontSize: 18, fontWeight: 800 }}>{totalGain >= 0 ? "+" : ""}{totalGain.toFixed(1)}%</div>
-                          <div style={{ color: "#4B5563", fontSize: 10 }}>total gain</div>
+                          <div style={{ color: "#4B5563", fontSize: 10 }}>{baselines[String(ex.id)] ? "from baseline" : "total gain"}</div>
                         </>
                       ) : (
                         <div style={{ color: "#3A3D4A", fontSize: 11 }}>no data</div>
@@ -2257,6 +2288,55 @@ function ProgressTab({ exercises, workoutLogs }) {
 
           {selStats && (
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+              {/* Set New Baseline confirmation modal */}
+              {showBaselineConfirm && selStats && (() => {
+                const latestLog = [...selStats.logs].sort((a,b) => new Date(b.date)-new Date(a.date))[0];
+                const latestSF  = latestLog ? calcPF(latestLog.sets, latestLog.reps, latestLog.weight, selStats.ex.type, selStats.ex.laterality) : 0;
+                const latestDate = latestLog ? new Date(latestLog.date).toLocaleDateString("en-CA") : null;
+                return (
+                  <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.8)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+                    <div style={{ background:"#1A1D26", borderRadius:16, border:"1px solid #4A90D944", padding:32, maxWidth:440, width:"100%" }}>
+                      <div style={{ fontSize:28, marginBottom:12, textAlign:"center" }}>⭐</div>
+                      <div style={{ color:"#E8EAF0", fontSize:18, fontWeight:700, marginBottom:8, textAlign:"center" }}>Set New Baseline</div>
+                      <div style={{ color:"#8B92A5", fontSize:13, marginBottom:20, lineHeight:1.7, textAlign:"center" }}>
+                        Set the most recent session as the new baseline for <span style={{ color:"#E8EAF0", fontWeight:700 }}>{selStats.ex.name}</span>?
+                      </div>
+                      <div style={{ background:"#0F1117", borderRadius:10, padding:"14px 18px", marginBottom:20 }}>
+                        <div style={{ color:"#4B5563", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>This will:</div>
+                        {["Preserve all workout history","Preserve PR history","Preserve all Strength Factor values","Reset future % gain calculations from this session forward"].map((item,i) => (
+                          <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                            <span style={{ color:"#4AD99A", fontSize:12, flexShrink:0 }}>✓</span>
+                            <span style={{ color:"#C8CDD8", fontSize:13 }}>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {latestLog && (
+                        <div style={{ background:"#4A90D911", border:"1px solid #4A90D933", borderRadius:8, padding:"10px 14px", marginBottom:20, textAlign:"center" }}>
+                          <div style={{ color:"#4A90D9", fontSize:12, fontWeight:700 }}>New Baseline</div>
+                          <div style={{ color:"#E8EAF0", fontSize:15, fontWeight:700, marginTop:4 }}>{fmtDate(latestLog.date)} · SF {latestSF.toLocaleString()}</div>
+                          <div style={{ color:"#8B92A5", fontSize:12, marginTop:2 }}>{latestLog.sets}×{latestLog.reps}{latestLog.weight ? ` @ ${latestLog.weight} lbs` : ""}</div>
+                        </div>
+                      )}
+                      <div style={{ display:"flex", gap:12 }}>
+                        <button onClick={() => setShowBaselineConfirm(false)}
+                          style={{ flex:1, background:"#2A2D3A", color:"#8B92A5", border:"none", borderRadius:10, height:52, fontSize:15, cursor:"pointer" }}>
+                          Cancel
+                        </button>
+                        <button onClick={() => {
+                            if (!latestDate || !latestSF) return;
+                            setBaseline(selStats.ex.id, latestDate, latestSF);
+                            setBaselines(getBaselines());
+                            setShowBaselineConfirm(false);
+                          }}
+                          style={{ flex:1, background:"#4A90D9", color:"#fff", border:"none", borderRadius:10, height:52, fontSize:15, fontWeight:800, cursor:"pointer" }}>
+                          ⭐ Set New Baseline
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <Card>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
                   <div>
@@ -2264,14 +2344,23 @@ function ProgressTab({ exercises, workoutLogs }) {
                     <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
                       {selStats.ex.laterality === "unilateral" ? "Unilateral — SF = sets × reps × weight × 2" : "Bilateral — SF = sets × reps × weight"}
                     </div>
+                    {/* Active baseline indicator */}
+                    {selStats.baseline && (
+                      <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:8, background:"#4A90D911", border:"1px solid #4A90D933", borderRadius:6, padding:"4px 10px", display:"inline-flex" }}>
+                        <span style={{ fontSize:12 }}>⭐</span>
+                        <span style={{ color:"#4A90D9", fontSize:12, fontWeight:700 }}>
+                          Baseline set {fmtDate(selStats.baseline.date)} · SF {selStats.baseline.sf.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ display: "flex", gap: 16 }}>
+                  <div style={{ display: "flex", gap: 16, alignItems:"flex-start" }}>
                     {selStats.totalGain !== null && (
                       <div style={{ textAlign: "right" }}>
                         <div style={{ color: selStats.totalGain >= 0 ? "#4AD99A" : "#D94A4A", fontSize: 22, fontWeight: 800 }}>
                           {selStats.totalGain >= 0 ? "+" : ""}{selStats.totalGain.toFixed(1)}%
                         </div>
-                        <div style={{ color: "#4B5563", fontSize: 11 }}>total gain</div>
+                        <div style={{ color: "#4B5563", fontSize: 11 }}>{selStats.baseline ? "gain from baseline" : "total gain"}</div>
                       </div>
                     )}
                     {selStats.peak && (
@@ -2338,6 +2427,18 @@ function ProgressTab({ exercises, workoutLogs }) {
                         {/* Trendline */}
                         <line x1={xOf(0)} y1={trendY1} x2={xOf(n - 1)} y2={trendY2}
                           stroke={gainColor} strokeWidth={1.5} strokeOpacity={0.3} strokeDasharray="4 3" />
+                        {/* Baseline vertical marker */}
+                        {selStats.baseline && (() => {
+                          const bIdx = series.findIndex(p => p.date >= selStats.baseline.date);
+                          if (bIdx < 0) return null;
+                          const bx = xOf(bIdx);
+                          return (
+                            <g>
+                              <line x1={bx} y1={padT} x2={bx} y2={H - padB} stroke="#4A90D9" strokeWidth={1.5} strokeDasharray="4 3" strokeOpacity={0.8} />
+                              <text x={bx + 4} y={padT + 10} fill="#4A90D9" fontSize={9} fontWeight="700">⭐ Baseline</text>
+                            </g>
+                          );
+                        })()}
                         {/* Data line */}
                         <polyline points={pts} fill="none" stroke={gainColor} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
                         {/* Dots on each point */}
@@ -2356,23 +2457,42 @@ function ProgressTab({ exercises, workoutLogs }) {
                 })()}
               </Card>
 
+              {/* ⭐ Set New Baseline button */}
+              <div style={{ marginTop:0 }}>
+                <button onClick={() => setShowBaselineConfirm(true)}
+                  disabled={selStats.logs.length === 0}
+                  style={{ width:"100%", background: selStats.logs.length ? "#4A90D911" : "#2A2D3A", color: selStats.logs.length ? "#4A90D9" : "#4B5563",
+                    border: selStats.logs.length ? "1px solid #4A90D944" : "1px solid #2A2D3A",
+                    borderRadius:10, height:44, fontSize:14, fontWeight:700, cursor: selStats.logs.length ? "pointer" : "default" }}>
+                  ⭐ Set New Baseline
+                </button>
+              </div>
+
               <Card>
                 <SectionLabel>Session History</SectionLabel>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
                   {selStats.logs.length === 0 ? (
                     <div style={{ color: "#3A3D4A", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No sessions yet</div>
-                  ) : [...selStats.logs].sort((a, b) => new Date(b.date) - new Date(a.date)).map((l, i) => (
-                    <div key={i} style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
-                        <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>SF {calcPF(l.sets, l.reps, l.weight, selStats.ex.type, selStats.ex.laterality).toLocaleString()}</span>
+                  ) : [...selStats.logs].sort((a, b) => new Date(b.date) - new Date(a.date)).map((l, i) => {
+                    const lDate = new Date(l.date).toLocaleDateString("en-CA");
+                    const isBaseline = selStats.baseline && lDate === selStats.baseline.date;
+                    const lSF = calcPF(l.sets, l.reps, l.weight, selStats.ex.type, selStats.ex.laterality);
+                    return (
+                      <div key={i} style={{ background: isBaseline ? "#4A90D911" : "#0F1117", borderRadius: 8, padding: "10px 12px", border: isBaseline ? "1px solid #4A90D944" : "none" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems:"center" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <span style={{ color: "#8B92A5", fontSize: 12 }}>{fmtDate(l.date)}</span>
+                            {isBaseline && <span style={{ background:"#4A90D922", color:"#4A90D9", fontSize:10, fontWeight:700, padding:"1px 6px", borderRadius:4 }}>⭐ BASELINE</span>}
+                          </div>
+                          <span style={{ color: "#E8A838", fontSize: 13, fontWeight: 700 }}>SF {lSF.toLocaleString()}</span>
+                        </div>
+                        <div style={{ color: "#C8CDD8", fontSize: 13, marginTop: 2 }}>
+                          {l.sets}×{l.reps}{l.weight ? ` @ ${l.weight} lbs` : ""}
+                          {selStats.ex.laterality === "unilateral" && <span style={{ color: "#7B68EE", marginLeft: 6, fontSize: 11 }}>×2 sides</span>}
+                        </div>
                       </div>
-                      <div style={{ color: "#C8CDD8", fontSize: 13, marginTop: 2 }}>
-                        {l.sets}×{l.reps}{l.weight ? ` @ ${l.weight} lbs` : ""}
-                        {selStats.ex.laterality === "unilateral" && <span style={{ color: "#7B68EE", marginLeft: 6, fontSize: 11 }}>×2 sides</span>}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             </div>
@@ -2836,6 +2956,7 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
   };
 
   // Group all phase logs by exercise
+  const ssBaselines = getBaselines(); // per-exercise recalibration baselines
   const byEx = {};
   workoutLogs.forEach(l => {
     const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
@@ -2844,8 +2965,12 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
     if (d < phaseStart) return;
     const key = Number(l.exerciseId);
     if (!byEx[key]) byEx[key] = { ex, baseline: [], current: [] };
-    // Baseline: first 7 days of phase
-    if (d <= baselineEnd) byEx[key].baseline.push({ sf: calcSF(l, ex), date: d });
+    // If a recalibration baseline exists, use it as the baseline anchor instead of phase-start week
+    const exBaseline = ssBaselines[String(key)];
+    const effectiveBaselineEnd = exBaseline
+      ? new Date(exBaseline.date)
+      : baselineEnd;
+    if (d <= effectiveBaselineEnd) byEx[key].baseline.push({ sf: calcSF(l, ex), date: d });
     // Current: within rolling window
     if (d >= windowStart) byEx[key].current.push({ sf: calcSF(l, ex), date: d });
   });
@@ -3259,13 +3384,18 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
   const calcGroupPFChange = (exIds) => {
     const since = phase?.startDate;
+    const bodyBaselines = getBaselines(); // respect per-exercise recalibration baselines
     const byEx = pfSince(exIds, null);
     let totalFirst = 0, totalLast = 0, count = 0;
     Object.entries(byEx).forEach(([exId, entries]) => {
       if (exIds && !exIds.includes(Number(exId))) return;
       if (entries.length < 2) return;
       const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
-      const phaseEntries = since ? sorted.filter(e => new Date(e.date) >= new Date(since)) : sorted;
+      // If a recalibration baseline exists for this exercise, use it as the start point.
+      // Otherwise fall back to phase start date.
+      const exBaseline = bodyBaselines[String(exId)];
+      const baselineDate = exBaseline?.date || since;
+      const phaseEntries = baselineDate ? sorted.filter(e => new Date(e.date) >= new Date(baselineDate)) : sorted;
       if (phaseEntries.length < 2) return;
       totalFirst += phaseEntries[0].pf;
       totalLast  += phaseEntries[phaseEntries.length - 1].pf;
