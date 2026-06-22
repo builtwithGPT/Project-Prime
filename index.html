@@ -125,7 +125,7 @@ const MUSCLE_COLORS = {
 const WORKOUT_TEMPLATES = [
   {
     id: "express",
-    duration: "30 MIN",
+    duration: "60 MIN",
     label: "Express Workout",
     description: "Essential movements. Maximum efficiency.",
     color: "#4A90D9",
@@ -141,11 +141,11 @@ const WORKOUT_TEMPLATES = [
   },
   {
     id: "full",
-    duration: "60 MIN",
+    duration: "90 MIN",
     label: "Full Body Workout",
     description: "Balanced full body training. Build muscle and strength.",
     color: "#4AD99A",
-    badge: "Recommended",
+    badge: null,
     exerciseNames: [
       "Banded Clamshell",
       "Glute Bridge",
@@ -161,7 +161,7 @@ const WORKOUT_TEMPLATES = [
   },
   {
     id: "extended",
-    duration: "90 MIN",
+    duration: "120 MIN",
     label: "Extended Workout",
     description: "Maximum volume. Complete development.",
     color: "#7B68EE",
@@ -198,23 +198,17 @@ function flattenTemplate(template) {
   return out;
 }
 
-// inferTemplateName — given a set of exerciseIds logged on a day, returns the best-matching
-// template label (e.g. "Express Workout") by counting how many of that template's exercises
-// appear in the logged set. The template with the highest overlap wins.
-// Used in Workout History to display the workout name without requiring it to be stored.
+// inferTemplateName — maps logged exercise count to template name using fixed thresholds.
+// Real flattened exercise counts per template: Express=7, Full Body=13, Extended=16.
+// Ranges account for skipped exercises within a session:
+//   1–7   logged → Express Workout
+//   8–14  logged → Full Body Workout
+//   15+   logged → Extended Workout
 function inferTemplateName(loggedExerciseIds) {
-  const idSet = new Set(loggedExerciseIds.map(Number));
-  let bestTemplate = null, bestScore = 0;
-  WORKOUT_TEMPLATES.forEach(t => {
-    const tIds = flattenTemplate(t).map(e => {
-      const match = INITIAL_EXERCISES.find(x => x.name === e.name);
-      return match ? Number(match.id) : null;
-    }).filter(Boolean);
-    const overlap = tIds.filter(id => idSet.has(id)).length;
-    const score = tIds.length > 0 ? overlap / tIds.length : 0;
-    if (score > bestScore) { bestScore = score; bestTemplate = t; }
-  });
-  return bestTemplate ? bestTemplate.label : null;
+  const count = loggedExerciseIds.length;
+  if (count <= 7)  return "Express Workout";
+  if (count <= 14) return "Full Body Workout";
+  return "Extended Workout";
 }
 
 // Bodyweight/banded exercises with no history show their default prescription
