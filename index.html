@@ -1698,16 +1698,24 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       return tExIds.length > 0 && tExIds.every(id => todayLogs.some(l => Number(l.exerciseId) === id));
     };
 
-    // When workoutEnded=true, infer which template was actually run from the count of
-    // UNIQUE exercise IDs logged today. Deduplicating prevents double-counting when a
-    // user amends a workout or logs the same exercise twice in one day.
-    const todayUniqueExIds = [...new Set(todayLogs.map(l => Number(l.exerciseId)))];
-    const endedTemplateName = workoutEnded && todayLogs.length > 0
-      ? inferTemplateName(todayUniqueExIds)
+    // When workoutEnded=true, read the templateId saved to pp_workout_ended at the moment
+    // endWorkout() ran. This is the only reliable source — inferring from exercise count
+    // breaks when exercises are swapped (replacement IDs 100+ change the count) or when
+    // multiple templates share exercises. The saved templateId is always exact.
+    const endedTemplateId = (() => {
+      try {
+        const s = localStorage.getItem("pp_workout_ended");
+        if (!s) return null;
+        const { date, ended, templateId } = JSON.parse(s);
+        const todayOld = new Date().toDateString();
+        const isToday = ended && (date === todayKey || date === todayOld);
+        return isToday ? (templateId || null) : null;
+      } catch { return null; }
+    })();
+    const endedTemplate = workoutEnded && endedTemplateId
+      ? WORKOUT_TEMPLATES.find(t => t.id === endedTemplateId) || null
       : null;
-    const endedTemplate = endedTemplateName
-      ? WORKOUT_TEMPLATES.find(t => t.label === endedTemplateName) || null
-      : null;
+    const endedTemplateName = endedTemplate?.label || null;
 
     // selectedTemplateCompleted: true if workoutEnded and the selected template is the
     // inferred ended template, OR (when no session has ended) all its exercises are logged.
