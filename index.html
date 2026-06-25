@@ -1278,10 +1278,13 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       }
     });
 
-    // Determine which templates are fully completed today
-    // isTemplateCompleted — a template is "all exercises done" only (strict 100% check).
-    // Used for the "✓ Done Today" badge on templates where every exercise was logged.
+    // isTemplateCompleted — strict 100% check: every exercise in the template has a log today.
+    // ONLY used when workoutEnded is false (mid-session or no session yet).
+    // When workoutEnded is true, we rely solely on endedTemplate (inferred from log count)
+    // to avoid false positives where a smaller template's exercises are a subset of a
+    // larger completed session (e.g. Express exercises all appear in a Full Body session).
     const isTemplateCompleted = (t) => {
+      if (workoutEnded) return false; // defer to endedTemplate when a session was formally ended
       const tExIds = flattenTemplate(t).map(entry => {
         const match = exercises.find(e => e.name === entry.name && e.active);
         return match ? Number(match.id) : null;
@@ -1289,33 +1292,32 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       return tExIds.length > 0 && tExIds.every(id => todayLogs.some(l => Number(l.exerciseId) === id));
     };
 
-    // A workout session is considered "ended" if the user tapped End Workout today
-    // (workoutEnded=true), regardless of how many exercises were completed.
-    // In that case, infer which template was run from today's exercise count.
-    // This handles partial sessions — user ends early due to time, skips, etc.
-    const todayExIds = todayLogs.map(l => Number(l.exerciseId));
+    // When workoutEnded=true, infer which template was actually run from the count of
+    // UNIQUE exercise IDs logged today. Deduplicating prevents double-counting when a
+    // user amends a workout or logs the same exercise twice in one day.
+    const todayUniqueExIds = [...new Set(todayLogs.map(l => Number(l.exerciseId)))];
     const endedTemplateName = workoutEnded && todayLogs.length > 0
-      ? inferTemplateName(todayExIds)
+      ? inferTemplateName(todayUniqueExIds)
       : null;
     const endedTemplate = endedTemplateName
       ? WORKOUT_TEMPLATES.find(t => t.label === endedTemplateName) || null
       : null;
 
-    // selectedTemplateCompleted: true if ALL exercises done (strict), OR if workoutEnded
-    // and the selected template matches what was inferred from today's logs.
+    // selectedTemplateCompleted: true if workoutEnded and the selected template is the
+    // inferred ended template, OR (when no session has ended) all its exercises are logged.
     const selectedTemplateCompleted = isTemplateCompleted(selectedTemplate) ||
       (workoutEnded && endedTemplate?.id === selectedTemplateId);
 
-    // completedTemplateName: the name of the template considered done today.
-    // Priority: fully-completed template first, then ended-early template.
-    const fullyCompletedTemplate = WORKOUT_TEMPLATES.find(t => isTemplateCompleted(t));
-    const completedTemplateName = fullyCompletedTemplate?.label || endedTemplateName || null;
+    // completedTemplateName: when workoutEnded, use endedTemplate exclusively.
+    // When not ended, use the strict check.
+    const fullyCompletedTemplate = workoutEnded ? null : WORKOUT_TEMPLATES.find(t => isTemplateCompleted(t));
+    const completedTemplateName = endedTemplateName || fullyCompletedTemplate?.label || null;
 
-    // isTemplateEndedOrCompleted — broader check used for card badges and button labels.
-    // True if: all exercises done (strict), OR workoutEnded today and this template
-    // matches the inferred template from today's logs.
+    // isTemplateEndedOrCompleted — used for card badges and button labels.
+    // When workoutEnded: only the inferred ended template is "done".
+    // When not ended: strict check applies.
     const isTemplateEndedOrCompleted = (t) =>
-      isTemplateCompleted(t) || (workoutEnded && endedTemplate?.id === t.id);
+      (workoutEnded ? endedTemplate?.id === t.id : isTemplateCompleted(t));
 
     return (
       <div>
