@@ -1045,7 +1045,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const todayKey2 = new Date().toLocaleDateString("en-CA");
   const todayLogs = workoutLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === todayKey2);
   const sessionPF = todayLogs.reduce((sum, l) => {
-    const ex = exercises.find(e => e.id === l.exerciseId);
+    const ex = ALL_EXERCISES.find(e => e.id === l.exerciseId);
     return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
   }, 0);
 
@@ -1329,15 +1329,15 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       ? prevAllLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0])
       : [];
 
-    const curPF  = tLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
-    const prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+    const curPF  = tLogs.reduce((sum, l) => { const e = ALL_EXERCISES.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+    const prevPF = prevSessLogs.reduce((sum, l) => { const e = ALL_EXERCISES.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
     const pfChange = prevPF > 0 ? ((curPF - prevPF) / prevPF * 100) : null;
 
     // PRs: for each exercise in the current template completed today, check if today's SF
     // beats the best SF ever recorded for that exercise on any prior day.
     let prs = 0;
     tLogs.forEach(l => {
-      const e = exercises.find(x => x.id === l.exerciseId); if (!e) return;
+      const e = ALL_EXERCISES.find(x => x.id === l.exerciseId); if (!e) return;
       const thisPF = calcPF(l.sets, l.reps, l.weight, e.type, e.laterality);
       const bestPrev = prevAllLogs
         .filter(x => Number(x.exerciseId) === Number(l.exerciseId))
@@ -1388,7 +1388,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       );
       const prevDates = [...new Set(prevAllLogsPreview.map(l => new Date(l.date).toLocaleDateString("en-CA")))].sort((a, b) => new Date(b) - new Date(a));
       const prevSessLogs = prevDates.length ? prevAllLogsPreview.filter(l => new Date(l.date).toLocaleDateString("en-CA") === prevDates[0]) : [];
-      prevPF = prevSessLogs.reduce((sum, l) => { const e = exercises.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
+      prevPF = prevSessLogs.reduce((sum, l) => { const e = ALL_EXERCISES.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
       pfChange = prevPF > 0 ? ((sPF - prevPF) / prevPF * 100) : null;
       prs = 0; // PR detection omitted from live preview for simplicity/speed
     }
@@ -1568,8 +1568,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const renderEditSetModal = () => {
     if (!editingSet || !editDraft) return null;
     const exMeta = editingSet.inMemory
-      ? exercises.find(x => x.id === editingSet.exerciseId)
-      : exercises.find(x => x.id === Number(workoutLogs.find(l => l.id === editingSet.logId)?.exerciseId));
+      ? ALL_EXERCISES.find(x => x.id === editingSet.exerciseId)
+      : ALL_EXERCISES.find(x => x.id === Number(workoutLogs.find(l => l.id === editingSet.logId)?.exerciseId));
     const isBodyweightLike = exMeta?.type === "bodyweight" || exMeta?.type === "banded";
 
     const setField = (k) => (v) => setEditDraft(prev => ({ ...prev, [k]: v }));
@@ -2050,7 +2050,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
 
         {reviewExerciseId ? (() => {
-          const reviewEx = exercises.find(x => x.id === reviewExerciseId);
+          const reviewEx = ALL_EXERCISES.find(x => x.id === reviewExerciseId);
           const reviewLog = todayLogs.find(l => Number(l.exerciseId) === Number(reviewExerciseId));
           if (!reviewEx) return null;
           return (
@@ -3460,12 +3460,12 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
             if (sorted.length === 0) return <Card style={{ textAlign: "center", padding: 48 }}><div style={{ color: "#3A3D4A", fontSize: 14 }}>No workout sessions yet.</div></Card>;
             return sorted.map(([day, logs], i) => {
               const dayPF = logs.reduce((sum, l) => {
-                const ex = exercises.find(e => e.id === l.exerciseId);
+                const ex = ALL_EXERCISES.find(e => e.id === l.exerciseId);
                 return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
               }, 0);
               const prevDay = sorted[i + 1];
               const prevPF = prevDay ? prevDay[1].reduce((sum, l) => {
-                const ex = exercises.find(e => e.id === l.exerciseId);
+                const ex = ALL_EXERCISES.find(e => e.id === l.exerciseId);
                 return sum + calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
               }, 0) : null;
               const change = prevPF ? ((dayPF - prevPF) / prevPF * 100) : null;
@@ -3495,7 +3495,7 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {logs.map((l, j) => {
-                      const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+                      const ex = ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId));
                       const pf = calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
                       return (
                         <div key={j} style={{ background: "#0F1117", borderRadius: 6, padding: "6px 10px", border: "1px solid #2A2D3A" }}>
@@ -4337,7 +4337,7 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
   const ssBaselines = getBaselines(); // per-exercise recalibration baselines
   const byEx = {};
   workoutLogs.forEach(l => {
-    const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+    const ex = ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId));
     if (!ex) return;
     const d = new Date(l.date);
     if (d < phaseStart) return;
@@ -4746,7 +4746,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     const relevant = workoutLogs.filter(l => !sinceDate || new Date(l.date) >= sinceDate);
     const byEx = {};
     relevant.forEach(l => {
-      const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+      const ex = ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId));
       if (!ex) return;
       if (exerciseIds && !exerciseIds.includes(Number(l.exerciseId))) return;
       if (!byEx[l.exerciseId]) byEx[l.exerciseId] = [];
@@ -4832,7 +4832,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const pfByDay = (() => {
     const byDay = {};
     workoutLogs.forEach(l => {
-      const ex = exercises.find(e => Number(e.id) === Number(l.exerciseId));
+      const ex = ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId));
       if (!ex) return;
       const day = l.date.split("T")[0];
       byDay[day] = (byDay[day] || 0) + calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
