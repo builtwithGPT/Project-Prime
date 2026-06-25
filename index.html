@@ -3096,13 +3096,18 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         const silverUnlocked = silver.filter(r => r.unlocked).length;
 
         // ── Sections ─────────────────────────────────────────────────────────
-        const recentlyUnlocked = [...results].filter(r => r.unlocked)
+        // These sections filter by tier when a tier filter is active
+        const tierFilterFn = r => achievementFilter === "gold" ? r.tier === 1
+          : achievementFilter === "silver" ? r.tier === 2 : true;
+        const recentlyUnlocked = [...results].filter(r => r.unlocked).filter(tierFilterFn)
           .sort((a,b) => (b.unlockedDate||"") > (a.unlockedDate||"") ? 1 : -1).slice(0,3);
-        const nearlyComplete = [...results].filter(r => !r.unlocked && r.progress >= 0.60)
+        const nearlyComplete = [...results].filter(r => !r.unlocked && r.progress >= 0.60).filter(tierFilterFn)
           .sort((a,b) => b.progress - a.progress).slice(0,6);
 
         // Filter for the library section
-        const filterFn = r => achievementFilter === "all" ? true
+        const filterFn = r => achievementFilter === "all"        ? true
+          : achievementFilter === "gold"       ? r.tier === 1
+          : achievementFilter === "silver"     ? r.tier === 2
           : achievementFilter === "unlocked"   ? r.unlocked
           : achievementFilter === "inprogress" ? r.status === "inprogress"
           : r.status === "locked";
@@ -3239,26 +3244,33 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
               borderRadius:16, border:"1px solid #2A2D3A", padding:"20px 24px", marginBottom:20,
               boxShadow:"0 4px 24px rgba(0,0,0,0.4)" }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:20 }}>
-                <span style={{ color:"#FFD700", fontSize:15 }}>★</span>
-                <span style={{ color:"#C8CDD8", fontSize:13, fontWeight:800, textTransform:"uppercase",
-                  letterSpacing:"0.16em" }}>Trophy Cabinet</span>
-                <span style={{ color:"#FFD700", fontSize:15 }}>★</span>
+                <span style={{ color:"#FFD700", fontSize:16 }}>★</span>
+                <span style={{ color:"#C8CDD8", fontSize:15, fontWeight:800, textTransform:"uppercase",
+                  letterSpacing:"0.18em" }}>Trophy Cabinet</span>
+                <span style={{ color:"#FFD700", fontSize:16 }}>★</span>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
                 {[
-                  { label:"Tier 1 · Gold",   val:`${goldUnlocked}`, total:gold.length,   color:"#FFD700", emoji:"🥇", pct: gold.length   ? goldUnlocked/gold.length     : 0 },
-                  { label:"Tier 2 · Silver", val:`${silverUnlocked}`, total:silver.length, color:"#C0C0C0", emoji:"🥈", pct: silver.length ? silverUnlocked/silver.length : 0 },
-                  { label:"Total",            val:`${goldUnlocked+silverUnlocked}`, total:results.length, color:"#4A90D9", emoji:"⭐", pct: results.length ? (goldUnlocked+silverUnlocked)/results.length : 0 },
-                ].map(({label,val,total,color,emoji,pct}) => {
+                  { label:"Tier 1 · Gold",   val:`${goldUnlocked}`, total:gold.length,   color:"#FFD700", emoji:"🥇", pct: gold.length   ? goldUnlocked/gold.length     : 0, filterId:"gold"   },
+                  { label:"Tier 2 · Silver", val:`${silverUnlocked}`, total:silver.length, color:"#C0C0C0", emoji:"🥈", pct: silver.length ? silverUnlocked/silver.length : 0, filterId:"silver" },
+                  { label:"Total",            val:`${goldUnlocked+silverUnlocked}`, total:results.length, color:"#4A90D9", emoji:"⭐", pct: results.length ? (goldUnlocked+silverUnlocked)/results.length : 0, filterId:"all" },
+                ].map(({label,val,total,color,emoji,pct,filterId}) => {
                   const R = 36, stroke = 6, circ = 2*Math.PI*R, dash = pct*circ;
+                  const isActive = achievementFilter === filterId;
                   return (
-                    <div key={label} style={{ textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+                    <div key={label} onClick={() => setAchievementFilter(filterId)}
+                      style={{ textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:8,
+                        cursor:"pointer", borderRadius:12, padding:"8px 4px",
+                        background: isActive ? color+"11" : "transparent",
+                        border: isActive ? `1px solid ${color}44` : "1px solid transparent",
+                        transition:"background 0.2s, border 0.2s" }}>
                       {/* Close-the-ring gauge with emoji in centre */}
                       <div style={{ position:"relative", width:88, height:88 }}>
                         <svg width="88" height="88" style={{ transform:"rotate(-90deg)" }}>
                           <circle cx="44" cy="44" r={R} fill="none" stroke="#2A2D3A" strokeWidth={stroke}/>
                           <circle cx="44" cy="44" r={R} fill="none" stroke={color} strokeWidth={stroke}
-                            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"/>
+                            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+                            style={{ filter: isActive ? `drop-shadow(0 0 4px ${color}88)` : "none" }}/>
                         </svg>
                         <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column",
                           alignItems:"center", justifyContent:"center", gap:1 }}>
@@ -3270,8 +3282,8 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
                         <div style={{ color, fontSize:22, fontWeight:900, lineHeight:1 }}>
                           {val}<span style={{ color:"#4B5563", fontSize:14, fontWeight:400 }}> / {total}</span>
                         </div>
-                        <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase",
-                          letterSpacing:"0.06em", marginTop:4 }}>{label}</div>
+                        <div style={{ color: isActive ? color : "#4B5563", fontSize:10, fontWeight:700,
+                          textTransform:"uppercase", letterSpacing:"0.06em", marginTop:4 }}>{label}</div>
                       </div>
                     </div>
                   );
