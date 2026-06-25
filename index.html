@@ -2629,6 +2629,8 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
   const [showBaselineConfirm, setShowBaselineConfirm] = useState(false);
   const [achievementFilter, setAchievementFilter] = useState("all"); // "all" | "unlocked" | "inprogress" | "locked"
   const [selectedAchievement, setSelectedAchievement] = useState(null); // achievement result object for detail modal
+  const [expandedTier, setExpandedTier] = useState({}); // { 1: true, 2: false } — collapsed remaining tiers
+  const [glowId, setGlowId] = useState(null); // achievement id currently animating unlock glow
 
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
@@ -3076,9 +3078,8 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         </div>
       )}
       {view === "achievements" && (() => {
-        // Calculate all achievements from live data
+        // ── Compute all achievement results ──────────────────────────────────
         const achData = buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase, exercises);
-        // Attach recoverySessions to achData so calculate() can access it
         achData.recoverySessions = recoverySessions;
         const results = ACHIEVEMENTS.map(a => {
           let r;
@@ -3092,130 +3093,136 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         const goldUnlocked   = gold.filter(r => r.unlocked).length;
         const silverUnlocked = silver.filter(r => r.unlocked).length;
 
-        const tierColor  = { 1: "#FFD700", 2: "#C0C0C0" };
-        const tierLabel  = { 1: "Tier 1 — Gold", 2: "Tier 2 — Silver" };
-        const tierBg     = { 1: "#FFD70011", 2: "#C0C0C011" };
+        // ── Sections ─────────────────────────────────────────────────────────
+        const recentlyUnlocked = [...results].filter(r => r.unlocked)
+          .sort((a,b) => (b.unlockedDate||"") > (a.unlockedDate||"") ? 1 : -1).slice(0,3);
+        const nearlyComplete = [...results].filter(r => !r.unlocked && r.progress >= 0.60)
+          .sort((a,b) => b.progress - a.progress).slice(0,6);
 
-        const sortGroup = (arr) => {
-          const order = { unlocked: 0, inprogress: 1, locked: 2 };
-          const filtered = achievementFilter === "all" ? arr
-            : achievementFilter === "unlocked"   ? arr.filter(r => r.status === "unlocked")
-            : achievementFilter === "inprogress" ? arr.filter(r => r.status === "inprogress")
-            : arr.filter(r => r.status === "locked");
-          return [...filtered].sort((a,b) => order[a.status] - order[b.status]);
+        // Filter for the library section
+        const filterFn = r => achievementFilter === "all" ? true
+          : achievementFilter === "unlocked"   ? r.unlocked
+          : achievementFilter === "inprogress" ? r.status === "inprogress"
+          : r.status === "locked";
+
+        const tierColor = { 1: "#FFD700", 2: "#C0C0C0" };
+        const tierName  = { 1: "Tier 1 · Gold", 2: "Tier 2 · Silver" };
+
+        // ── Circular progress ring ───────────────────────────────────────────
+        const Ring = ({ pct, color, size = 52, stroke = 5, children }) => {
+          const r = (size - stroke*2) / 2;
+          const circ = 2 * Math.PI * r;
+          const dash = Math.min(pct/100, 1) * circ;
+          return (
+            <svg width={size} height={size} style={{ transform:"rotate(-90deg)", flexShrink:0 }}>
+              <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#2A2D3A" strokeWidth={stroke}/>
+              <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+                strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"/>
+            </svg>
+          );
         };
 
-        const AchCard = ({ a }) => {
-          const tc = tierColor[a.tier];
-          const isLocked = a.status === "locked";
-          const isUnlocked = a.status === "unlocked";
-          const pct = Math.round(a.progress * 100);
+        // ── Small hex-style icon badge ───────────────────────────────────────
+        const BadgeIcon = ({ emoji, tier, unlocked, size=48 }) => {
+          const tc = tierColor[tier];
           return (
-            <div onClick={() => setSelectedAchievement(a)}
-              style={{ background: isLocked ? "#161820" : "#1A1D26", borderRadius: 12,
-                border: isUnlocked ? `1px solid ${tc}55` : "1px solid #2A2D3A",
-                padding: "16px 18px", cursor: "pointer", opacity: isLocked ? 0.6 : 1,
-                filter: isLocked ? "grayscale(0.4)" : "none" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-                  background: isUnlocked ? tc + "22" : "#2A2D3A",
-                  border: isUnlocked ? `1px solid ${tc}44` : "1px solid #3A3D4A",
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
-                  {a.emoji}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
-                    <span style={{ color: isLocked ? "#4B5563" : "#E8EAF0", fontSize: 14, fontWeight: 700 }}>{a.name}</span>
-                    <span style={{ background: tc + "22", color: tc, padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
-                      {tierLabel[a.tier]}
-                    </span>
-                    {isUnlocked && <span style={{ background: tc + "22", color: tc, padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>✓ UNLOCKED</span>}
-                  </div>
-                  <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>{a.description}</div>
-                  {isUnlocked ? (
-                    <div style={{ color: tc, fontSize: 12, fontWeight: 700 }}>
-                      {a.unlockedDate ? `Unlocked ${fmtDate(a.unlockedDate)}` : "Achievement unlocked ✓"}
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ color: "#4B5563", fontSize: 11 }}>{a.currentValueLabel}</span>
-                        <span style={{ color: a.status === "inprogress" ? tc : "#4B5563", fontSize: 11, fontWeight: 700 }}>{pct}%</span>
-                      </div>
-                      <div style={{ background: "#0F1117", borderRadius: 3, height: 4 }}>
-                        <div style={{ width: `${pct}%`, height: "100%", background: a.status === "inprogress" ? tc : "#2A2D3A", borderRadius: 3, transition: "width 0.4s" }} />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+            <div style={{ width:size, height:size, borderRadius:size*0.22, flexShrink:0,
+              background: unlocked ? `radial-gradient(circle at 35% 35%, ${tc}44, ${tc}11)` : "#1E2030",
+              border: unlocked ? `1.5px solid ${tc}88` : "1.5px solid #2A2D3A",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize: size*0.46,
+              boxShadow: unlocked ? `0 0 12px ${tc}44` : "none",
+              filter: unlocked ? "none" : "grayscale(0.7) opacity(0.5)",
+            }}>{emoji}</div>
           );
         };
 
         return (
-          <div>
-            {/* Achievement detail modal */}
+          <div style={{ color:"#E8EAF0" }}>
+
+            {/* ── DETAIL MODAL ─────────────────────────────────────────────── */}
             {selectedAchievement && (() => {
               const a  = selectedAchievement;
               const tc = tierColor[a.tier];
               const pct = Math.round(a.progress * 100);
               return (
-                <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
+                <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:700,
+                  display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}
                   onClick={() => setSelectedAchievement(null)}>
-                  <div style={{ background:"#1A1D26", borderRadius:16, border:`1px solid ${tc}44`, padding:32, maxWidth:500, width:"100%", maxHeight:"85vh", overflowY:"auto" }}
+                  <div style={{ background:"#12141E", borderRadius:18, border:`1px solid ${tc}44`,
+                    padding:28, maxWidth:460, width:"100%", maxHeight:"88vh", overflowY:"auto",
+                    boxShadow:`0 0 40px ${tc}22` }}
                     onClick={e => e.stopPropagation()}>
+
+                    {/* Modal header */}
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ fontSize:32 }}>{a.emoji}</div>
+                      <div style={{ display:"flex", gap:14, alignItems:"center" }}>
+                        <BadgeIcon emoji={a.emoji} tier={a.tier} unlocked={a.unlocked} size={56}/>
                         <div>
-                          <div style={{ color:"#E8EAF0", fontSize:18, fontWeight:800 }}>{a.name}</div>
-                          <div style={{ color:tc, fontSize:12, fontWeight:700, marginTop:2 }}>{tierLabel[a.tier]} · {a.status === "unlocked" ? "✓ Unlocked" : a.status === "inprogress" ? "In Progress" : "Locked"}</div>
+                          <div style={{ color:"#E8EAF0", fontSize:17, fontWeight:800, lineHeight:1.2 }}>{a.name}</div>
+                          <div style={{ color:tc, fontSize:11, fontWeight:700, marginTop:4, textTransform:"uppercase", letterSpacing:"0.08em" }}>{tierName[a.tier]}</div>
+                          <div style={{ color: a.unlocked ? "#4AD99A" : a.status==="inprogress" ? tc : "#4B5563",
+                            fontSize:12, fontWeight:700, marginTop:2 }}>
+                            {a.unlocked ? "✓ Unlocked" : a.status==="inprogress" ? `${pct}% Complete` : "Locked"}
+                          </div>
                         </div>
                       </div>
-                      <button onClick={() => setSelectedAchievement(null)} style={{ background:"#2A2D3A", border:"none", color:"#8B92A5", fontSize:18, cursor:"pointer", width:32, height:32, borderRadius:6 }}>×</button>
+                      <button onClick={() => setSelectedAchievement(null)}
+                        style={{ background:"#2A2D3A", border:"none", color:"#8B92A5", fontSize:16,
+                          cursor:"pointer", width:30, height:30, borderRadius:6, flexShrink:0 }}>×</button>
                     </div>
 
-                    <div style={{ color:"#C8CDD8", fontSize:13, lineHeight:1.7, marginBottom:20 }}>{a.description}</div>
+                    <div style={{ color:"#8B92A5", fontSize:13, lineHeight:1.7, marginBottom:18 }}>{a.description}</div>
 
-                    <div style={{ background:"#0F1117", borderRadius:10, padding:"14px 16px", marginBottom:16 }}>
-                      <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>How to Unlock</div>
-                      {a.requirements.map((req, i) => (
-                        <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
-                          <span style={{ color:"#4B5563", fontSize:12, flexShrink:0, marginTop:1 }}>•</span>
-                          <span style={{ color:"#C8CDD8", fontSize:13 }}>{typeof req === "string" ? req : req.label + " → " + req.target}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {a.status !== "locked" && a.requirements.some(r => typeof r === "object") && (
-                      <div style={{ background:"#0F1117", borderRadius:10, padding:"14px 16px", marginBottom:16 }}>
-                        <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>Current Progress</div>
-                        {a.requirements.filter(r => typeof r === "object").map((req, i) => (
-                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                            <span style={{ color:"#8B92A5", fontSize:13 }}>{req.label}</span>
-                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                              <span style={{ color: req.passed ? "#4AD99A" : "#C8CDD8", fontSize:13, fontWeight:700 }}>{req.current}</span>
-                              <span style={{ color:"#3A3D4A", fontSize:11 }}>/ {req.target}</span>
-                              <span style={{ fontSize:12 }}>{req.passed ? "✓" : "○"}</span>
+                    {/* Requirements */}
+                    <div style={{ background:"#0D0F1A", borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
+                      <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase",
+                        letterSpacing:"0.1em", marginBottom:10 }}>How to Unlock</div>
+                      {(a.requirements||[]).map((req,i) => {
+                        const isObj = typeof req === "object";
+                        const passed = isObj ? req.passed : false;
+                        return (
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                            alignItems:"center", marginBottom:7 }}>
+                            <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                              <span style={{ fontSize:12, color: passed ? "#4AD99A" : "#4B5563" }}>{passed ? "✓" : "○"}</span>
+                              <span style={{ color: passed ? "#C8CDD8" : "#8B92A5", fontSize:13 }}>
+                                {isObj ? req.label : req}
+                              </span>
                             </div>
+                            {isObj && (
+                              <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
+                                <span style={{ color: passed ? "#4AD99A" : "#E8EAF0", fontSize:12, fontWeight:700 }}>{req.current}</span>
+                                <span style={{ color:"#3A3D4A", fontSize:11 }}>/ {req.target}</span>
+                              </div>
+                            )}
                           </div>
-                        ))}
-                        <div style={{ marginTop:12 }}>
-                          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                            <span style={{ color:"#4B5563", fontSize:11 }}>Overall progress</span>
-                            <span style={{ color:tc, fontSize:12, fontWeight:700 }}>{pct}%</span>
-                          </div>
-                          <div style={{ background:"#1A1D26", borderRadius:4, height:6 }}>
-                            <div style={{ width:`${pct}%`, height:"100%", background:tc, borderRadius:4 }} />
-                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Progress bar */}
+                    {!a.unlocked && a.progress > 0 && (
+                      <div style={{ marginBottom:14 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                          <span style={{ color:"#4B5563", fontSize:11 }}>Overall Progress</span>
+                          <span style={{ color:tc, fontSize:12, fontWeight:800 }}>{pct}%</span>
                         </div>
+                        <div style={{ background:"#1A1D26", borderRadius:4, height:7 }}>
+                          <div style={{ width:`${pct}%`, height:"100%", background:`linear-gradient(90deg, ${tc}88, ${tc})`,
+                            borderRadius:4, transition:"width 0.6s ease" }}/>
+                        </div>
+                        {a.currentValueLabel && (
+                          <div style={{ color:"#4B5563", fontSize:11, marginTop:5 }}>{a.currentValueLabel}</div>
+                        )}
                       </div>
                     )}
 
-                    {a.status === "unlocked" && (
-                      <div style={{ background:tc+"11", border:`1px solid ${tc}33`, borderRadius:10, padding:"12px 16px", textAlign:"center" }}>
-                        <div style={{ color:tc, fontSize:15, fontWeight:800 }}>
+                    {/* Unlocked date */}
+                    {a.unlocked && (
+                      <div style={{ background:`${tc}11`, border:`1px solid ${tc}33`, borderRadius:10,
+                        padding:"12px 16px", textAlign:"center" }}>
+                        <div style={{ color:tc, fontSize:14, fontWeight:800 }}>
                           {a.unlockedDate ? `Unlocked ${fmtDate(a.unlockedDate)}` : "Achievement Unlocked ✓"}
                         </div>
                       </div>
@@ -3225,70 +3232,265 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
               );
             })()}
 
-            {/* Header */}
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-              <div>
-                <h2 style={{ margin:0, fontSize:22, fontWeight:700, color:"#E8EAF0" }}>Achievements</h2>
-                <div style={{ color:"#8B92A5", fontSize:13, marginTop:3 }}>Milestones that mark real transformation</div>
+            {/* ── TROPHY CABINET ───────────────────────────────────────────── */}
+            <div style={{ background:"linear-gradient(135deg, #12141E 0%, #1A1D2E 100%)",
+              borderRadius:16, border:"1px solid #2A2D3A", padding:"20px 24px", marginBottom:20,
+              boxShadow:"0 4px 24px rgba(0,0,0,0.4)" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:16 }}>
+                <span style={{ color:"#FFD700", fontSize:13 }}>★</span>
+                <span style={{ color:"#8B92A5", fontSize:11, fontWeight:700, textTransform:"uppercase",
+                  letterSpacing:"0.14em" }}>Trophy Cabinet</span>
+                <span style={{ color:"#FFD700", fontSize:13 }}>★</span>
               </div>
-              <div style={{ display:"flex", background:"#1A1D26", borderRadius:8, padding:3, border:"1px solid #2A2D3A" }}>
-                {[["all","All"],["unlocked","Unlocked"],["inprogress","In Progress"],["locked","Locked"]].map(([id,label]) => (
-                  <button key={id} onClick={() => setAchievementFilter(id)}
-                    style={{ background: achievementFilter === id ? "#4A90D9" : "none", color: achievementFilter === id ? "#fff" : "#8B92A5",
-                      border:"none", borderRadius:6, padding:"5px 12px", fontSize:12, fontWeight: achievementFilter === id ? 600 : 400, cursor:"pointer" }}>
-                    {label}
-                  </button>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+                {[
+                  { label:"Tier 1 · Gold", val:`${goldUnlocked} / ${gold.length}`, color:"#FFD700", emoji:"🥇", bar: goldUnlocked/gold.length },
+                  { label:"Tier 2 · Silver", val:`${silverUnlocked} / ${silver.length}`, color:"#C0C0C0", emoji:"🥈", bar: silverUnlocked/silver.length },
+                  { label:"Total", val:`${goldUnlocked+silverUnlocked} / ${results.length}`, color:"#4A90D9", emoji:"⭐", bar:(goldUnlocked+silverUnlocked)/results.length },
+                ].map(({label,val,color,emoji,bar}) => (
+                  <div key={label} style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:28, marginBottom:6 }}>{emoji}</div>
+                    <div style={{ color, fontSize:20, fontWeight:900, lineHeight:1 }}>{val}</div>
+                    <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase",
+                      letterSpacing:"0.06em", marginTop:4, marginBottom:8 }}>{label}</div>
+                    <div style={{ background:"#2A2D3A", borderRadius:3, height:3 }}>
+                      <div style={{ width:`${Math.round(bar*100)}%`, height:"100%",
+                        background:color, borderRadius:3 }}/>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* Summary strip */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:24 }}>
-              {[
-                ["🥇 Gold", `${goldUnlocked} / ${gold.length}`, "#FFD700"],
-                ["🥈 Silver", `${silverUnlocked} / ${silver.length}`, "#C0C0C0"],
-                ["Total", `${goldUnlocked + silverUnlocked} / ${results.length}`, "#4A90D9"],
-              ].map(([label, val, color]) => (
-                <div key={label} style={{ background:"#1A1D26", borderRadius:10, border:"1px solid #2A2D3A", padding:"12px 16px", textAlign:"center" }}>
-                  <div style={{ color:"#4B5563", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>{label}</div>
-                  <div style={{ color, fontSize:22, fontWeight:800 }}>{val}</div>
+            {/* ── RECENTLY UNLOCKED ─────────────────────────────────────────── */}
+            {recentlyUnlocked.length > 0 && (
+              <div style={{ marginBottom:20 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:16 }}>🏆</span>
+                    <span style={{ color:"#E8EAF0", fontSize:13, fontWeight:800, textTransform:"uppercase",
+                      letterSpacing:"0.1em" }}>Recently Unlocked</span>
+                  </div>
                 </div>
-              ))}
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {recentlyUnlocked.map((a, idx) => {
+                    const tc = tierColor[a.tier];
+                    const isFirst = idx === 0;
+                    return (
+                      <div key={a.id} onClick={() => setSelectedAchievement(a)}
+                        style={{ background: isFirst
+                          ? `linear-gradient(135deg, #1E1A0A 0%, #2A2010 50%, #1A1810 100%)`
+                          : "#1A1D26",
+                          borderRadius:14,
+                          border: `1px solid ${tc}${isFirst?"88":"44"}`,
+                          padding: isFirst ? "20px 22px" : "14px 18px",
+                          cursor:"pointer",
+                          boxShadow: isFirst ? `0 0 24px ${tc}33` : "none",
+                          position:"relative", overflow:"hidden" }}>
+                        {/* Glow shimmer for first card */}
+                        {isFirst && (
+                          <div style={{ position:"absolute", top:-40, right:-40, width:120, height:120,
+                            borderRadius:"50%", background:`radial-gradient(circle, ${tc}22 0%, transparent 70%)`,
+                            pointerEvents:"none" }}/>
+                        )}
+                        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                          <BadgeIcon emoji={a.emoji} tier={a.tier} unlocked={true} size={isFirst?52:40}/>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                              <span style={{ color:"#E8EAF0", fontSize: isFirst?15:14, fontWeight:800 }}>{a.name}</span>
+                              <span style={{ background:tc+"22", color:tc, padding:"1px 7px", borderRadius:4,
+                                fontSize:9, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                                {tierName[a.tier]}
+                              </span>
+                            </div>
+                            <div style={{ color:"#8B92A5", fontSize:12, marginTop:3, lineHeight:1.4 }}>{a.description}</div>
+                            {a.unlockedDate && (
+                              <div style={{ color:tc, fontSize:11, fontWeight:700, marginTop:4 }}>
+                                Unlocked {fmtDate(a.unlockedDate)}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ color:tc, fontSize:22, flexShrink:0 }}>✓</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── NEARLY COMPLETE ───────────────────────────────────────────── */}
+            {nearlyComplete.length > 0 && (
+              <div style={{ marginBottom:20 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                  <span style={{ fontSize:16 }}>🔥</span>
+                  <span style={{ color:"#E8EAF0", fontSize:13, fontWeight:800, textTransform:"uppercase",
+                    letterSpacing:"0.1em" }}>Nearly Complete</span>
+                  <span style={{ color:"#4B5563", fontSize:12 }}>≥ 60%</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(nearlyComplete.length,3)}, 1fr)`, gap:10 }}>
+                  {nearlyComplete.map(a => {
+                    const tc = tierColor[a.tier];
+                    const pct = Math.round(a.progress * 100);
+                    const r = 26, circ = 2*Math.PI*r;
+                    const dash = (pct/100)*circ;
+                    return (
+                      <div key={a.id} onClick={() => setSelectedAchievement(a)}
+                        style={{ background:"#12141E", borderRadius:12, border:`1px solid ${tc}44`,
+                          padding:"16px 14px", cursor:"pointer", textAlign:"center",
+                          boxShadow:`0 0 12px ${tc}11` }}>
+                        {/* Circular progress ring with icon */}
+                        <div style={{ position:"relative", width:64, height:64, margin:"0 auto 10px" }}>
+                          <svg width="64" height="64" style={{ transform:"rotate(-90deg)", position:"absolute", top:0, left:0 }}>
+                            <circle cx="32" cy="32" r={r} fill="none" stroke="#2A2D3A" strokeWidth="5"/>
+                            <circle cx="32" cy="32" r={r} fill="none" stroke={tc} strokeWidth="5"
+                              strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"/>
+                          </svg>
+                          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
+                            justifyContent:"center", fontSize:24 }}>{a.emoji}</div>
+                        </div>
+                        <div style={{ color:tc, fontSize:18, fontWeight:900, lineHeight:1, marginBottom:3 }}>{pct}%</div>
+                        <div style={{ color:"#E8EAF0", fontSize:12, fontWeight:700, marginBottom:4,
+                          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{a.name}</div>
+                        <div style={{ color:"#4B5563", fontSize:10, lineHeight:1.4 }}>
+                          {a.currentValueLabel?.split("·")[0]?.trim() || a.targetLabel?.split("·")[0]?.trim() || ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── ACHIEVEMENT LIBRARY ───────────────────────────────────────── */}
+            <div>
+              {/* Filter bar */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <span style={{ color:"#8B92A5", fontSize:12, fontWeight:700, textTransform:"uppercase",
+                  letterSpacing:"0.1em" }}>Achievement Library</span>
+                <div style={{ display:"flex", background:"#12141E", borderRadius:8, padding:3,
+                  border:"1px solid #2A2D3A" }}>
+                  {[["all","All"],["unlocked","✓"],["inprogress","Active"],["locked","🔒"]].map(([id,label]) => (
+                    <button key={id} onClick={() => setAchievementFilter(id)}
+                      style={{ background: achievementFilter===id ? "#4A90D9" : "none",
+                        color: achievementFilter===id ? "#fff" : "#8B92A5",
+                        border:"none", borderRadius:6, padding:"5px 12px", fontSize:12,
+                        fontWeight: achievementFilter===id ? 700 : 400, cursor:"pointer" }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tier sections */}
+              {[{tier:1,arr:gold},{tier:2,arr:silver}].map(({tier,arr}) => {
+                const tc = tierColor[tier];
+                const filtered = arr.filter(filterFn);
+                if (filtered.length === 0) return null;
+                const isExpanded = expandedTier[tier] !== false; // default expanded
+                // Sort: in-progress first, then locked, then unlocked
+                const sorted = [...filtered].sort((a,b) => {
+                  const order = { inprogress:0, locked:1, unlocked:2 };
+                  return order[a.status] - order[b.status];
+                });
+
+                return (
+                  <div key={tier} style={{ marginBottom:14 }}>
+                    {/* Tier header — always visible, acts as toggle */}
+                    <button onClick={() => setExpandedTier(p => ({...p,[tier]: !isExpanded}))}
+                      style={{ width:"100%", background:"#12141E", border:`1px solid ${tc}33`,
+                        borderRadius:12, padding:"14px 18px", cursor:"pointer", display:"flex",
+                        alignItems:"center", justifyContent:"space-between",
+                        marginBottom: isExpanded ? 8 : 0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <span style={{ fontSize:18 }}>{tier===1?"🥇":"🥈"}</span>
+                        <span style={{ color:tc, fontSize:13, fontWeight:800, textTransform:"uppercase",
+                          letterSpacing:"0.08em" }}>{tierName[tier]}</span>
+                        <span style={{ color:"#4B5563", fontSize:12 }}>
+                          {arr.filter(r=>r.unlocked).length}/{arr.length} unlocked
+                        </span>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        {/* Ghost badge strip */}
+                        <div style={{ display:"flex", gap:4 }}>
+                          {arr.slice(0,6).map(a => (
+                            <div key={a.id} style={{ width:24, height:24, borderRadius:6,
+                              background: a.unlocked ? tc+"33" : "#2A2D3A",
+                              border: a.unlocked ? `1px solid ${tc}66` : "1px solid #3A3D4A",
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              fontSize:13, filter: a.unlocked ? "none" : "grayscale(1) opacity(0.4)" }}>
+                              {a.emoji}
+                            </div>
+                          ))}
+                          {arr.length > 6 && (
+                            <div style={{ width:24, height:24, borderRadius:6, background:"#2A2D3A",
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              color:"#4B5563", fontSize:9, fontWeight:700 }}>+{arr.length-6}</div>
+                          )}
+                        </div>
+                        <span style={{ color:"#4B5563", fontSize:16 }}>{isExpanded?"▲":"▼"}</span>
+                      </div>
+                    </button>
+
+                    {/* Expanded cards */}
+                    {isExpanded && (
+                      <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+                        {sorted.map(a => {
+                          const atc = tierColor[a.tier];
+                          const pct = Math.round(a.progress*100);
+                          const isGlowing = glowId === a.id;
+                          return (
+                            <div key={a.id} onClick={() => setSelectedAchievement(a)}
+                              style={{ background: a.unlocked ? "#161A10" : a.status==="inprogress" ? "#13141E" : "#0E0F16",
+                                borderRadius:10,
+                                border: a.unlocked ? `1px solid ${atc}55` : a.status==="inprogress" ? `1px solid ${atc}33` : "1px solid #1E2030",
+                                padding:"12px 16px", cursor:"pointer", display:"flex",
+                                alignItems:"center", gap:14,
+                                opacity: a.status==="locked" ? 0.65 : 1,
+                                boxShadow: isGlowing ? `0 0 20px ${atc}88` : "none",
+                                transition:"box-shadow 0.4s ease" }}>
+                              <BadgeIcon emoji={a.emoji} tier={a.tier} unlocked={a.unlocked} size={38}/>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ color: a.status==="locked" ? "#4B5563" : "#E8EAF0",
+                                  fontSize:13, fontWeight:700, marginBottom:2,
+                                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{a.name}</div>
+                                {a.status === "unlocked" ? (
+                                  <div style={{ color:atc, fontSize:11, fontWeight:600 }}>
+                                    {a.unlockedDate ? `Unlocked ${fmtDate(a.unlockedDate)}` : "Unlocked ✓"}
+                                  </div>
+                                ) : a.status === "inprogress" ? (
+                                  <div>
+                                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                                      <span style={{ color:"#4B5563", fontSize:10 }}>
+                                        {a.currentValueLabel?.split("·")[0]?.trim() || ""}
+                                      </span>
+                                      <span style={{ color:atc, fontSize:11, fontWeight:800 }}>{pct}%</span>
+                                    </div>
+                                    <div style={{ background:"#2A2D3A", borderRadius:3, height:3 }}>
+                                      <div style={{ width:`${pct}%`, height:"100%",
+                                        background:`linear-gradient(90deg,${atc}77,${atc})`,
+                                        borderRadius:3 }}/>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div style={{ color:"#3A3D4A", fontSize:10 }}>{a.targetLabel?.split("·")[0]?.trim() || "Locked"}</div>
+                                )}
+                              </div>
+                              {a.status === "locked" && (
+                                <span style={{ color:"#2A2D3A", fontSize:14, flexShrink:0 }}>🔒</span>
+                              )}
+                              {a.unlocked && (
+                                <span style={{ color:atc, fontSize:16, flexShrink:0 }}>✓</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-
-            {/* Tier 1 */}
-            {sortGroup(gold).length > 0 && (
-              <div style={{ marginBottom:28 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                  <span style={{ fontSize:18 }}>🥇</span>
-                  <div style={{ color:"#FFD700", fontSize:14, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em" }}>Tier 1 — Gold Achievements</div>
-                  <span style={{ color:"#4B5563", fontSize:12 }}>{goldUnlocked}/{gold.length} unlocked</span>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {sortGroup(gold).map(a => <AchCard key={a.id} a={a} />)}
-                </div>
-              </div>
-            )}
-
-            {/* Tier 2 */}
-            {sortGroup(silver).length > 0 && (
-              <div>
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                  <span style={{ fontSize:18 }}>🥈</span>
-                  <div style={{ color:"#C0C0C0", fontSize:14, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em" }}>Tier 2 — Silver Milestones</div>
-                  <span style={{ color:"#4B5563", fontSize:12 }}>{silverUnlocked}/{silver.length} unlocked</span>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                  {sortGroup(silver).map(a => <AchCard key={a.id} a={a} />)}
-                </div>
-              </div>
-            )}
-
-            {sortGroup(gold).length === 0 && sortGroup(silver).length === 0 && (
-              <div style={{ textAlign:"center", padding:"48px 0", color:"#3A3D4A", fontSize:14 }}>
-                No achievements match this filter.
-              </div>
-            )}
           </div>
         );
       })()}
