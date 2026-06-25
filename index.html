@@ -2273,10 +2273,10 @@ const ACHIEVEMENTS = [
       const progress = (weightP + waistP + sfP) / 3;
       const unlocked = wg >= 5 && wi <= 0.5 && sf >= 15;
       return { progress, unlocked,
-        currentValueLabel: `Weight ${wg>=0?"+":""}${wg} lbs · Waist ${wi<=0?"+":""}${wi}" · SF ${sf>=0?"+":""}${sf}%`,
+        currentValueLabel: `Weight ${wg>=0?"+":""}${wg} lbs · Waist ${wi>=0?"+":""}${wi} in · SF ${sf>=0?"+":""}${sf}%`,
         requirements: [
           { label: "Weight gain", current: `${wg>=0?"+":""}${wg} lbs`, target: "+5 lbs", passed: wg >= 5 },
-          { label: "Waist increase", current: `${wi>=0?"+":""}${wi}"`, target: "≤ +0.5"", passed: wi <= 0.5 },
+          { label: "Waist increase", current: `${wi>=0?"+":""}${wi} in`, target: "≤ +0.5 in", passed: wi <= 0.5 },
           { label: "SF increase", current: `${sf>=0?"+":""}${sf}%`, target: "+15%", passed: sf >= 15 },
         ]};
     }
@@ -2304,7 +2304,7 @@ const ACHIEVEMENTS = [
         requirements: [
           { label: "Phase completed", current: d.phaseCompleted?"Yes":"In progress", target: "Complete", passed: d.phaseCompleted },
           { label: "Weight gained", current: `${wg>=0?"+":""}${wg} lbs`, target: "> 0 lbs", passed: wg > 0 },
-          { label: "Waist control", current: `${wi>=0?"+":""}${wi}"`, target: "≤ +1.0"", passed: wi <= 1.0 },
+          { label: "Waist control", current: `${wi>=0?"+":""}${wi} in`, target: "≤ +1.0 in", passed: wi <= 1.0 },
           { label: "SF increase", current: `${sf>=0?"+":""}${sf}%`, target: "+20%", passed: sf >= 20 },
           { label: "Training compliance", current: `${tc.toFixed(0)}%`, target: "80%", passed: tc >= 80 },
         ]};
@@ -2428,10 +2428,10 @@ const ACHIEVEMENTS = [
       const progress = (sfP + wiP + tcP + pcP + rcP + dpP) / 6;
       const unlocked = sf >= 25 && wi <= 0.5 && tc >= 85 && pc >= 85 && rc >= 80 && days >= 28;
       return { progress, unlocked,
-        currentValueLabel: `SF ${sf>=0?"+":""}${sf}% · Waist ${wi>=0?"+":""}${wi}" · Training ${tc.toFixed(0)}% · Protein ${pc.toFixed(0)}%`,
+        currentValueLabel: `SF ${sf>=0?"+":""}${sf}% · Waist ${wi>=0?"+":""}${wi} in · Training ${tc.toFixed(0)}% · Protein ${pc.toFixed(0)}%`,
         requirements: [
           { label: "SF increase", current: `${sf>=0?"+":""}${sf}%`, target: "+25%", passed: sf >= 25 },
-          { label: "Waist control", current: `${wi>=0?"+":""}${wi}"`, target: "≤ +0.5"", passed: wi <= 0.5 },
+          { label: "Waist control", current: `${wi>=0?"+":""}${wi} in`, target: "≤ +0.5 in", passed: wi <= 0.5 },
           { label: "Training compliance", current: `${tc.toFixed(0)}%`, target: "85%", passed: tc >= 85 },
           { label: "Protein compliance", current: `${pc.toFixed(0)}%`, target: "85%", passed: pc >= 85 },
           { label: "Recovery compliance", current: `${rc.toFixed(0)}%`, target: "80%", passed: rc >= 80 },
