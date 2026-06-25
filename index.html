@@ -883,6 +883,11 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   // Initialised above alongside workoutEnded — reads pp_workout_ended templateId if today's session ended
   const selectedTemplate = WORKOUT_TEMPLATES.find(t => t.id === selectedTemplateId) || WORKOUT_TEMPLATES[1];
 
+  // ── Swap state — must be declared before active derivation (active reads swaps) ──
+  const [swaps, setSwaps] = useState(() => loadSwaps(userId)); // per-user exercise swaps { slotId: exerciseName }
+  const [swapModal, setSwapModal] = useState(null); // null | { defaultName, exerciseIdx }
+  const [swapMidWorkoutConfirm, setSwapMidWorkoutConfirm] = useState(null); // pending swap when sets exist
+
   // active — the ordered, resolved exercise list for the CURRENTLY SELECTED session.
   // This drives both the pre-workout preview list and (via startWorkout/loadExercise)
   // the active workout navigation, sidebar, and progress bar — so swapping templates
@@ -958,10 +963,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const [exerciseDone,    setExerciseDone]    = useState(false); // post-exercise completion moment
   const [workoutDraftPrompt, setWorkoutDraftPrompt] = useState(null); // null | { status, draft }
   const [additionalWorkoutConfirm, setAdditionalWorkoutConfirm] = useState(null); // null | { completedTemplateName }
-  const [swaps, setSwaps] = useState(() => loadSwaps(userId)); // per-user exercise swaps { slotId: exerciseName }
-  const [swapModal, setSwapModal] = useState(null); // null | { defaultName, exerciseIdx }
-  const [swapMidWorkoutConfirm, setSwapMidWorkoutConfirm] = useState(null); // pending swap when sets exist
-
   // ── Draft persistence ────────────────────────────────────────────────────────
   // Check for draft on mount
   useEffect(() => {
