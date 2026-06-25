@@ -2144,13 +2144,491 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
 }
 
 
+// ─── ACHIEVEMENT ENGINE ──────────────────────────────────────────────────────
+// All achievements calculated dynamically from existing data. No DB writes.
+// Each calculate(data) returns { progress, unlocked, requirements, currentValueLabel, unlockedDate }
+
+function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase, exercises) {
+  const now = new Date();
+  const toCA  = d => new Date(d).toLocaleDateString("en-CA");
+  const daysAgo = n => { const d = new Date(now); d.setDate(d.getDate() - n); return d; };
+
+  // Unique workout dates
+  const allWorkoutDays = [...new Set(workoutLogs.map(l => toCA(l.date)))].sort();
+  const totalWorkoutDays = allWorkoutDays.length;
+
+  // Phase helpers
+  const phaseStart     = phase?.startDate ? new Date(phase.startDate) : null;
+  const phaseDays      = phaseStart ? Math.max(0, Math.round((now - phaseStart) / 86400000)) : 0;
+  const phaseCompleted = phase?.history?.length > 0;
+
+  // Body log helpers
+  const sortedBody = [...bodyLogs].sort((a,b) => new Date(a.date)-new Date(b.date));
+  const phaseBodyLogs = phaseStart ? sortedBody.filter(l => new Date(l.date) >= phaseStart) : sortedBody;
+  const firstBodyLog  = phaseBodyLogs[0] || null;
+  const latestBodyLog = phaseBodyLogs[phaseBodyLogs.length-1] || null;
+  const weightGain    = (firstBodyLog?.weight && latestBodyLog?.weight) ? +(latestBodyLog.weight - firstBodyLog.weight).toFixed(1) : null;
+  const waistLogs     = phaseBodyLogs.filter(l => l.waist);
+  const firstWaist    = waistLogs[0]?.waist || null;
+  const latestWaist   = waistLogs[waistLogs.length-1]?.waist || null;
+  const waistIncrease = (firstWaist && latestWaist) ? +(latestWaist - firstWaist).toFixed(2) : null;
+
+  // SF helpers — comparable SF increase across phase
+  const calcSF = (l, ex) => calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
+  const phaseWorkoutLogs = phaseStart ? workoutLogs.filter(l => new Date(l.date) >= phaseStart) : workoutLogs;
+  const phaseBaseEnd = phaseStart ? new Date(new Date(phaseStart).setDate(phaseStart.getDate()+7)) : null;
+
+  const getSFProgress = (exName) => {
+    const ex = exercises.find(e => e.name === exName && e.active);
+    if (!ex) return null;
+    const logs = phaseWorkoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
+    if (!logs.length) return null;
+    const sorted = [...logs].sort((a,b) => new Date(a.date)-new Date(b.date));
+    const baseLogs = phaseBaseEnd ? sorted.filter(l => new Date(l.date) <= phaseBaseEnd) : [sorted[0]];
+    if (!baseLogs.length) return null;
+    const baseSF = Math.max(...baseLogs.map(l => calcSF(l,ex)));
+    const last14Start = daysAgo(14);
+    const recentLogs  = sorted.filter(l => new Date(l.date) >= last14Start);
+    const currentSF   = recentLogs.length ? Math.max(...recentLogs.map(l => calcSF(l,ex))) : Math.max(...sorted.map(l => calcSF(l,ex)));
+    if (!baseSF) return null;
+    return { baseSF, currentSF, pct: +((currentSF - baseSF) / baseSF * 100).toFixed(1) };
+  };
+
+  // Total comparable SF across all phase exercises
+  const totalSFPct = (() => {
+    const perEx = exercises.filter(e=>e.active).map(e => getSFProgress(e.name)).filter(Boolean);
+    if (!perEx.length) return null;
+    return +(perEx.reduce((s,v)=>s+v.pct,0)/perEx.length).toFixed(1);
+  })();
+
+  // Rolling 28-day helpers
+  const win28Start = daysAgo(28);
+  const workoutDaysLast28 = [...new Set(workoutLogs.filter(l=>new Date(l.date)>=win28Start).map(l=>toCA(l.date)))].length;
+  const recLast28 = (recoverySessions||[]).filter(s=>new Date(s.date+"T12:00:00")>=win28Start);
+  const nutritionLast28 = nutritionDays.filter(d=>new Date(d.date+"T12:00:00")>=win28Start);
+  const T = getTargets(phase);
+  const proteinHitDays = nutritionDays.filter(d=>(d.total_protein||0)>=(d.target_protein||T.protein)).length;
+  const proteinHitLast28 = nutritionLast28.filter(d=>(d.total_protein||0)>=(d.target_protein||T.protein)).length;
+
+  // Training compliance (28d): expected 3/week = 12 in 28 days
+  const trainingComp28  = Math.min(workoutDaysLast28 / 12 * 100, 100);
+  // Protein compliance (28d)
+  const proteinComp28   = nutritionLast28.length ? Math.min(proteinHitLast28 / nutritionLast28.length * 100, 100) : 0;
+  // Recovery compliance (28d): target 20 sessions
+  const recoveryComp28  = Math.min(recLast28.length / 20 * 100, 100);
+
+  // Heel / low back trend helpers (28d window)
+  const heelBackData = recLast28.filter(s => s.after_heel_pain != null);
+  const avgHeel = arr => arr.length ? arr.reduce((s,r)=>s+(r.after_heel_pain||0),0)/arr.length : null;
+  const avgBack = arr => arr.length ? arr.reduce((s,r)=>s+(r.after_low_back_tightness||0),0)/arr.length : null;
+  const first7Rec  = heelBackData.slice(0, Math.ceil(heelBackData.length/2));
+  const last7Rec   = heelBackData.slice(Math.floor(heelBackData.length/2));
+  const heelImproved = (avgHeel(last7Rec) !== null && avgHeel(first7Rec) !== null) ? avgHeel(last7Rec) <= avgHeel(first7Rec) : false;
+  const backImproved = (avgBack(last7Rec) !== null && avgBack(first7Rec) !== null) ? avgBack(last7Rec) <= avgBack(first7Rec) : false;
+
+  // Body logs last 28d
+  const bodyLogsLast28 = bodyLogs.filter(l=>new Date(l.date)>=win28Start).length;
+
+  // Best single-exercise SF ever
+  const bestExSF = exercises.filter(e=>e.active).reduce((best,ex) => {
+    const logs = workoutLogs.filter(l=>Number(l.exerciseId)===Number(ex.id));
+    const maxSF = logs.reduce((m,l)=>Math.max(m,calcSF(l,ex)),0);
+    return Math.max(best,maxSF);
+  },0);
+
+  // Weekly review (localStorage)
+  const weeklyReview = (() => { try { const r=localStorage.getItem("pp_weekly_review"); return r?JSON.parse(r):null; } catch{return null;} })();
+  const confidenceTier = (() => { try { return calcConfidence(phase,bodyLogs,workoutLogs,nutritionDays).tier; } catch{return "none";} })();
+
+  // Phase training compliance (for Phase Victory)
+  const phaseWorkoutDays = phaseStart ? [...new Set(workoutLogs.filter(l=>new Date(l.date)>=phaseStart).map(l=>toCA(l.date)))].length : 0;
+  const phaseExpectedDays = phaseStart ? Math.max(1, Math.round(phaseDays / 7 * 3)) : 1;
+  const phaseTrainingComp = Math.min(phaseWorkoutDays / phaseExpectedDays * 100, 100);
+
+  return {
+    totalWorkoutDays, allWorkoutDays, phaseDays, phaseCompleted, phaseTrainingComp,
+    weightGain, waistIncrease, totalSFPct, getSFProgress,
+    workoutDaysLast28, recLast28, recLast28Count: recLast28.length,
+    trainingComp28, proteinComp28, recoveryComp28,
+    proteinHitDays, heelImproved, backImproved,
+    bodyLogsLast28, bestExSF, weeklyReview, confidenceTier, T,
+  };
+}
+
+const ACHIEVEMENTS = [
+  // ── TIER 1 — GOLD ────────────────────────────────────────────────────────
+  {
+    id: "lean_gain_signal", tier: 1, name: "Lean Gain Signal",
+    category: "Body Composition", emoji: "⚖️",
+    description: "Gain meaningful bodyweight while keeping waist controlled and increasing Strength Factor.",
+    targetLabel: "Weight +5 lbs · Waist ≤ +0.5 in · SF +15%",
+    requirements: ["Gain at least 5 lbs during current Gain Phase","Keep waist increase at or below 0.5 inches","Increase total comparable SF by at least 15%"],
+    calculate(d) {
+      const wg = d.weightGain ?? 0;
+      const wi = d.waistIncrease ?? 999;
+      const sf = d.totalSFPct ?? 0;
+      const weightP  = Math.min(wg / 5, 1);
+      const waistP   = wi <= 0.5 ? 1 : Math.max(0, 1 - ((wi - 0.5) / 1.0));
+      const sfP      = Math.min(sf / 15, 1);
+      const progress = (weightP + waistP + sfP) / 3;
+      const unlocked = wg >= 5 && wi <= 0.5 && sf >= 15;
+      return { progress, unlocked,
+        currentValueLabel: `Weight ${wg>=0?"+":""}${wg} lbs · Waist ${wi<=0?"+":""}${wi}" · SF ${sf>=0?"+":""}${sf}%`,
+        requirements: [
+          { label: "Weight gain", current: `${wg>=0?"+":""}${wg} lbs`, target: "+5 lbs", passed: wg >= 5 },
+          { label: "Waist increase", current: `${wi>=0?"+":""}${wi}"`, target: "≤ +0.5"", passed: wi <= 0.5 },
+          { label: "SF increase", current: `${sf>=0?"+":""}${sf}%`, target: "+15%", passed: sf >= 15 },
+        ]};
+    }
+  },
+  {
+    id: "phase_victory", tier: 1, name: "Phase Victory",
+    category: "Phase", emoji: "🏁",
+    description: "Complete a full Gain Phase with strength improvement and controlled body composition.",
+    targetLabel: "Complete phase · Weight up · Waist ≤ +1.0 in · SF +20% · Training 80%",
+    requirements: ["Complete the Gain Phase","Gain any bodyweight","Keep waist increase at or below 1.0 inch","Increase total comparable SF by at least 20%","Achieve 80%+ training compliance"],
+    calculate(d) {
+      const wg  = d.weightGain ?? 0;
+      const wi  = d.waistIncrease ?? 999;
+      const sf  = d.totalSFPct ?? 0;
+      const tc  = d.phaseTrainingComp ?? 0;
+      const phP = d.phaseCompleted ? 1 : Math.min(d.phaseDays / 84, 1);
+      const wgP = wg > 0 ? 1 : 0;
+      const wiP = wi <= 1.0 ? 1 : Math.max(0, 1 - ((wi - 1.0) / 1.0));
+      const sfP = Math.min(sf / 20, 1);
+      const tcP = Math.min(tc / 80, 1);
+      const progress = (phP + wgP + wiP + sfP + tcP) / 5;
+      const unlocked = d.phaseCompleted && wg > 0 && wi <= 1.0 && sf >= 20 && tc >= 80;
+      return { progress, unlocked,
+        currentValueLabel: `Phase ${d.phaseCompleted?"complete":"in progress"} · Weight ${wg>=0?"+":""}${wg} lbs · SF ${sf>=0?"+":""}${sf}%`,
+        requirements: [
+          { label: "Phase completed", current: d.phaseCompleted?"Yes":"In progress", target: "Complete", passed: d.phaseCompleted },
+          { label: "Weight gained", current: `${wg>=0?"+":""}${wg} lbs`, target: "> 0 lbs", passed: wg > 0 },
+          { label: "Waist control", current: `${wi>=0?"+":""}${wi}"`, target: "≤ +1.0"", passed: wi <= 1.0 },
+          { label: "SF increase", current: `${sf>=0?"+":""}${sf}%`, target: "+20%", passed: sf >= 20 },
+          { label: "Training compliance", current: `${tc.toFixed(0)}%`, target: "80%", passed: tc >= 80 },
+        ]};
+    }
+  },
+  {
+    id: "consistency_machine", tier: 1, name: "Consistency Machine",
+    category: "Training", emoji: "🔁",
+    description: "Execute training consistently over a sustained period.",
+    targetLabel: "12 workouts in any rolling 28-day window",
+    requirements: ["Complete at least 12 workouts in any rolling 28-day period"],
+    calculate(d) {
+      const n = d.workoutDaysLast28;
+      const progress = Math.min(n / 12, 1);
+      const unlocked = n >= 12;
+      return { progress, unlocked,
+        currentValueLabel: `${n} / 12 workouts in last 28 days`,
+        requirements: [{ label: "Workouts (28 days)", current: String(n), target: "12", passed: unlocked }] };
+    }
+  },
+  {
+    id: "triple_threat", tier: 1, name: "Triple Threat",
+    category: "Compliance", emoji: "⚡",
+    description: "Maintain training, nutrition, and recovery compliance simultaneously.",
+    targetLabel: "Training 80% · Protein 80% · Recovery 80% (28 days)",
+    requirements: ["Training compliance ≥ 80% over 28 days","Protein target hit on ≥ 80% of logged days","Complete ≥ 20 recovery sessions in 28 days"],
+    calculate(d) {
+      const tp = Math.min(d.trainingComp28 / 80, 1);
+      const np = Math.min(d.proteinComp28 / 80, 1);
+      const rp = Math.min(d.recoveryComp28 / 80, 1);
+      const progress = (tp + np + rp) / 3;
+      const unlocked = d.trainingComp28 >= 80 && d.proteinComp28 >= 80 && d.recoveryComp28 >= 80;
+      return { progress, unlocked,
+        currentValueLabel: `Training ${d.trainingComp28.toFixed(0)}% · Protein ${d.proteinComp28.toFixed(0)}% · Recovery ${d.recoveryComp28.toFixed(0)}%`,
+        requirements: [
+          { label: "Training compliance", current: `${d.trainingComp28.toFixed(0)}%`, target: "80%", passed: d.trainingComp28 >= 80 },
+          { label: "Protein compliance", current: `${d.proteinComp28.toFixed(0)}%`, target: "80%", passed: d.proteinComp28 >= 80 },
+          { label: "Recovery compliance", current: `${d.recoveryComp28.toFixed(0)}%`, target: "80%", passed: d.recoveryComp28 >= 80 },
+        ]};
+    }
+  },
+  {
+    id: "upper_chest_builder", tier: 1, name: "Upper Chest Builder",
+    category: "Strength", emoji: "💪",
+    description: "Make significant progress in the upper chest priority movement.",
+    targetLabel: "Incline Dumbbell Press SF +25% from phase baseline",
+    requirements: ["Incline Dumbbell Press SF increase ≥ 25% from phase baseline"],
+    calculate(d) {
+      const sf = d.getSFProgress("Incline Dumbbell Press");
+      if (!sf) return { progress: 0, unlocked: false, currentValueLabel: "Baseline needed — log Incline Dumbbell Press", requirements: [{ label: "SF increase", current: "No data", target: "+25%", passed: false }] };
+      const progress = Math.min(Math.max(sf.pct, 0) / 25, 1);
+      const unlocked = sf.pct >= 25;
+      return { progress, unlocked,
+        currentValueLabel: `${sf.pct>=0?"+":""}${sf.pct}% (${sf.baseSF.toLocaleString()} → ${sf.currentSF.toLocaleString()} SF)`,
+        requirements: [{ label: "Incline Press SF", current: `${sf.pct>=0?"+":""}${sf.pct}%`, target: "+25%", passed: unlocked }] };
+    }
+  },
+  {
+    id: "posterior_chain_rebuilt", tier: 1, name: "Posterior Chain Rebuilt",
+    category: "Strength", emoji: "🦵",
+    description: "Make significant progress in glute and posterior chain strength.",
+    targetLabel: "Hip Thrust +25% · Dumbbell RDL +25% from phase baseline",
+    requirements: ["Hip Thrust SF increase ≥ 25% from phase baseline","Dumbbell RDL SF increase ≥ 25% from phase baseline"],
+    calculate(d) {
+      const ht  = d.getSFProgress("Hip Thrust");
+      const rdl = d.getSFProgress("Dumbbell RDL");
+      const htP  = ht  ? Math.min(Math.max(ht.pct,0)  / 25, 1) : 0;
+      const rdlP = rdl ? Math.min(Math.max(rdl.pct,0) / 25, 1) : 0;
+      const progress = (htP + rdlP) / 2;
+      const unlocked = (ht?.pct ?? -1) >= 25 && (rdl?.pct ?? -1) >= 25;
+      return { progress, unlocked,
+        currentValueLabel: `Hip Thrust ${ht?`${ht.pct>=0?"+":""}${ht.pct}%`:"No data"} · RDL ${rdl?`${rdl.pct>=0?"+":""}${rdl.pct}%`:"No data"}`,
+        requirements: [
+          { label: "Hip Thrust SF", current: ht?`${ht.pct>=0?"+":""}${ht.pct}%`:"No data", target: "+25%", passed: (ht?.pct??-1)>=25 },
+          { label: "Dumbbell RDL SF", current: rdl?`${rdl.pct>=0?"+":""}${rdl.pct}%`:"No data", target: "+25%", passed: (rdl?.pct??-1)>=25 },
+        ]};
+    }
+  },
+  {
+    id: "durable_athlete", tier: 1, name: "Durable Athlete",
+    category: "Recovery", emoji: "🛡️",
+    description: "Train consistently while keeping heel pain and low back symptoms stable or improving.",
+    targetLabel: "20 recovery sessions · 8 workouts · Heel & back stable (28 days)",
+    requirements: ["At least 20 recovery sessions in 28 days","At least 8 workouts in 28 days","Heel pain stable or improved","Low back tightness stable or improved"],
+    calculate(d) {
+      const rp = Math.min(d.recLast28Count / 20, 1);
+      const wp = Math.min(d.workoutDaysLast28 / 8, 1);
+      const hp = d.heelImproved ? 1 : 0;
+      const bp = d.backImproved ? 1 : 0;
+      const progress = (rp + wp + hp + bp) / 4;
+      const unlocked = d.recLast28Count >= 20 && d.workoutDaysLast28 >= 8 && d.heelImproved && d.backImproved;
+      return { progress, unlocked,
+        currentValueLabel: `${d.recLast28Count}/20 recovery · ${d.workoutDaysLast28}/8 workouts · Heel ${d.heelImproved?"✓":"↑"} · Back ${d.backImproved?"✓":"↑"}`,
+        requirements: [
+          { label: "Recovery sessions (28d)", current: String(d.recLast28Count), target: "20", passed: d.recLast28Count >= 20 },
+          { label: "Workouts (28d)", current: String(d.workoutDaysLast28), target: "8", passed: d.workoutDaysLast28 >= 8 },
+          { label: "Heel pain trend", current: d.heelImproved?"Stable/improved":"Worsening", target: "Stable or better", passed: d.heelImproved },
+          { label: "Low back trend", current: d.backImproved?"Stable/improved":"Worsening", target: "Stable or better", passed: d.backImproved },
+        ]};
+    }
+  },
+  {
+    id: "prime_physical", tier: 1, name: "Prime Physical",
+    category: "Elite", emoji: "🌟",
+    description: "The ultimate Project Prime achievement. Demonstrates strength, body composition, consistency, nutrition, and recovery simultaneously.",
+    targetLabel: "SF +25% · Waist ≤ +0.5 in · Training 85% · Protein 85% · Recovery 80% · 28+ days",
+    requirements: ["Total comparable SF increase ≥ 25%","Waist increase ≤ 0.5 inches","Training compliance ≥ 85%","Protein compliance ≥ 85%","Recovery compliance ≥ 80%","At least 28 days of phase data"],
+    calculate(d) {
+      const sf  = d.totalSFPct ?? 0;
+      const wi  = d.waistIncrease ?? 999;
+      const tc  = d.trainingComp28;
+      const pc  = d.proteinComp28;
+      const rc  = d.recoveryComp28;
+      const days = d.phaseDays;
+      const sfP  = Math.min(Math.max(sf,0) / 25, 1);
+      const wiP  = wi <= 0.5 ? 1 : Math.max(0, 1 - ((wi - 0.5) / 1.0));
+      const tcP  = Math.min(tc / 85, 1);
+      const pcP  = Math.min(pc / 85, 1);
+      const rcP  = Math.min(rc / 80, 1);
+      const dpP  = Math.min(days / 28, 1);
+      const progress = (sfP + wiP + tcP + pcP + rcP + dpP) / 6;
+      const unlocked = sf >= 25 && wi <= 0.5 && tc >= 85 && pc >= 85 && rc >= 80 && days >= 28;
+      return { progress, unlocked,
+        currentValueLabel: `SF ${sf>=0?"+":""}${sf}% · Waist ${wi>=0?"+":""}${wi}" · Training ${tc.toFixed(0)}% · Protein ${pc.toFixed(0)}%`,
+        requirements: [
+          { label: "SF increase", current: `${sf>=0?"+":""}${sf}%`, target: "+25%", passed: sf >= 25 },
+          { label: "Waist control", current: `${wi>=0?"+":""}${wi}"`, target: "≤ +0.5"", passed: wi <= 0.5 },
+          { label: "Training compliance", current: `${tc.toFixed(0)}%`, target: "85%", passed: tc >= 85 },
+          { label: "Protein compliance", current: `${pc.toFixed(0)}%`, target: "85%", passed: pc >= 85 },
+          { label: "Recovery compliance", current: `${rc.toFixed(0)}%`, target: "80%", passed: rc >= 80 },
+          { label: "Days of phase data", current: String(days), target: "28", passed: days >= 28 },
+        ]};
+    }
+  },
+  // ── TIER 2 — SILVER ──────────────────────────────────────────────────────
+  {
+    id: "first_workout", tier: 2, name: "First Workout",
+    category: "Training", emoji: "👟",
+    description: "Complete and log the first Project Prime workout.",
+    targetLabel: "1 workout logged",
+    requirements: ["Log at least 1 workout session"],
+    calculate(d) {
+      const n = d.totalWorkoutDays;
+      const unlocked = n >= 1;
+      return { progress: Math.min(n, 1), unlocked,
+        currentValueLabel: `${n} / 1 workouts`,
+        unlockedDate: unlocked ? d.allWorkoutDays[0] : null,
+        requirements: [{ label: "Workouts logged", current: String(n), target: "1", passed: unlocked }] };
+    }
+  },
+  {
+    id: "milestone_10", tier: 2, name: "10 Workout Milestone",
+    category: "Training", emoji: "🔟",
+    description: "Complete 10 Project Prime workouts.",
+    targetLabel: "10 workouts logged",
+    requirements: ["Log at least 10 workout sessions"],
+    calculate(d) {
+      const n = d.totalWorkoutDays;
+      const unlocked = n >= 10;
+      return { progress: Math.min(n/10, 1), unlocked,
+        currentValueLabel: `${n} / 10 workouts`,
+        unlockedDate: unlocked ? d.allWorkoutDays[9] : null,
+        requirements: [{ label: "Workouts logged", current: String(n), target: "10", passed: unlocked }] };
+    }
+  },
+  {
+    id: "milestone_25", tier: 2, name: "25 Workout Milestone",
+    category: "Training", emoji: "💫",
+    description: "Complete 25 Project Prime workouts.",
+    targetLabel: "25 workouts logged",
+    requirements: ["Log at least 25 workout sessions"],
+    calculate(d) {
+      const n = d.totalWorkoutDays;
+      const unlocked = n >= 25;
+      return { progress: Math.min(n/25, 1), unlocked,
+        currentValueLabel: `${n} / 25 workouts`,
+        unlockedDate: unlocked ? d.allWorkoutDays[24] : null,
+        requirements: [{ label: "Workouts logged", current: String(n), target: "25", passed: unlocked }] };
+    }
+  },
+  {
+    id: "milestone_50", tier: 2, name: "50 Workout Milestone",
+    category: "Training", emoji: "🏅",
+    description: "Complete 50 Project Prime workouts.",
+    targetLabel: "50 workouts logged",
+    requirements: ["Log at least 50 workout sessions"],
+    calculate(d) {
+      const n = d.totalWorkoutDays;
+      const unlocked = n >= 50;
+      return { progress: Math.min(n/50, 1), unlocked,
+        currentValueLabel: `${n} / 50 workouts`,
+        unlockedDate: unlocked ? d.allWorkoutDays[49] : null,
+        requirements: [{ label: "Workouts logged", current: String(n), target: "50", passed: unlocked }] };
+    }
+  },
+  {
+    id: "recovery_matters", tier: 2, name: "Recovery Matters",
+    category: "Recovery", emoji: "🌿",
+    description: "Complete the first meaningful block of recovery sessions.",
+    targetLabel: "10 recovery sessions completed",
+    requirements: ["Complete at least 10 recovery sessions"],
+    calculate(d) {
+      const n = (d.recoverySessions||[]).length;
+      const unlocked = n >= 10;
+      return { progress: Math.min(n/10, 1), unlocked,
+        currentValueLabel: `${n} / 10 sessions`,
+        requirements: [{ label: "Recovery sessions", current: String(n), target: "10", passed: unlocked }] };
+    }
+  },
+  {
+    id: "recovery_professional", tier: 2, name: "Recovery Professional",
+    category: "Recovery", emoji: "🧘",
+    description: "Establish a consistent recovery habit.",
+    targetLabel: "25 recovery sessions completed",
+    requirements: ["Complete at least 25 recovery sessions"],
+    calculate(d) {
+      const n = (d.recoverySessions||[]).length;
+      const unlocked = n >= 25;
+      return { progress: Math.min(n/25, 1), unlocked,
+        currentValueLabel: `${n} / 25 sessions`,
+        requirements: [{ label: "Recovery sessions", current: String(n), target: "25", passed: unlocked }] };
+    }
+  },
+  {
+    id: "protein_locked_in", tier: 2, name: "Protein Locked In",
+    category: "Nutrition", emoji: "🥩",
+    description: "Hit the daily protein target consistently.",
+    targetLabel: "7 days hitting protein target",
+    requirements: ["Hit protein target on at least 7 total days"],
+    calculate(d) {
+      const n = d.proteinHitDays;
+      const unlocked = n >= 7;
+      return { progress: Math.min(n/7, 1), unlocked,
+        currentValueLabel: `${n} / 7 protein days`,
+        requirements: [{ label: "Protein days hit", current: String(n), target: "7", passed: unlocked }] };
+    }
+  },
+  {
+    id: "nutrition_professional", tier: 2, name: "Nutrition Professional",
+    category: "Nutrition", emoji: "🍽️",
+    description: "Maintain protein discipline over a longer period.",
+    targetLabel: "21 days hitting protein target",
+    requirements: ["Hit protein target on at least 21 total days"],
+    calculate(d) {
+      const n = d.proteinHitDays;
+      const unlocked = n >= 21;
+      return { progress: Math.min(n/21, 1), unlocked,
+        currentValueLabel: `${n} / 21 protein days`,
+        requirements: [{ label: "Protein days hit", current: String(n), target: "21", passed: unlocked }] };
+    }
+  },
+  {
+    id: "first_breakthrough", tier: 2, name: "First Strength Breakthrough",
+    category: "Strength", emoji: "⚡",
+    description: "Reach the first meaningful Strength Factor milestone.",
+    targetLabel: "Any exercise reaches 1,000 SF",
+    requirements: ["Any single exercise achieves 1,000 SF in one session"],
+    calculate(d) {
+      const n = d.bestExSF;
+      const unlocked = n >= 1000;
+      return { progress: Math.min(n/1000, 1), unlocked,
+        currentValueLabel: `Best SF: ${n.toLocaleString()} / 1,000`,
+        requirements: [{ label: "Best single-exercise SF", current: n.toLocaleString(), target: "1,000", passed: unlocked }] };
+    }
+  },
+  {
+    id: "strength_builder", tier: 2, name: "Strength Builder",
+    category: "Strength", emoji: "🏋️",
+    description: "Reach an advanced Strength Factor milestone.",
+    targetLabel: "Any exercise reaches 2,000 SF",
+    requirements: ["Any single exercise achieves 2,000 SF in one session"],
+    calculate(d) {
+      const n = d.bestExSF;
+      const unlocked = n >= 2000;
+      return { progress: Math.min(n/2000, 1), unlocked,
+        currentValueLabel: `Best SF: ${n.toLocaleString()} / 2,000`,
+        requirements: [{ label: "Best single-exercise SF", current: n.toLocaleString(), target: "2,000", passed: unlocked }] };
+    }
+  },
+  {
+    id: "body_data_discipline", tier: 2, name: "Body Data Discipline",
+    category: "Tracking", emoji: "📊",
+    description: "Maintain consistent body measurement tracking.",
+    targetLabel: "8 body logs in last 28 days",
+    requirements: ["Log body measurements at least 8 times in any 28-day window"],
+    calculate(d) {
+      const n = d.bodyLogsLast28;
+      const unlocked = n >= 8;
+      return { progress: Math.min(n/8, 1), unlocked,
+        currentValueLabel: `${n} / 8 logs in last 28 days`,
+        requirements: [{ label: "Body logs (28d)", current: String(n), target: "8", passed: unlocked }] };
+    }
+  },
+  {
+    id: "self_coached_athlete", tier: 2, name: "Self-Coached Athlete",
+    category: "Coaching", emoji: "🧠",
+    description: "Generate a full weekly Project Prime review with sufficient data quality.",
+    targetLabel: "AI review generated + Medium or High confidence",
+    requirements: ["Generate at least one weekly AI review","Data confidence must be Medium or High"],
+    calculate(d) {
+      const hasReview = !!d.weeklyReview && !d.weeklyReview.overall_status?.includes("Error");
+      const confOk    = d.confidenceTier === "medium" || d.confidenceTier === "high";
+      const reviewP   = hasReview ? 0.5 : 0;
+      const confP     = confOk ? 0.5 : 0;
+      const progress  = reviewP + confP;
+      const unlocked  = hasReview && confOk;
+      return { progress, unlocked,
+        currentValueLabel: `Review ${hasReview?"generated":"not yet generated"} · Confidence ${d.confidenceTier}`,
+        requirements: [
+          { label: "Weekly review generated", current: hasReview?"Yes":"No", target: "Yes", passed: hasReview },
+          { label: "Data confidence", current: d.confidenceTier, target: "Medium or High", passed: confOk },
+        ]};
+    }
+  },
+];
+
 // ─── PROGRESS TAB ─────────────────────────────────────────────────────────────
-function ProgressTab({ exercises, workoutLogs }) {
+function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase }) {
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("dashboard");
   const [baselines, setBaselines] = useState(() => getBaselines());
   const [showBaselineConfirm, setShowBaselineConfirm] = useState(false);
-  const [prSort, setPrSort] = useState("recent"); // "recent" | "group" | "gain" — lifted from PR IIFE (Rules of Hooks)
+  const [achievementFilter, setAchievementFilter] = useState("all"); // "all" | "unlocked" | "inprogress" | "locked"
+  const [selectedAchievement, setSelectedAchievement] = useState(null); // achievement result object for detail modal
 
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
@@ -2201,7 +2679,7 @@ function ProgressTab({ exercises, workoutLogs }) {
           <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 3 }}>Normalized progress across all exercises</div>
         </div>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-          {[["dashboard", "Dashboard"], ["detail", "Exercise Detail"], ["history", "Workout History"], ["prs", "🏆 PRs"]].map(([id, label]) => (
+          {[["dashboard", "Dashboard"], ["detail", "Exercise Detail"], ["history", "Workout History"], ["achievements", "Achievements"]].map(([id, label]) => (
             <button key={id} onClick={() => setView(id)}
               style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
                 border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
@@ -2597,120 +3075,218 @@ function ProgressTab({ exercises, workoutLogs }) {
           })()}
         </div>
       )}
-      {view === "prs" && (() => {
-        // Build PR record for each active exercise with at least 1 session
-        // PR = highest SF ever recorded; also track when it was set and delta vs prior best
-        const prRecords = exercises.filter(e => e.active).map(ex => {
-          const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
-          if (!logs.length) return null;
-          // Build all SF values with their source log
-          const entries = logs.map(l => ({
-            sf: calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality),
-            log: l,
-          })).filter(e => e.sf > 0).sort((a, b) => b.sf - a.sf);
-          if (!entries.length) return null;
-          const best = entries[0];
-          const prior = entries.find(e => {
-            // Prior best: highest SF from a different date than the PR session
-            return new Date(e.log.date).toLocaleDateString("en-CA") !== new Date(best.log.date).toLocaleDateString("en-CA");
-          });
-          const delta = prior ? ((best.sf - prior.sf) / prior.sf * 100) : null;
-          return { ex, best, prior, delta };
-        }).filter(Boolean).sort((a, b) => new Date(b.best.log.date) - new Date(a.best.log.date));
-
-        // Group by muscle group for optional grouping
-        const sorted = [...prRecords].sort((a, b) => {
-          if (prSort === "group")  return a.ex.muscleGroup.localeCompare(b.ex.muscleGroup);
-          if (prSort === "gain")   return (b.delta ?? -Infinity) - (a.delta ?? -Infinity);
-          return new Date(b.best.log.date) - new Date(a.best.log.date); // recent
+      {view === "achievements" && (() => {
+        // Calculate all achievements from live data
+        const achData = buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase, exercises);
+        // Attach recoverySessions to achData so calculate() can access it
+        achData.recoverySessions = recoverySessions;
+        const results = ACHIEVEMENTS.map(a => {
+          let r;
+          try { r = a.calculate(achData); } catch(e) { r = { progress: 0, unlocked: false, currentValueLabel: "Error", requirements: [] }; }
+          const status = r.unlocked ? "unlocked" : r.progress > 0 ? "inprogress" : "locked";
+          return { ...a, ...r, status };
         });
+
+        const gold   = results.filter(r => r.tier === 1);
+        const silver = results.filter(r => r.tier === 2);
+        const goldUnlocked   = gold.filter(r => r.unlocked).length;
+        const silverUnlocked = silver.filter(r => r.unlocked).length;
+
+        const tierColor  = { 1: "#FFD700", 2: "#C0C0C0" };
+        const tierLabel  = { 1: "Tier 1 — Gold", 2: "Tier 2 — Silver" };
+        const tierBg     = { 1: "#FFD70011", 2: "#C0C0C011" };
+
+        const sortGroup = (arr) => {
+          const order = { unlocked: 0, inprogress: 1, locked: 2 };
+          const filtered = achievementFilter === "all" ? arr
+            : achievementFilter === "unlocked"   ? arr.filter(r => r.status === "unlocked")
+            : achievementFilter === "inprogress" ? arr.filter(r => r.status === "inprogress")
+            : arr.filter(r => r.status === "locked");
+          return [...filtered].sort((a,b) => order[a.status] - order[b.status]);
+        };
+
+        const AchCard = ({ a }) => {
+          const tc = tierColor[a.tier];
+          const isLocked = a.status === "locked";
+          const isUnlocked = a.status === "unlocked";
+          const pct = Math.round(a.progress * 100);
+          return (
+            <div onClick={() => setSelectedAchievement(a)}
+              style={{ background: isLocked ? "#161820" : "#1A1D26", borderRadius: 12,
+                border: isUnlocked ? `1px solid ${tc}55` : "1px solid #2A2D3A",
+                padding: "16px 18px", cursor: "pointer", opacity: isLocked ? 0.6 : 1,
+                filter: isLocked ? "grayscale(0.4)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+                  background: isUnlocked ? tc + "22" : "#2A2D3A",
+                  border: isUnlocked ? `1px solid ${tc}44` : "1px solid #3A3D4A",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+                  {a.emoji}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                    <span style={{ color: isLocked ? "#4B5563" : "#E8EAF0", fontSize: 14, fontWeight: 700 }}>{a.name}</span>
+                    <span style={{ background: tc + "22", color: tc, padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>
+                      {tierLabel[a.tier]}
+                    </span>
+                    {isUnlocked && <span style={{ background: tc + "22", color: tc, padding: "1px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700 }}>✓ UNLOCKED</span>}
+                  </div>
+                  <div style={{ color: "#8B92A5", fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>{a.description}</div>
+                  {isUnlocked ? (
+                    <div style={{ color: tc, fontSize: 12, fontWeight: 700 }}>
+                      {a.unlockedDate ? `Unlocked ${fmtDate(a.unlockedDate)}` : "Achievement unlocked ✓"}
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ color: "#4B5563", fontSize: 11 }}>{a.currentValueLabel}</span>
+                        <span style={{ color: a.status === "inprogress" ? tc : "#4B5563", fontSize: 11, fontWeight: 700 }}>{pct}%</span>
+                      </div>
+                      <div style={{ background: "#0F1117", borderRadius: 3, height: 4 }}>
+                        <div style={{ width: `${pct}%`, height: "100%", background: a.status === "inprogress" ? tc : "#2A2D3A", borderRadius: 3, transition: "width 0.4s" }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
 
         return (
           <div>
+            {/* Achievement detail modal */}
+            {selectedAchievement && (() => {
+              const a  = selectedAchievement;
+              const tc = tierColor[a.tier];
+              const pct = Math.round(a.progress * 100);
+              return (
+                <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
+                  onClick={() => setSelectedAchievement(null)}>
+                  <div style={{ background:"#1A1D26", borderRadius:16, border:`1px solid ${tc}44`, padding:32, maxWidth:500, width:"100%", maxHeight:"85vh", overflowY:"auto" }}
+                    onClick={e => e.stopPropagation()}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <div style={{ fontSize:32 }}>{a.emoji}</div>
+                        <div>
+                          <div style={{ color:"#E8EAF0", fontSize:18, fontWeight:800 }}>{a.name}</div>
+                          <div style={{ color:tc, fontSize:12, fontWeight:700, marginTop:2 }}>{tierLabel[a.tier]} · {a.status === "unlocked" ? "✓ Unlocked" : a.status === "inprogress" ? "In Progress" : "Locked"}</div>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedAchievement(null)} style={{ background:"#2A2D3A", border:"none", color:"#8B92A5", fontSize:18, cursor:"pointer", width:32, height:32, borderRadius:6 }}>×</button>
+                    </div>
+
+                    <div style={{ color:"#C8CDD8", fontSize:13, lineHeight:1.7, marginBottom:20 }}>{a.description}</div>
+
+                    <div style={{ background:"#0F1117", borderRadius:10, padding:"14px 16px", marginBottom:16 }}>
+                      <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>How to Unlock</div>
+                      {a.requirements.map((req, i) => (
+                        <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                          <span style={{ color:"#4B5563", fontSize:12, flexShrink:0, marginTop:1 }}>•</span>
+                          <span style={{ color:"#C8CDD8", fontSize:13 }}>{typeof req === "string" ? req : req.label + " → " + req.target}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {a.status !== "locked" && a.requirements.some(r => typeof r === "object") && (
+                      <div style={{ background:"#0F1117", borderRadius:10, padding:"14px 16px", marginBottom:16 }}>
+                        <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>Current Progress</div>
+                        {a.requirements.filter(r => typeof r === "object").map((req, i) => (
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                            <span style={{ color:"#8B92A5", fontSize:13 }}>{req.label}</span>
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              <span style={{ color: req.passed ? "#4AD99A" : "#C8CDD8", fontSize:13, fontWeight:700 }}>{req.current}</span>
+                              <span style={{ color:"#3A3D4A", fontSize:11 }}>/ {req.target}</span>
+                              <span style={{ fontSize:12 }}>{req.passed ? "✓" : "○"}</span>
+                            </div>
+                          </div>
+                        ))}
+                        <div style={{ marginTop:12 }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                            <span style={{ color:"#4B5563", fontSize:11 }}>Overall progress</span>
+                            <span style={{ color:tc, fontSize:12, fontWeight:700 }}>{pct}%</span>
+                          </div>
+                          <div style={{ background:"#1A1D26", borderRadius:4, height:6 }}>
+                            <div style={{ width:`${pct}%`, height:"100%", background:tc, borderRadius:4 }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {a.status === "unlocked" && (
+                      <div style={{ background:tc+"11", border:`1px solid ${tc}33`, borderRadius:10, padding:"12px 16px", textAlign:"center" }}>
+                        <div style={{ color:tc, fontSize:15, fontWeight:800 }}>
+                          {a.unlockedDate ? `Unlocked ${fmtDate(a.unlockedDate)}` : "Achievement Unlocked ✓"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
               <div>
-                <div style={{ color: "#E8EAF0", fontSize: 17, fontWeight: 700 }}>Personal Records</div>
-                <div style={{ color: "#8B92A5", fontSize: 13, marginTop: 2 }}>Best Strength Factor ever recorded per exercise</div>
+                <h2 style={{ margin:0, fontSize:22, fontWeight:700, color:"#E8EAF0" }}>Achievements</h2>
+                <div style={{ color:"#8B92A5", fontSize:13, marginTop:3 }}>Milestones that mark real transformation</div>
               </div>
-              <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-                {[["recent", "Most Recent"], ["group", "By Muscle"], ["gain", "Biggest Gain"]].map(([id, label]) => (
-                  <button key={id} onClick={() => setPrSort(id)}
-                    style={{ background: prSort === id ? "#4A90D9" : "none", color: prSort === id ? "#fff" : "#8B92A5",
-                      border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: prSort === id ? 600 : 400, cursor: "pointer" }}>
+              <div style={{ display:"flex", background:"#1A1D26", borderRadius:8, padding:3, border:"1px solid #2A2D3A" }}>
+                {[["all","All"],["unlocked","Unlocked"],["inprogress","In Progress"],["locked","Locked"]].map(([id,label]) => (
+                  <button key={id} onClick={() => setAchievementFilter(id)}
+                    style={{ background: achievementFilter === id ? "#4A90D9" : "none", color: achievementFilter === id ? "#fff" : "#8B92A5",
+                      border:"none", borderRadius:6, padding:"5px 12px", fontSize:12, fontWeight: achievementFilter === id ? 600 : 400, cursor:"pointer" }}>
                     {label}
                   </button>
                 ))}
               </div>
             </div>
 
-            {sorted.length === 0 ? (
-              <Card style={{ textAlign: "center", padding: 48 }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>🏆</div>
-                <div style={{ color: "#3A3D4A", fontSize: 14 }}>No PRs yet. Complete your first workout to start tracking records.</div>
-              </Card>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {sorted.map(({ ex, best, prior, delta }) => {
-                  const color = MUSCLE_COLORS[ex.muscleGroup] || "#4B5563";
-                  const l = best.log;
-                  return (
-                    <div key={ex.id} style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #FFD70033", padding: "16px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            {/* Summary strip */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:24 }}>
+              {[
+                ["🥇 Gold", `${goldUnlocked} / ${gold.length}`, "#FFD700"],
+                ["🥈 Silver", `${silverUnlocked} / ${silver.length}`, "#C0C0C0"],
+                ["Total", `${goldUnlocked + silverUnlocked} / ${results.length}`, "#4A90D9"],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ background:"#1A1D26", borderRadius:10, border:"1px solid #2A2D3A", padding:"12px 16px", textAlign:"center" }}>
+                  <div style={{ color:"#4B5563", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>{label}</div>
+                  <div style={{ color, fontSize:22, fontWeight:800 }}>{val}</div>
+                </div>
+              ))}
+            </div>
 
-                        {/* Left: trophy + exercise info */}
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: 10, background: "#FFD70022", border: "1px solid #FFD70044",
-                            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-                            🏆
-                          </div>
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                              <span style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{ex.name}</span>
-                              <span style={{ background: color + "22", color, padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>{ex.muscleGroup}</span>
-                              <span style={{ background: "#FFD70022", color: "#FFD700", padding: "2px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" }}>🏆 PR</span>
-                            </div>
-                            {delta !== null && (
-                              <div style={{ color: "#FFD700", fontSize: 12, fontWeight: 700, marginTop: 4 }}>
-                                +{delta.toFixed(1)}% vs previous best ({prior.sf.toLocaleString()} SF)
-                              </div>
-                            )}
-                            <div style={{ color: "#4B5563", fontSize: 11, marginTop: 3 }}>
-                              Set {fmtDateLong(new Date(l.date))}
-                              {ex.laterality === "unilateral" && <span style={{ color: "#7B68EE", marginLeft: 6 }}>per side</span>}
-                            </div>
-                          </div>
-                        </div>
+            {/* Tier 1 */}
+            {sortGroup(gold).length > 0 && (
+              <div style={{ marginBottom:28 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                  <span style={{ fontSize:18 }}>🥇</span>
+                  <div style={{ color:"#FFD700", fontSize:14, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em" }}>Tier 1 — Gold Achievements</div>
+                  <span style={{ color:"#4B5563", fontSize:12 }}>{goldUnlocked}/{gold.length} unlocked</span>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {sortGroup(gold).map(a => <AchCard key={a.id} a={a} />)}
+                </div>
+              </div>
+            )}
 
-                        {/* Right: SF + weight × reps */}
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ color: "#E8A838", fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{best.sf.toLocaleString()}</div>
-                          <div style={{ color: "#4B5563", fontSize: 11, marginTop: 2 }}>SF</div>
-                          <div style={{ color: "#C8CDD8", fontSize: 13, fontWeight: 600, marginTop: 6 }}>
-                            {l.weight ? `${l.reps} reps @ ${l.weight} lbs` : `${l.reps} reps`}
-                          </div>
-                          <div style={{ color: "#4B5563", fontSize: 11 }}>{l.sets} sets</div>
-                        </div>
-                      </div>
+            {/* Tier 2 */}
+            {sortGroup(silver).length > 0 && (
+              <div>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                  <span style={{ fontSize:18 }}>🥈</span>
+                  <div style={{ color:"#C0C0C0", fontSize:14, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em" }}>Tier 2 — Silver Milestones</div>
+                  <span style={{ color:"#4B5563", fontSize:12 }}>{silverUnlocked}/{silver.length} unlocked</span>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {sortGroup(silver).map(a => <AchCard key={a.id} a={a} />)}
+                </div>
+              </div>
+            )}
 
-                      {/* Progress bar: best SF vs prior best */}
-                      {prior && (
-                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #2A2D3A" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                            <span style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>vs Previous Best</span>
-                            <span style={{ color: "#8B92A5", fontSize: 10 }}>{prior.sf.toLocaleString()} SF → {best.sf.toLocaleString()} SF</span>
-                          </div>
-                          <div style={{ background: "#0F1117", borderRadius: 4, height: 5 }}>
-                            <div style={{ width: `${Math.min(100, (prior.sf / best.sf) * 100)}%`, height: "100%", background: "#4B5563", borderRadius: 4 }} />
-                          </div>
-                          <div style={{ background: "#0F1117", borderRadius: 4, height: 5, marginTop: 2, position: "relative" }}>
-                            <div style={{ width: "100%", height: "100%", background: "#FFD700", borderRadius: 4 }} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {sortGroup(gold).length === 0 && sortGroup(silver).length === 0 && (
+              <div style={{ textAlign:"center", padding:"48px 0", color:"#3A3D4A", fontSize:14 }}>
+                No achievements match this filter.
               </div>
             )}
           </div>
@@ -6511,7 +7087,7 @@ function App() {
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 0", minHeight: 0, WebkitOverflowScrolling: "touch", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}>
         {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onEditSet={editWorkoutSet} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} />}
-        {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} />}
+        {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} bodyLogs={bodyLogs} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
         {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} phase={phase} />}
         {tab === "recovery"  && <RecoveryTab recoverySessions={recoverySessions} onSaveSession={saveRecoverySession} />}
