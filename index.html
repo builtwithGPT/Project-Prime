@@ -3236,29 +3236,44 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
             <div style={{ background:"linear-gradient(135deg, #12141E 0%, #1A1D2E 100%)",
               borderRadius:16, border:"1px solid #2A2D3A", padding:"20px 24px", marginBottom:20,
               boxShadow:"0 4px 24px rgba(0,0,0,0.4)" }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:16 }}>
-                <span style={{ color:"#FFD700", fontSize:13 }}>★</span>
-                <span style={{ color:"#8B92A5", fontSize:11, fontWeight:700, textTransform:"uppercase",
-                  letterSpacing:"0.14em" }}>Trophy Cabinet</span>
-                <span style={{ color:"#FFD700", fontSize:13 }}>★</span>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:20 }}>
+                <span style={{ color:"#FFD700", fontSize:15 }}>★</span>
+                <span style={{ color:"#C8CDD8", fontSize:13, fontWeight:800, textTransform:"uppercase",
+                  letterSpacing:"0.16em" }}>Trophy Cabinet</span>
+                <span style={{ color:"#FFD700", fontSize:15 }}>★</span>
               </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
                 {[
-                  { label:"Tier 1 · Gold", val:`${goldUnlocked} / ${gold.length}`, color:"#FFD700", emoji:"🥇", bar: goldUnlocked/gold.length },
-                  { label:"Tier 2 · Silver", val:`${silverUnlocked} / ${silver.length}`, color:"#C0C0C0", emoji:"🥈", bar: silverUnlocked/silver.length },
-                  { label:"Total", val:`${goldUnlocked+silverUnlocked} / ${results.length}`, color:"#4A90D9", emoji:"⭐", bar:(goldUnlocked+silverUnlocked)/results.length },
-                ].map(({label,val,color,emoji,bar}) => (
-                  <div key={label} style={{ textAlign:"center" }}>
-                    <div style={{ fontSize:28, marginBottom:6 }}>{emoji}</div>
-                    <div style={{ color, fontSize:20, fontWeight:900, lineHeight:1 }}>{val}</div>
-                    <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase",
-                      letterSpacing:"0.06em", marginTop:4, marginBottom:8 }}>{label}</div>
-                    <div style={{ background:"#2A2D3A", borderRadius:3, height:3 }}>
-                      <div style={{ width:`${Math.round(bar*100)}%`, height:"100%",
-                        background:color, borderRadius:3 }}/>
+                  { label:"Tier 1 · Gold",   val:`${goldUnlocked}`, total:gold.length,   color:"#FFD700", emoji:"🥇", pct: gold.length   ? goldUnlocked/gold.length     : 0 },
+                  { label:"Tier 2 · Silver", val:`${silverUnlocked}`, total:silver.length, color:"#C0C0C0", emoji:"🥈", pct: silver.length ? silverUnlocked/silver.length : 0 },
+                  { label:"Total",            val:`${goldUnlocked+silverUnlocked}`, total:results.length, color:"#4A90D9", emoji:"⭐", pct: results.length ? (goldUnlocked+silverUnlocked)/results.length : 0 },
+                ].map(({label,val,total,color,emoji,pct}) => {
+                  const R = 36, stroke = 6, circ = 2*Math.PI*R, dash = pct*circ;
+                  return (
+                    <div key={label} style={{ textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+                      {/* Close-the-ring gauge with emoji in centre */}
+                      <div style={{ position:"relative", width:88, height:88 }}>
+                        <svg width="88" height="88" style={{ transform:"rotate(-90deg)" }}>
+                          <circle cx="44" cy="44" r={R} fill="none" stroke="#2A2D3A" strokeWidth={stroke}/>
+                          <circle cx="44" cy="44" r={R} fill="none" stroke={color} strokeWidth={stroke}
+                            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"/>
+                        </svg>
+                        <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column",
+                          alignItems:"center", justifyContent:"center", gap:1 }}>
+                          <span style={{ fontSize:22, lineHeight:1 }}>{emoji}</span>
+                        </div>
+                      </div>
+                      {/* Count */}
+                      <div>
+                        <div style={{ color, fontSize:22, fontWeight:900, lineHeight:1 }}>
+                          {val}<span style={{ color:"#4B5563", fontSize:14, fontWeight:400 }}> / {total}</span>
+                        </div>
+                        <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase",
+                          letterSpacing:"0.06em", marginTop:4 }}>{label}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
