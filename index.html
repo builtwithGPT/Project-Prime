@@ -79,6 +79,263 @@ const EXERCISE_LIST = [
 
 const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({ id: i + 1, ...e, active: true }));
 
+// ─── EXERCISE LIBRARY EXTENSIONS ─────────────────────────────────────────────
+// Additional exercises available as swap options. These extend EXERCISE_LIST
+// and are included in the full EXERCISE_LIBRARY used by the swap system.
+// IDs start at 100 to avoid collisions with INITIAL_EXERCISES (1-21).
+const EXERCISE_LIBRARY_EXTENSIONS = [
+  { id: 100, name: "Side-Lying Hip Abduction",      muscleGroup: "Warm-up",    type: "bodyweight", laterality: "unilateral", defaultSets: "2",  defaultReps: "15", flag: null, active: true },
+  { id: 101, name: "Monster Walk",                   muscleGroup: "Warm-up",    type: "banded",     laterality: "bilateral",  defaultSets: "2",  defaultReps: "10", flag: null, active: true },
+  { id: 102, name: "Banded Glute Bridge",            muscleGroup: "Warm-up",    type: "banded",     laterality: "bilateral",  defaultSets: "2",  defaultReps: "15", flag: null, active: true },
+  { id: 103, name: "Single-Leg Glute Bridge",        muscleGroup: "Warm-up",    type: "bodyweight", laterality: "unilateral", defaultSets: "2",  defaultReps: "12", flag: null, active: true },
+  { id: 104, name: "Feet-Elevated Push-Up",          muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null, active: true },
+  { id: 105, name: "Push-Up",                        muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 106, name: "Chest-Supported Dumbbell Row",   muscleGroup: "Back",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 107, name: "Band Row",                       muscleGroup: "Back",       type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 108, name: "One-Arm Kettlebell Row",         muscleGroup: "Back",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: null, active: true },
+  { id: 109, name: "Assisted Pull-up",               muscleGroup: "Back",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "8",  flag: null, active: true },
+  { id: 110, name: "Band Lat Pulldown",              muscleGroup: "Back",       type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 111, name: "Inverted Row",                   muscleGroup: "Back",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null, active: true },
+  { id: 112, name: "Squeeze Press",                  muscleGroup: "Chest",      type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 113, name: "Close-Grip Push-Up",             muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 114, name: "Bench Dip",                      muscleGroup: "Chest",      type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 115, name: "Banded Hip Thrust",              muscleGroup: "Glutes",     type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 116, name: "Kettlebell RDL",                 muscleGroup: "Hamstrings", type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: "⚠️ Neutral spine", active: true },
+  { id: 117, name: "Chest-Supported Hip Hinge Drill",muscleGroup: "Hamstrings", type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 118, name: "Slider Hamstring Curl",          muscleGroup: "Hamstrings", type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null, active: true },
+  { id: 119, name: "Band Hamstring Curl",            muscleGroup: "Hamstrings", type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 120, name: "Step-Up",                        muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Heel elevation if needed", active: true },
+  { id: 121, name: "Reverse Lunge",                  muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Heel elevation if needed", active: true },
+  { id: 122, name: "Split Squat",                    muscleGroup: "Legs",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Heel elevation if needed", active: true },
+  { id: 123, name: "Arnold Press",                   muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: "⚠️ Seated only", active: true },
+  { id: 124, name: "High-Incline Dumbbell Press",    muscleGroup: "Shoulders",  type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: "⚠️ Seated only", active: true },
+  { id: 125, name: "Band Lateral Raise",             muscleGroup: "Shoulders",  type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 126, name: "Lean-Away Lateral Raise",        muscleGroup: "Shoulders",  type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 127, name: "Hammer Curl",                    muscleGroup: "Arms",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 128, name: "Incline Dumbbell Curl",          muscleGroup: "Arms",       type: "weighted",   laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 129, name: "Band Curl",                      muscleGroup: "Arms",       type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 130, name: "Band Pressdown",                 muscleGroup: "Arms",       type: "banded",     laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 131, name: "Dumbbell Skull Crusher",         muscleGroup: "Arms",       type: "weighted",   laterality: "bilateral",  defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 132, name: "Reverse Crunch",                 muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "15", flag: null, active: true },
+  { id: 133, name: "Hollow Hold",                    muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "30", flag: null, active: true },
+  { id: 134, name: "Pallof Press",                   muscleGroup: "Core",       type: "banded",     laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 135, name: "Band Wood Chop",                 muscleGroup: "Core",       type: "banded",     laterality: "unilateral", defaultSets: "3",  defaultReps: "12", flag: null, active: true },
+  { id: 136, name: "Bird Dog",                       muscleGroup: "Core",       type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "10", flag: "⚠️ Keep lower back flat", active: true },
+  { id: 137, name: "Side Plank",                     muscleGroup: "Core",       type: "bodyweight", laterality: "unilateral", defaultSets: "3",  defaultReps: "30", flag: null, active: true },
+  { id: 138, name: "Modified McGill Curl-Up",        muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null, active: true },
+];
+
+// Full exercise library = original exercises + extensions
+// Used by the swap system to resolve exercise metadata for any name
+const ALL_EXERCISES = [...INITIAL_EXERCISES, ...EXERCISE_LIBRARY_EXTENSIONS];
+
+// ─── EXERCISE SLOTS ───────────────────────────────────────────────────────────
+// Each slot maps a program purpose to its default exercise and approved replacements.
+// Swaps are stored per-user in localStorage and applied at template resolution time.
+const EXERCISE_SLOTS = [
+  {
+    id: "warmup_1",         label: "Warm-Up 1",          equipment: "Band",
+    defaultExercise: "Banded Clamshell",
+    options: [
+      { name: "Banded Clamshell",        note: null },
+      { name: "Side-Lying Hip Abduction",note: null },
+      { name: "Monster Walk",            note: null },
+    ],
+  },
+  {
+    id: "warmup_2",         label: "Warm-Up 2",          equipment: "Bodyweight",
+    defaultExercise: "Glute Bridge",
+    options: [
+      { name: "Glute Bridge",            note: null },
+      { name: "Banded Glute Bridge",     note: null },
+      { name: "Single-Leg Glute Bridge", note: null },
+    ],
+  },
+  {
+    id: "upper_chest",      label: "Upper Chest",         equipment: "Dumbbells",
+    defaultExercise: "Incline Dumbbell Press",
+    options: [
+      { name: "Incline Dumbbell Press",  note: null },
+      { name: "Flat Dumbbell Press",     note: null },
+      { name: "Feet-Elevated Push-Up",   note: null },
+      { name: "Push-Up",                 note: null },
+    ],
+  },
+  {
+    id: "horizontal_pull",  label: "Horizontal Pull",     equipment: "Dumbbells / Band",
+    defaultExercise: "Dumbbell Row",
+    options: [
+      { name: "Dumbbell Row",                  note: null },
+      { name: "Chest-Supported Dumbbell Row",  note: null },
+      { name: "Band Row",                      note: null },
+      { name: "One-Arm Kettlebell Row",        note: null },
+    ],
+  },
+  {
+    id: "vertical_pull",    label: "Vertical Pull",       equipment: "Bodyweight / Band",
+    defaultExercise: "Pull-up / Chin-up",
+    options: [
+      { name: "Pull-up / Chin-up",       note: null },
+      { name: "Assisted Pull-up",        note: null },
+      { name: "Band Lat Pulldown",       note: null },
+      { name: "Inverted Row",            note: null },
+    ],
+  },
+  {
+    id: "chest_accessory",  label: "Chest Accessory",     equipment: "Dumbbells",
+    defaultExercise: "Dumbbell Fly",
+    options: [
+      { name: "Dumbbell Fly",            note: null },
+      { name: "Push-Up",                 note: null },
+      { name: "Squeeze Press",           note: null },
+    ],
+  },
+  {
+    id: "chest_finisher",   label: "Dip / Chest Finisher",equipment: "Bodyweight",
+    defaultExercise: "Dips",
+    options: [
+      { name: "Dips",                    note: null },
+      { name: "Close-Grip Push-Up",      note: null },
+      { name: "Bench Dip",               note: null },
+    ],
+  },
+  {
+    id: "glute_primary",    label: "Glute Primary",       equipment: "Dumbbells / Band",
+    defaultExercise: "Hip Thrust",
+    options: [
+      { name: "Hip Thrust",              note: null },
+      { name: "Glute Bridge",            note: null },
+      { name: "Single-Leg Hip Thrust",   note: null },
+      { name: "Banded Hip Thrust",       note: null },
+    ],
+  },
+  {
+    id: "hip_hinge",        label: "Hip Hinge",           equipment: "Dumbbells",
+    defaultExercise: "Dumbbell RDL",
+    options: [
+      { name: "Dumbbell RDL",                    note: null },
+      { name: "Single-Leg Dumbbell RDL",         note: null },
+      { name: "Kettlebell RDL",                  note: null },
+      { name: "Chest-Supported Hip Hinge Drill", note: null },
+    ],
+  },
+  {
+    id: "hamstring_curl",   label: "Hamstring Curl",      equipment: "Dumbbells / Band",
+    defaultExercise: "Prone Dumbbell Hamstring Curl",
+    options: [
+      { name: "Prone Dumbbell Hamstring Curl", note: null },
+      { name: "Slider Hamstring Curl",         note: null },
+      { name: "Band Hamstring Curl",           note: null },
+    ],
+  },
+  {
+    id: "split_squat",      label: "Split Squat",         equipment: "Dumbbells",
+    defaultExercise: "Bulgarian Split Squat",
+    options: [
+      { name: "Bulgarian Split Squat", note: "Use heel elevation as needed. Avoid if plantar fascia pain increases." },
+      { name: "Step-Up",               note: "Use heel elevation as needed. Avoid if plantar fascia pain increases." },
+      { name: "Reverse Lunge",         note: "Use heel elevation as needed. Avoid if plantar fascia pain increases." },
+      { name: "Split Squat",           note: "Use heel elevation as needed. Avoid if plantar fascia pain increases." },
+    ],
+  },
+  {
+    id: "shoulder_press",   label: "Shoulder Press",      equipment: "Dumbbells",
+    defaultExercise: "Seated Overhead Press",
+    options: [
+      { name: "Seated Overhead Press",        note: "Do not use standing overhead press." },
+      { name: "Arnold Press",                 note: "Seated only. Do not use standing." },
+      { name: "High-Incline Dumbbell Press",  note: "Seated only." },
+    ],
+  },
+  {
+    id: "shoulder_accessory",label: "Shoulder Accessory", equipment: "Dumbbells / Band",
+    defaultExercise: "Lateral Raise",
+    options: [
+      { name: "Lateral Raise",          note: null },
+      { name: "Band Lateral Raise",     note: null },
+      { name: "Lean-Away Lateral Raise",note: null },
+    ],
+  },
+  {
+    id: "biceps",           label: "Biceps",              equipment: "Dumbbells / Band",
+    defaultExercise: "Bicep Curl",
+    options: [
+      { name: "Bicep Curl",             note: null },
+      { name: "Hammer Curl",            note: null },
+      { name: "Incline Dumbbell Curl",  note: null },
+      { name: "Band Curl",              note: null },
+    ],
+  },
+  {
+    id: "triceps",          label: "Triceps",             equipment: "Dumbbells / Band",
+    defaultExercise: "Tricep Extension",
+    options: [
+      { name: "Tricep Extension",       note: null },
+      { name: "Close-Grip Push-Up",     note: null },
+      { name: "Band Pressdown",         note: null },
+      { name: "Dumbbell Skull Crusher", note: null },
+    ],
+  },
+  {
+    id: "core_flexion",     label: "Core Flexion",        equipment: "Bodyweight",
+    defaultExercise: "Leg Raise",
+    options: [
+      { name: "Leg Raise",              note: null },
+      { name: "Reverse Crunch",         note: null },
+      { name: "Dead Bug",               note: null },
+      { name: "Hollow Hold",            note: null },
+    ],
+  },
+  {
+    id: "core_rotation",    label: "Core Rotation",       equipment: "Dumbbells / Band",
+    defaultExercise: "Core Rotation",
+    options: [
+      { name: "Core Rotation",          note: null },
+      { name: "Pallof Press",           note: null },
+      { name: "Band Wood Chop",         note: null },
+      { name: "Dead Bug",               note: null },
+    ],
+  },
+  {
+    id: "core_stability",   label: "Core Stability",      equipment: "Bodyweight",
+    defaultExercise: "Dead Bug",
+    options: [
+      { name: "Dead Bug",               note: null },
+      { name: "Bird Dog",               note: null },
+      { name: "Side Plank",             note: null },
+      { name: "Modified McGill Curl-Up",note: null },
+    ],
+  },
+];
+
+// Map from exercise name → slot (for fast lookup during template resolution)
+const EXERCISE_NAME_TO_SLOT = {};
+EXERCISE_SLOTS.forEach(slot => {
+  slot.options.forEach(opt => {
+    if (!EXERCISE_NAME_TO_SLOT[opt.name]) EXERCISE_NAME_TO_SLOT[opt.name] = slot;
+  });
+  // Also map default directly (in case not in options somehow)
+  if (!EXERCISE_NAME_TO_SLOT[slot.defaultExercise]) EXERCISE_NAME_TO_SLOT[slot.defaultExercise] = slot;
+});
+
+// ── Swap storage helpers ──────────────────────────────────────────────────────
+function getSwapKey(userId) { return `pp_swaps_${userId}`; }
+function loadSwaps(userId) {
+  try { return JSON.parse(localStorage.getItem(getSwapKey(userId)) || "{}"); } catch { return {}; }
+}
+function saveSwap(userId, slotId, exerciseName) {
+  const swaps = loadSwaps(userId);
+  if (exerciseName === null) { delete swaps[slotId]; }
+  else { swaps[slotId] = exerciseName; }
+  try { localStorage.setItem(getSwapKey(userId), JSON.stringify(swaps)); } catch {}
+}
+// Resolve the active exercise name for a given default exercise name
+function resolveExercise(defaultName, swaps) {
+  const slot = EXERCISE_NAME_TO_SLOT[defaultName];
+  if (!slot) return defaultName;
+  return swaps[slot.id] || defaultName;
+}
+
 // ─── STRENGTH FACTOR ──────────────────────────────────────────────────────────
 function calcPF(sets, reps, weight, type, laterality) {
   const mult = laterality === "unilateral" ? 2 : 1;
@@ -634,8 +891,10 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   // but each entry remains its own full exercise object/log — no combined PF entities.
   const active = flattenTemplate(selectedTemplate)
     .map(entry => {
-      const match = exercises.find(e => e.name === entry.name && e.active);
-      return match ? { ...match, groupLabel: entry.groupLabel } : null;
+      const resolvedName = resolveExercise(entry.name, swaps);
+      const match = ALL_EXERCISES.find(e => e.name === resolvedName && e.active)
+        || ALL_EXERCISES.find(e => e.name === entry.name && e.active);
+      return match ? { ...match, groupLabel: entry.groupLabel, slotDefaultName: entry.name } : null;
     })
     .filter(Boolean);
 
@@ -699,6 +958,9 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const [exerciseDone,    setExerciseDone]    = useState(false); // post-exercise completion moment
   const [workoutDraftPrompt, setWorkoutDraftPrompt] = useState(null); // null | { status, draft }
   const [additionalWorkoutConfirm, setAdditionalWorkoutConfirm] = useState(null); // null | { completedTemplateName }
+  const [swaps, setSwaps] = useState(() => loadSwaps(userId)); // per-user exercise swaps { slotId: exerciseName }
+  const [swapModal, setSwapModal] = useState(null); // null | { defaultName, exerciseIdx }
+  const [swapMidWorkoutConfirm, setSwapMidWorkoutConfirm] = useState(null); // pending swap when sets exist
 
   // ── Draft persistence ────────────────────────────────────────────────────────
   // Check for draft on mount
@@ -756,6 +1018,26 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const discardWorkoutDraft = () => {
     clearDraft(DRAFT_KEYS.workout);
     setWorkoutDraftPrompt(null);
+  };
+
+  // ── Exercise swap helpers ──────────────────────────────────────────────────
+  const applySwap = (defaultName, newExerciseName) => {
+    const slot = EXERCISE_NAME_TO_SLOT[defaultName];
+    if (!slot) return;
+    saveSwap(userId, slot.id, newExerciseName === slot.defaultExercise ? null : newExerciseName);
+    setSwaps(loadSwaps(userId));
+    setSwapModal(null);
+    setSwapMidWorkoutConfirm(null);
+  };
+  const openSwapModal = (slotDefaultName, exerciseIdx) => {
+    const hasSets = activeMode && (completedSets[
+      (ALL_EXERCISES.find(e => e.name === resolveExercise(slotDefaultName, swaps)))?.id
+    ] || []).length > 0;
+    if (hasSets) {
+      setSwapMidWorkoutConfirm({ defaultName: slotDefaultName, exerciseIdx });
+    } else {
+      setSwapModal({ defaultName: slotDefaultName, exerciseIdx });
+    }
   };
 
   // ── Derived ─────────────────────────────────────────────────────────────────
@@ -1170,6 +1452,117 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     );
   };
 
+  // ── Swap Modal ───────────────────────────────────────────────────────────────
+  const renderSwapModal = () => {
+    if (!swapModal) return null;
+    const { defaultName } = swapModal;
+    const slot = EXERCISE_NAME_TO_SLOT[defaultName];
+    if (!slot) return null;
+    const currentName = resolveExercise(defaultName, swaps);
+    const isSwapped = currentName !== defaultName;
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.82)", zIndex:600,
+        display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
+        onClick={() => setSwapModal(null)}>
+        <div style={{ background:"#1A1D26", borderRadius:16, border:"1px solid #2A2D3A",
+          padding:28, maxWidth:440, width:"100%", maxHeight:"85vh", overflowY:"auto" }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+            <div>
+              <div style={{ color:"#4A90D9", fontSize:11, fontWeight:700, textTransform:"uppercase",
+                letterSpacing:"0.1em", marginBottom:4 }}>Replace Exercise</div>
+              <div style={{ color:"#E8EAF0", fontSize:17, fontWeight:800 }}>{slot.label} Slot</div>
+              <div style={{ color:"#8B92A5", fontSize:12, marginTop:2 }}>
+                Current: <span style={{ color:"#E8EAF0", fontWeight:600 }}>{currentName}</span>
+                {isSwapped && <span style={{ color:"#E8A838", marginLeft:6, fontSize:11 }}>(swapped)</span>}
+              </div>
+            </div>
+            <button onClick={() => setSwapModal(null)}
+              style={{ background:"#2A2D3A", border:"none", color:"#8B92A5", fontSize:16,
+                cursor:"pointer", width:30, height:30, borderRadius:6 }}>×</button>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:isSwapped?16:0 }}>
+            {slot.options.map(opt => {
+              const exMeta = ALL_EXERCISES.find(e => e.name === opt.name);
+              const isSelected = opt.name === currentName;
+              const typeLabel = exMeta?.type === "weighted" ? "Weighted" : exMeta?.type === "bodyweight" ? "Bodyweight" : "Banded";
+              const typeColor = exMeta?.type === "weighted" ? "#4A90D9" : exMeta?.type === "bodyweight" ? "#4AD99A" : "#E8A838";
+              return (
+                <button key={opt.name} onClick={() => applySwap(defaultName, opt.name)}
+                  style={{ background: isSelected ? "#4A90D911" : "#0F1117",
+                    border: isSelected ? "1px solid #4A90D944" : "1px solid #2A2D3A",
+                    borderRadius:10, padding:"12px 14px", cursor:"pointer", textAlign:"left", width:"100%" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      {isSelected && <span style={{ color:"#4A90D9", fontSize:14 }}>✓</span>}
+                      <div>
+                        <div style={{ color: isSelected ? "#4A90D9" : "#E8EAF0",
+                          fontSize:14, fontWeight:isSelected?700:500 }}>{opt.name}</div>
+                        <div style={{ display:"flex", gap:8, marginTop:3, alignItems:"center", flexWrap:"wrap" }}>
+                          <span style={{ background:typeColor+"22", color:typeColor,
+                            fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3 }}>{typeLabel}</span>
+                          {exMeta?.muscleGroup && (
+                            <span style={{ color:"#4B5563", fontSize:11 }}>{exMeta.muscleGroup}</span>
+                          )}
+                          {exMeta?.flag && (
+                            <span style={{ color:"#E8A838", fontSize:10 }}>{exMeta.flag}</span>
+                          )}
+                        </div>
+                        {opt.note && (
+                          <div style={{ color:"#E8A838", fontSize:11, marginTop:4, lineHeight:1.4 }}>
+                            ⚠️ {opt.note}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {!isSelected && <span style={{ color:"#3A3D4A", fontSize:13 }}>›</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {isSwapped && (
+            <button onClick={() => applySwap(defaultName, slot.defaultExercise)}
+              style={{ width:"100%", background:"none", border:"1px solid #2A2D3A", color:"#8B92A5",
+                borderRadius:8, padding:"10px 0", fontSize:13, cursor:"pointer", marginTop:4 }}>
+              ↩ Reset to Default ({slot.defaultExercise})
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Mid-workout swap confirmation ────────────────────────────────────────────
+  const renderSwapMidWorkoutConfirm = () => {
+    if (!swapMidWorkoutConfirm) return null;
+    const { defaultName } = swapMidWorkoutConfirm;
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.82)", zIndex:600,
+        display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+        <div style={{ background:"#1A1D26", borderRadius:16, border:"1px solid #E8A83844",
+          padding:28, maxWidth:400, width:"100%", textAlign:"center" }}>
+          <div style={{ fontSize:28, marginBottom:12 }}>⚠️</div>
+          <div style={{ color:"#E8EAF0", fontSize:16, fontWeight:700, marginBottom:8 }}>Sets Already Completed</div>
+          <div style={{ color:"#8B92A5", fontSize:13, marginBottom:24, lineHeight:1.7 }}>
+            You already completed sets for this exercise. Replacing now will discard unsaved sets for this exercise.
+            Saved logs are not affected.
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            <button onClick={() => setSwapMidWorkoutConfirm(null)}
+              style={{ flex:1, background:"#2A2D3A", color:"#8B92A5", border:"none",
+                borderRadius:10, height:48, fontSize:14, cursor:"pointer" }}>Cancel</button>
+            <button onClick={() => { setSwapMidWorkoutConfirm(null); setSwapModal({ defaultName }); }}
+              style={{ flex:1, background:"#E8A838", color:"#0F1117", border:"none",
+                borderRadius:10, height:48, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+              Replace Anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ── Edit Set modal — handles both in-progress (in-memory) sets and persisted log sets ──
   const renderEditSetModal = () => {
     if (!editingSet || !editDraft) return null;
@@ -1335,6 +1728,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       <div>
         {renderWorkoutSummaryModal()}
         {renderEditSetModal()}
+        {renderSwapModal()}
+        {renderSwapMidWorkoutConfirm()}
 
         {/* Workout draft recovery prompt */}
         {workoutDraftPrompt && (
@@ -1598,6 +1993,14 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                       </div>
                     </div>
                     <span style={{ color: "#3A3D4A", fontSize: 16, width: 12, flexShrink: 0, textAlign: "center" }}>›</span>
+                    {EXERCISE_NAME_TO_SLOT[primary.slotDefaultName || primary.name] && (
+                      <button onClick={(e) => { e.stopPropagation(); openSwapModal(primary.slotDefaultName || primary.name, i); }}
+                        title="Replace exercise"
+                        style={{ background:"none", border:"none", color:"#4B5563", fontSize:13,
+                          cursor:"pointer", padding:"2px 4px", flexShrink:0, lineHeight:1 }}>
+                        ⇄
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1631,6 +2034,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       {renderWorkoutSummaryModal()}
       {renderJumpConfirmModal()}
       {renderEditSetModal()}
+      {renderSwapModal()}
+      {renderSwapMidWorkoutConfirm()}
 
       {/* ── MAIN PANEL ───────────────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
@@ -2140,6 +2545,12 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
                 style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
                 <span style={{ fontSize: 14 }}>⏭</span> Skip Exercise
               </button>
+              {EXERCISE_NAME_TO_SLOT[ex?.slotDefaultName || ex?.name] && (
+                <button onClick={() => openSwapModal(ex.slotDefaultName || ex.name, currentIdx)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
+                  <span style={{ fontSize: 14 }}>⇄</span> Replace Exercise
+                </button>
+              )}
               <button disabled
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "none", color: "#3A3D4A", fontSize: 13, padding: "8px 4px", cursor: "not-allowed", textAlign: "left", borderRadius: 6 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 14 }}>＋</span> Add Exercise</span>
