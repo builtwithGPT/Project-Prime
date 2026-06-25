@@ -622,8 +622,8 @@ function MacroRing({ pct, color, label, val, target, unit }) {
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
 function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSummary, session, userId }) {
-  // ── Session template selection — default Full Body (60 min) ────────────────
-  const [selectedTemplateId, setSelectedTemplateId] = useState("full");
+  // ── Session template selection — default Full Body (60 min)
+  // Initialised above alongside workoutEnded — reads pp_workout_ended templateId if today's session ended
   const selectedTemplate = WORKOUT_TEMPLATES.find(t => t.id === selectedTemplateId) || WORKOUT_TEMPLATES[1];
 
   // active — the ordered, resolved exercise list for the CURRENTLY SELECTED session.
@@ -655,6 +655,18 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       const todayOld = new Date().toDateString();
       return ended && (date === todayKey || date === todayOld);
     } catch { return false; }
+  });
+  // Initialise selectedTemplateId to the template that was actually run today,
+  // so the list view shows the correct Today's Results panel on load/reload.
+  const [selectedTemplateId, setSelectedTemplateId] = useState(() => {
+    try {
+      const s = localStorage.getItem("pp_workout_ended");
+      if (!s) return "full";
+      const { date, ended, templateId } = JSON.parse(s);
+      const todayOld = new Date().toDateString();
+      const isToday = ended && (date === todayKey || date === todayOld);
+      return (isToday && templateId) ? templateId : "full";
+    } catch { return "full"; }
   });
   const [workoutSummary, setWorkoutSummary] = useState(null);
   const [showSummaryPreview, setShowSummaryPreview] = useState(false); // View Workout Summary (mid-workout, non-terminal)
@@ -1063,7 +1075,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId, durationMinutes };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
-    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true }));
+    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId }));
     setLoggedIds(new Set());
     onSaveSummary && onSaveSummary(summary);
   };
