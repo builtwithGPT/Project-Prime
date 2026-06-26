@@ -878,7 +878,7 @@ function MacroRing({ pct, color, label, val, target, unit }) {
 }
 
 // ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
-function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSummary, session, userId }) {
+function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSummary, session, userId, phase, bodyLogs, nutritionDays, recoverySessions }) {
   // ── Session template selection — default Full Body (60 min)
   // Initialised above alongside workoutEnded — reads pp_workout_ended templateId if today's session ended
   const selectedTemplate = WORKOUT_TEMPLATES.find(t => t.id === selectedTemplateId) || WORKOUT_TEMPLATES[1];
@@ -1162,15 +1162,27 @@ CRITICAL RULES:
 - Respect medical constraints: no barbell squats, no conventional deadlifts from floor, no standing overhead press, no heavy axial loading
 - Prefer dumbbell, seated, supported, and bodyweight movements`;
 
+      // Enrich with body, nutrition, recovery context now that props are available
+      const sortedBody = [...(bodyLogs||[])].sort((a,b)=>new Date(a.date)-new Date(b.date));
+      const latestBody = sortedBody[sortedBody.length-1];
+      const recentRec  = (recoverySessions||[]).filter(s=>new Date(s.date+"T12:00:00")>=sevenDaysAgo);
+      const avgHeel    = recentRec.length ? (recentRec.reduce((s,r)=>s+(r.after_heel_pain||0),0)/recentRec.length).toFixed(1) : null;
+      const avgBack    = recentRec.length ? (recentRec.reduce((s,r)=>s+(r.after_low_back_tightness||0),0)/recentRec.length).toFixed(1) : null;
+      const avgEnergy  = recentRec.length ? (recentRec.reduce((s,r)=>s+(r.after_energy||0),0)/recentRec.length).toFixed(1) : null;
+      const T = getTargets(phase);
+      const recentNutr = (nutritionDays||[]).filter(d=>new Date(d.date+"T12:00:00")>=sevenDaysAgo);
+      const proteinHit = recentNutr.filter(d=>(d.total_protein||0)>=(d.target_protein||T.protein)).length;
+
       const userPrompt = `Generate today's optimal workout.
 
-Phase: ${phase ? `${phase.type} phase, week ${Math.ceil((new Date()-new Date(phase.startDate))/604800000)}` : "No active phase"}
+Phase: ${phase ? `${phase.type} phase, started ${phase.startDate}, week ${Math.ceil((new Date()-new Date(phase.startDate))/604800000)}` : "No active phase"}
 Intent: ${intent || "Let Prime decide"}
 Already trained today: ${todayExercises.length > 0 ? "Yes — " + todayExercises.join(", ") : "No"}
 Recent workout history (7 days): ${[...new Set(recentLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))].length} sessions
 Recent exercise SF: ${sfSummary.join(" | ")}
-Body: Weight trend and waist trend tracked in app
-Nutrition: Tracked in app`;
+Body: ${latestBody ? `Weight ${latestBody.weight}lbs, Waist ${latestBody.waist||"not logged"}"` : "No recent body data"}
+Recovery (7 days): ${recentRec.length} sessions, avg heel pain ${avgHeel||"n/a"}/10, avg low back ${avgBack||"n/a"}/10, avg energy ${avgEnergy||"n/a"}/10
+Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target of ${T.protein}g`;
 
       const raw = await callAI(systemPrompt, userPrompt, 1200);
       const parsed = JSON.parse(raw);
@@ -8066,7 +8078,7 @@ function App() {
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 0", minHeight: 0, WebkitOverflowScrolling: "touch", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}>
-        {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onEditSet={editWorkoutSet} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} />}
+        {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onEditSet={editWorkoutSet} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} phase={phase} bodyLogs={bodyLogs} nutritionDays={nutritionDays} recoverySessions={recoverySessions} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} bodyLogs={bodyLogs} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} />}
         {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
         {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} phase={phase} />}
