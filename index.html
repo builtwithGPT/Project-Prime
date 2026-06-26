@@ -25,8 +25,6 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback, useRef } = React;
 
-
-// ─── DATA ─────────────────────────────────────────────────────────────────────
 const FORM_GUIDES = {
   "Banded Clamshell": "Lie on your side, knees bent at 90°, band above knees. Keep feet stacked. Rotate top knee upward like a clamshell opening. Hold 1 second at top, lower slowly. Don't let hips rock backward. Targets glute medius — primary driver of both low back pain and plantar fasciitis.",
   "Glute Bridge": "Lie on back, knees bent, feet flat hip-width apart. Press through heels, drive hips to ceiling. Squeeze glutes hard at top — don't hyperextend lower back. Hold 2 seconds. Lower slowly. Core braced throughout.",
@@ -51,8 +49,6 @@ const FORM_GUIDES = {
   "Dead Bug": "Lie on back, arms up, knees bent at 90° in air. Lower opposite arm and leg simultaneously — keep lower back pressed flat. Return and alternate. Key: maintain spinal contact with floor.",
 };
 
-// laterality: "bilateral" | "unilateral"
-// PF for unilateral is automatically doubled (user enters per-side reps)
 const EXERCISE_LIST = [
   { name: "Banded Clamshell",           muscleGroup: "Warm-up",    type: "banded",     laterality: "unilateral", defaultSets: "2",  defaultReps: "15", flag: null },
   { name: "Glute Bridge",               muscleGroup: "Warm-up",    type: "bodyweight", laterality: "bilateral",  defaultSets: "2",  defaultReps: "15", flag: null },
@@ -79,10 +75,6 @@ const EXERCISE_LIST = [
 
 const INITIAL_EXERCISES = EXERCISE_LIST.map((e, i) => ({ id: i + 1, ...e, active: true }));
 
-// ─── EXERCISE LIBRARY EXTENSIONS ─────────────────────────────────────────────
-// Additional exercises available as swap options. These extend EXERCISE_LIST
-// and are included in the full EXERCISE_LIBRARY used by the swap system.
-// IDs start at 100 to avoid collisions with INITIAL_EXERCISES (1-21).
 const EXERCISE_LIBRARY_EXTENSIONS = [
   { id: 100, name: "Side-Lying Hip Abduction",      muscleGroup: "Warm-up",    type: "bodyweight", laterality: "unilateral", defaultSets: "2",  defaultReps: "15", flag: null, active: true },
   { id: 101, name: "Monster Walk",                   muscleGroup: "Warm-up",    type: "banded",     laterality: "bilateral",  defaultSets: "2",  defaultReps: "10", flag: null, active: true },
@@ -125,13 +117,8 @@ const EXERCISE_LIBRARY_EXTENSIONS = [
   { id: 138, name: "Modified McGill Curl-Up",        muscleGroup: "Core",       type: "bodyweight", laterality: "bilateral",  defaultSets: "3",  defaultReps: "10", flag: null, active: true },
 ];
 
-// Full exercise library = original exercises + extensions
-// Used by the swap system to resolve exercise metadata for any name
 const ALL_EXERCISES = [...INITIAL_EXERCISES, ...EXERCISE_LIBRARY_EXTENSIONS];
 
-// ─── WORKOUT SESSION HISTORY (today's completed sessions) ────────────────────
-// pp_workout_ended stores an ARRAY of completed sessions today.
-// Format: [{ date, ended, templateId, startingPoint }, ...]
 function getEndedSessions() {
   try {
     const s = localStorage.getItem("pp_workout_ended");
@@ -152,9 +139,6 @@ function appendEndedSession(entry) {
   try { localStorage.setItem("pp_workout_ended", JSON.stringify(sessions)); } catch {}
 }
 
-// ─── EXERCISE SLOTS ───────────────────────────────────────────────────────────
-// Each slot maps a program purpose to its default exercise and approved replacements.
-// Swaps are stored per-user in localStorage and applied at template resolution time.
 const EXERCISE_SLOTS = [
   {
     id: "warmup_1",         label: "Warm-Up 1",          equipment: "Band",
@@ -331,17 +315,14 @@ const EXERCISE_SLOTS = [
   },
 ];
 
-// Map from exercise name → slot (for fast lookup during template resolution)
 const EXERCISE_NAME_TO_SLOT = {};
 EXERCISE_SLOTS.forEach(slot => {
   slot.options.forEach(opt => {
     if (!EXERCISE_NAME_TO_SLOT[opt.name]) EXERCISE_NAME_TO_SLOT[opt.name] = slot;
   });
-  // Also map default directly (in case not in options somehow)
   if (!EXERCISE_NAME_TO_SLOT[slot.defaultExercise]) EXERCISE_NAME_TO_SLOT[slot.defaultExercise] = slot;
 });
 
-// ── Swap storage helpers ──────────────────────────────────────────────────────
 function getSwapKey(userId) { return `pp_swaps_${userId}`; }
 function loadSwaps(userId) {
   try { return JSON.parse(localStorage.getItem(getSwapKey(userId)) || "{}"); } catch { return {}; }
@@ -352,14 +333,12 @@ function saveSwap(userId, slotId, exerciseName) {
   else { swaps[slotId] = exerciseName; }
   try { localStorage.setItem(getSwapKey(userId), JSON.stringify(swaps)); } catch {}
 }
-// Resolve the active exercise name for a given default exercise name
 function resolveExercise(defaultName, swaps) {
   const slot = EXERCISE_NAME_TO_SLOT[defaultName];
   if (!slot) return defaultName;
   return swaps[slot.id] || defaultName;
 }
 
-// ─── STRENGTH FACTOR ──────────────────────────────────────────────────────────
 function calcPF(sets, reps, weight, type, laterality) {
   const mult = laterality === "unilateral" ? 2 : 1;
   if (type === "bodyweight") return sets * reps * 10 * mult;
@@ -367,11 +346,9 @@ function calcPF(sets, reps, weight, type, laterality) {
   return sets * reps * (weight || 0) * mult;
 }
 
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const OPENAI_KEY = "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"; // kept for deploy.sh compatibility — not used directly
 const AI_WORKER = "https://shrill-cloud-995e.jdurham.workers.dev";
 
-// ── Shared AI function — all AI calls route through Cloudflare Worker ─────────
 async function callAI(systemPrompt, userPrompt, maxTokens = 1000) {
   const res = await fetch(AI_WORKER, {
     method: "POST",
@@ -397,11 +374,6 @@ const MUSCLE_COLORS = {
   "Shoulders": "#4AD9A0", "Arms": "#D94A7A", "Core": "#4AD9D9",
 };
 
-// ── WORKOUT_TEMPLATES — defines the 30/60/90 min session builders ─────────────
-// exerciseNames are matched against EXERCISE_LIST by name, in order.
-// groupLabel (optional, per-name) lets multiple underlying exercises display
-// together as one row in the UI (e.g. "Arms Superset") while still logging
-// as fully separate exercise records with their own Strength Factor.
 const WORKOUT_TEMPLATES = [
   {
     id: "express",
@@ -464,8 +436,6 @@ const WORKOUT_TEMPLATES = [
   },
 ];
 
-// Flattens a template's exerciseNames (resolving grouped entries) into an
-// ordered list of { name, groupLabel } so callers can map to live exercise objects.
 function flattenTemplate(template) {
   const out = [];
   template.exerciseNames.forEach(entry => {
@@ -478,12 +448,6 @@ function flattenTemplate(template) {
   return out;
 }
 
-// inferTemplateName — maps logged exercise count to template name using fixed thresholds.
-// Real flattened exercise counts per template: Express=7, Full Body=13, Extended=16.
-// Ranges account for skipped exercises within a session:
-//   1–7   logged → Express Workout
-//   8–14  logged → Full Body Workout
-//   15+   logged → Extended Workout
 function inferTemplateName(loggedExerciseIds) {
   const count = loggedExerciseIds.length;
   if (count <= 7)  return "Express Workout";
@@ -491,8 +455,6 @@ function inferTemplateName(loggedExerciseIds) {
   return "Extended Workout";
 }
 
-// Bodyweight/banded exercises with no history show their default prescription
-// instead of "Set starting weight" since there's no weight to set.
 function suggestedText(ex, lastE) {
   if (lastE) {
     return `${ex.defaultSets}×${ex.defaultReps}`;
@@ -513,7 +475,6 @@ const NAV = [
   { id: "recovery", label: "Recovery",  icon: "🌿" },
 ];
 
-// ── Coach Tips — cycle with set number ───────────────────────────────────────
 const COACH_TIPS = {
   "Banded Clamshell": [
     "Keep your hips stacked. The knee moves — your pelvis does not rotate.",
@@ -622,8 +583,6 @@ const COACH_TIPS = {
   ],
 };
 
-// ── MUSCLE_FOCUS — primary/secondary muscles worked per exercise ──────────────
-// Used for the lightweight "Muscle Focus" awareness card (text, not anatomy art).
 const MUSCLE_FOCUS = {
   "Banded Clamshell":             { primary: ["Glute Medius"],            secondary: ["Hip External Rotators"] },
   "Glute Bridge":                 { primary: ["Glutes"],                  secondary: ["Hamstrings", "Core"] },
@@ -648,25 +607,20 @@ const MUSCLE_FOCUS = {
   "Dead Bug":                     { primary: ["Deep Core"],               secondary: ["Hip Flexors"] },
 };
 
-
 const PHASE_CONFIG = {
   gain: { label: "Gain Phase", color: "#4AD99A", bg: "#4AD99A22", icon: "📈", weeks: 12, calories: 2650, description: "Caloric surplus · Build muscle · Progressive overload" },
   cut:  { label: "Cut Phase",  color: "#4A90D9", bg: "#4A90D922", icon: "🔥", weeks: 4,  calories: 1600, description: "Caloric deficit · Preserve muscle · Shed fat" },
 };
 
 const NUTRITION_TARGETS = { calories: 2650, protein: 191, carbs: 220, fat: 65 };
-// getTargets — phase targets take priority over defaults
 function getTargets(phase) {
   if (!phase?.targets) return NUTRITION_TARGETS;
   return { ...NUTRITION_TARGETS, ...phase.targets };
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
 const fmtDate     = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const fmtDateLong = (d) => new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
-// Session name based on start hour
-// 3am–10am = Morning Session, 10:01am–4pm = Afternoon Session, 4:01pm–2:59am = Night Session
 function getSessionName(startTimestamp) {
   if (!startTimestamp) return "Today's Session";
   const h = new Date(startTimestamp).getHours();
@@ -675,7 +629,6 @@ function getSessionName(startTimestamp) {
   return "Night Session";
 }
 
-// ─── LOCAL STORAGE BUFFER ─────────────────────────────────────────────────────
 const LS_KEYS = {
   workout:   "pp_workout_logs",
   body:      "pp_body_logs",
@@ -690,10 +643,6 @@ function lsSet(key, data) {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 }
 
-// ── Exercise baseline storage ─────────────────────────────────────────────────
-// Baselines are stored as { [exerciseId]: { date, sf, setAt } }
-// Multiple baselines can be set over time; the most recent is always the active one.
-// History of all baselines is kept in the "history" array on each entry.
 const BASELINES_KEY = "pp_exercise_baselines";
 function getBaselines() {
   try { return JSON.parse(localStorage.getItem(BASELINES_KEY) || "{}"); } catch { return {}; }
@@ -711,7 +660,6 @@ function setBaseline(exerciseId, date, sf) {
   return all[key];
 }
 
-// ─── DRAFT SESSION PERSISTENCE ────────────────────────────────────────────────
 const DRAFT_KEYS = { workout: "pp_draft_workout", recovery: "pp_draft_recovery" };
 
 function saveDraft(key, data) {
@@ -757,7 +705,6 @@ function getDraftStatus(draft) {
   return hasMeaningfulProgress ? "stale-meaningful" : "stale-empty";
 }
 
-// ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPABASE_URL      = "https://jxwdoewfqcpzskvzxsfs.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4d2RvZXdmcWNwenNrdnp4c2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyMDU3MjYsImV4cCI6MjA5Njc4MTcyNn0.AGwIuH_-VLmtQcHr243HnRSWfDtg4fPvjBZzTN6OBnE";
 
@@ -810,7 +757,6 @@ async function sbDelete(path, token) {
   } catch { return false; }
 }
 
-// ─── SHARED UI ────────────────────────────────────────────────────────────────
 const inputStyle = {
   background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8,
   color: "#E8EAF0", padding: "10px 14px", fontSize: 14,
@@ -872,7 +818,6 @@ function Sparkline({ data, width = 120, height = 40 }) {
   const trend = vals[vals.length - 1] >= vals[0];
   const lc = trend ? "#4AD99A" : "#D94A4A";
 
-  // Linear regression trendline
   const n = vals.length;
   const sumX = vals.reduce((s, _, i) => s + i, 0);
   const sumY = vals.reduce((s, v) => s + v, 0);
@@ -910,26 +855,19 @@ function MacroRing({ pct, color, label, val, target, unit }) {
   );
 }
 
-// ─── WORKOUT TAB ──────────────────────────────────────────────────────────────
 function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSummary, session, userId, phase, bodyLogs, nutritionDays, recoverySessions }) {
-  // ── Session template selection — default Full Body (60 min)
-  // Initialised above alongside workoutEnded — reads pp_workout_ended templateId if today's session ended
   const selectedTemplate = WORKOUT_TEMPLATES.find(t => t.id === selectedTemplateId) || WORKOUT_TEMPLATES[1];
 
-  // ── Swap state — must be declared before active derivation (active reads swaps) ──
   const [swaps, setSwaps] = useState(() => loadSwaps(userId)); // per-user exercise swaps { slotId: exerciseName }
   const [swapModal, setSwapModal] = useState(null); // null | { defaultName, exerciseIdx }
   const [swapMidWorkoutConfirm, setSwapMidWorkoutConfirm] = useState(null); // pending swap when sets exist
 
-  // ── Workout starting point — "last" | "recommended" | "custom" ───────────
   const [startingPoint, setStartingPoint] = useState("recommended");
-  // AI recommendation state
   const [aiRec, setAiRec] = useState(() => {
     try {
       const s = localStorage.getItem("pp_ai_workout_rec");
       if (!s) return null;
       const parsed = JSON.parse(s);
-      // Only valid if generated today
       const today = new Date().toLocaleDateString("en-CA");
       return parsed.generatedDate === today ? parsed : null;
     } catch { return null; }
@@ -937,22 +875,13 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [secondWorkoutModal, setSecondWorkoutModal] = useState(false); // after-workout modal for 2nd gen
-  // Custom workout builder state
   const [customExercises, setCustomExercises] = useState([]); // array of exercise objects
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showAdjustWorkout, setShowAdjustWorkout] = useState(false); // mid-workout adjust modal
   const [activeQuickAction, setActiveQuickAction] = useState(null); // "skip" | "replace" | "adjust"
   const [exercisePickerSearch, setExercisePickerSearch] = useState("");
-  // Exercise edit modal (add/remove/reorder — distinct from swap)
   const [editExModal, setEditExModal] = useState(null); // null | { exerciseIdx }
 
-  // active — the ordered, resolved exercise list for the CURRENTLY SELECTED session.
-  // This drives both the pre-workout preview list and (via startWorkout/loadExercise)
-  // the active workout navigation, sidebar, and progress bar — so swapping templates
-  // automatically reshapes the whole session without touching downstream logic.
-  // groupLabel travels alongside each resolved exercise for UI grouping (Arms Superset etc.)
-  // but each entry remains its own full exercise object/log — no combined PF entities.
-  // Build the "template-resolved" active list (used by active workout engine)
   const templateResolved = flattenTemplate(selectedTemplate)
     .map(entry => {
       const resolvedName = resolveExercise(entry.name, swaps);
@@ -962,18 +891,10 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     })
     .filter(Boolean);
 
-  // workoutExerciseOverride: when the user starts from "last" / "recommended" / "custom",
-  // this holds the chosen exercise list so the active workout engine uses it too.
-  // Set by startWorkout(), cleared by endWorkout() and discard.
   const [workoutExerciseOverride, setWorkoutExerciseOverride] = useState(null);
 
-  // templateActive: what the workout engine navigates through.
-  // When an override is set (user started from non-template source), use it.
   const templateActive = workoutExerciseOverride || templateResolved;
 
-  // "Last Workout" exercise list — reconstruct from most recent day with logs.
-  // Always includes today if today has logs (covers the case where user completed a
-  // workout and then tapped + Add Workout, which resets workoutEnded to false).
   const lastWorkoutExercises = (() => {
     if (!workoutLogs.length) return [];
     const days = [...new Set(workoutLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))]
@@ -987,7 +908,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       .map(e => ({ ...e, groupLabel: null, slotDefaultName: e.name }));
   })();
 
-  // "AI Recommended" exercise list — from aiRec.exercises
   const aiActive = (() => {
     if (!aiRec?.exercises?.length) return [];
     return aiRec.exercises
@@ -1000,25 +920,19 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       .filter(Boolean);
   })();
 
-  // ── Top-level mode — must be declared BEFORE active derivation (active reads activeMode) ──
   const [activeMode, setActiveMode]     = useState(false);
   const [workoutStartedAt, setWorkoutStartedAt] = useState(null);
   const [currentSessionId, setCurrentSessionId] = useState(null); // uuid for current session — scopes logs so second sessions don't overwrite first
 
-  // The active list the LIST VIEW uses — overridden by starting point choice
-  // Active workout engine always uses templateActive (unchanged)
   const active = activeMode ? templateActive
     : startingPoint === "last"        ? (lastWorkoutExercises.length ? lastWorkoutExercises : templateActive)
     : startingPoint === "recommended" ? (aiActive.length ? aiActive : templateActive)
     : startingPoint === "custom"      ? customExercises
     : templateActive;
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // todayKey — local YYYY-MM-DD used as the session key
   const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
   const [workoutEnded, setWorkoutEnded] = useState(() => getEndedSessions().length > 0);
-  // Initialise selectedTemplateId to the template that was actually run today,
-  // so the list view shows the correct Today's Results panel on load/reload.
   const [selectedTemplateId, setSelectedTemplateId] = useState(() => {
     try {
       const s = localStorage.getItem("pp_workout_ended");
@@ -1032,36 +946,28 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const [workoutSummary, setWorkoutSummary] = useState(null);
   const [showSummaryPreview, setShowSummaryPreview] = useState(false); // View Workout Summary (mid-workout, non-terminal)
 
-  // ── Exercise navigation ─────────────────────────────────────────────────────
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loggedIds,  setLoggedIds]  = useState(new Set());
   const [skippedIds, setSkippedIds] = useState(new Set()); // exercises skipped this session — contribute no PF
 
-  // ── Per-set state ───────────────────────────────────────────────────────────
-  // completedSets: { [exerciseId]: [ {setNum, reps, weight, rir, notes, pf, ts}, ... ] }
   const [completedSets, setCompletedSets] = useState({});
-  // currentSet: the set currently being staged (before tapping Complete)
   const [currentSetNum,    setCurrentSetNum]    = useState(1);
   const [currentSetWeight, setCurrentSetWeight] = useState("0");
   const [currentSetReps,   setCurrentSetReps]   = useState("10");
   const [currentSetRir,    setCurrentSetRir]    = useState("");
   const [currentSetNotes,  setCurrentSetNotes]  = useState("");
 
-  // ── Rest timer ──────────────────────────────────────────────────────────────
   const [resting,       setResting]       = useState(false);
   const [restSeconds,   setRestSeconds]   = useState(60);
   const [restTotal,     setRestTotal]     = useState(60);
   const restRef = useRef(null);
 
-  // ── UI state ────────────────────────────────────────────────────────────────
   const [showFormGuide,   setShowFormGuide]   = useState(false);
   const [saveStatus,      setSaveStatus]      = useState(null);
   const [jumpConfirm,     setJumpConfirm]     = useState(null); // {targetIdx}
   const [exerciseDone,    setExerciseDone]    = useState(false); // post-exercise completion moment
   const [workoutDraftPrompt, setWorkoutDraftPrompt] = useState(null); // null | { status, draft }
   const [additionalWorkoutConfirm, setAdditionalWorkoutConfirm] = useState(null); // null | { completedTemplateName }
-  // ── Draft persistence ────────────────────────────────────────────────────────
-  // Check for draft on mount
   useEffect(() => {
     if (activeMode) return; // don't interrupt active workout
     const draft = loadDraft(DRAFT_KEYS.workout);
@@ -1072,7 +978,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     }
   }, []);
 
-  // Save draft whenever active workout state changes
   useEffect(() => {
     if (!activeMode) return;
     saveDraft(DRAFT_KEYS.workout, {
@@ -1089,7 +994,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     });
   }, [activeMode, currentIdx, completedSets, loggedIds, currentSetNum, currentSetWeight, currentSetReps, exerciseDone]);
 
-  // Live elapsed-time ticker for the stats row — updates once per second while active
   useEffect(() => {
     if (!activeMode || !workoutStartedAt) return;
     const tick = () => setElapsedSeconds(Math.max(0, Math.round((Date.now() - workoutStartedAt) / 1000)));
@@ -1119,7 +1023,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     setWorkoutDraftPrompt(null);
   };
 
-  // ── Exercise swap helpers ──────────────────────────────────────────────────
   const applySwap = (defaultName, newExerciseName) => {
     const slot = EXERCISE_NAME_TO_SLOT[defaultName];
     if (!slot) return;
@@ -1139,7 +1042,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     }
   };
 
-  // ── AI Workout Generation ─────────────────────────────────────────────────
   const generateAIWorkout = async (intent) => {
     setAiGenerating(true);
     setAiError(null);
@@ -1151,7 +1053,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       const todayLogs_ = workoutLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === today);
       const todayExercises = todayLogs_.map(l => ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId))?.name).filter(Boolean);
 
-      // Build SF summary per exercise (last 14 days)
       const fourteenAgo = new Date(); fourteenAgo.setDate(fourteenAgo.getDate() - 14);
       const sfSummary = ALL_EXERCISES.filter(e => e.active && e.id <= 21).map(ex => {
         const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id) && new Date(l.date) >= fourteenAgo);
@@ -1161,11 +1062,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
         return `${ex.name}: last ${last.sets}x${last.reps}${last.weight ? ` @${last.weight}lbs` : ""} SF=${calcPF(last.sets,last.reps,last.weight,ex.type,ex.laterality)}`;
       }).filter(Boolean).slice(0, 12);
 
-      // Recent recovery
       const recoverySessions_ = workoutLogs; // passed via closure — use prop
       const recentRecovery = (workoutLogs.length ? [] : []); // recovery not in workoutLogs
-      // Use global recoverySessions if available via closure — it's not a prop of WorkoutTab
-      // so we summarize from what we have
 
       const approvedNames = ALL_EXERCISES.map(e => e.name);
 
@@ -1188,7 +1086,6 @@ CRITICAL RULES:
 - Respect medical constraints: no barbell squats, no conventional deadlifts from floor, no standing overhead press, no heavy axial loading
 - Prefer dumbbell, seated, supported, and bodyweight movements`;
 
-      // Enrich with body, nutrition, recovery context now that props are available
       const sortedBody = [...(bodyLogs||[])].sort((a,b)=>new Date(a.date)-new Date(b.date));
       const latestBody = sortedBody[sortedBody.length-1];
       const recentRec  = (recoverySessions||[]).filter(s=>new Date(s.date+"T12:00:00")>=sevenDaysAgo);
@@ -1213,7 +1110,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       const raw = await callAI(systemPrompt, userPrompt, 1200);
       const parsed = JSON.parse(raw);
 
-      // Validate exercises against approved library
       const validated = { ...parsed };
       validated.exercises = (parsed.exercises || []).filter(item => {
         const found = ALL_EXERCISES.find(e => e.name === item.name);
@@ -1233,17 +1129,14 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     }
   };
 
-  // ── Custom workout exercise management ────────────────────────────────────
   const addCustomExercise = (ex) => {
     const newEntry = { ...ex, groupLabel: null, slotDefaultName: ex.name };
     if (activeMode) {
-      // Mid-workout: append to workoutExerciseOverride so exercise appears in active sidebar
       if (templateActive.find(e => e.id === ex.id)) { // no duplicates against live list
         setShowExercisePicker(false); setExercisePickerSearch(""); return;
       }
       setWorkoutExerciseOverride(prev => [...(prev || templateActive), newEntry]);
     } else {
-      // Pre-workout: add to custom builder
       if (customExercises.find(e => e.id === ex.id)) return;
       const next = [...customExercises, newEntry];
       setCustomExercises(next);
@@ -1265,7 +1158,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     });
   };
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
   const todayKey2 = new Date().toLocaleDateString("en-CA");
   const todayLogs = workoutLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === todayKey2);
   const sessionPF = todayLogs.reduce((sum, l) => {
@@ -1274,11 +1166,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
   }, 0);
 
   const lastEntry = (id) => {
-    // Returns the most recent log for this exercise across ALL history (including today).
-    // Used in the pre-workout list view "Last" column — should always show the most recent
-    // actual session, including one completed earlier today.
-    // Note: lastExPF and bestEverPF (used on the Exercise Complete screen) have their own
-    // inline today-exclusion so comparisons don't compare a session against itself.
     const logs = workoutLogs.filter(x => Number(x.exerciseId) === Number(id));
     return logs.length ? logs[logs.length - 1] : null;
   };
@@ -1290,21 +1177,14 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
   const last = ex ? lastEntry(ex.id) : null;
   const color = ex ? (MUSCLE_COLORS[ex.muscleGroup] || "#4B5563") : "#4B5563";
 
-  // Live PF for the current set being staged
   const stagedPF = ex ? calcPF(1, +currentSetReps, +currentSetWeight, ex.type, ex.laterality) : 0;
-  // PF accumulated for this exercise so far
   const exAccumPF = exSets.reduce((s, set) => s + (set.pf || 0), 0);
-  // Last session PF for this exercise — excludes today so "vs Last Session" always compares
-  // against a prior session, not the entry that was just saved moments ago.
   const lastExPF = ex ? (() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
     const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id) && new Date(x.date).toLocaleDateString("en-CA") !== todayStr);
     return h.length ? calcPF(h[h.length-1].sets, h[h.length-1].reps, h[h.length-1].weight, ex.type, ex.laterality) : null;
   })() : null;
 
-  // bestEverPF — highest Strength Factor ever logged for this exercise, across ALL PRIOR history.
-  // Excludes today so the PR badge on the Exercise Complete screen compares the current session
-  // against historical bests, not against itself (which would always be false).
   const bestEverPF = ex ? (() => {
     const todayStr = new Date().toLocaleDateString("en-CA");
     const h = workoutLogs.filter(x => Number(x.exerciseId) === Number(ex.id) && new Date(x.date).toLocaleDateString("en-CA") !== todayStr);
@@ -1312,7 +1192,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     return h.reduce((best, l) => Math.max(best, calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality)), 0);
   })() : null;
 
-  // ── Rest timer logic ────────────────────────────────────────────────────────
   const startRest = (seconds = 60) => {
     setRestSeconds(seconds); setRestTotal(seconds); setResting(true);
     clearInterval(restRef.current);
@@ -1329,7 +1208,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
   const resetRest = () => { clearInterval(restRef.current); startRest(60); };
   useEffect(() => () => clearInterval(restRef.current), []);
 
-  // ── Load exercise ───────────────────────────────────────────────────────────
   const loadExercise = (idx, force = false) => {
     const target = active[idx];
     if (!target) return;
@@ -1356,13 +1234,11 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     stopRest();
   };
 
-  // ── Review mode — viewing/editing a COMPLETED exercise without disturbing the active one ──
   const [reviewExerciseId, setReviewExerciseId] = useState(null);
   const [editingSet, setEditingSet] = useState(null); // { logId, setNum, reps, weight, rir, notes } | null
   const [editDraft, setEditDraft] = useState(null); // working copy of editingSet's fields while modal is open — lives here, not inside the nested modal component, so the 1s elapsed-time re-render doesn't reset it
   const [editSaving, setEditSaving] = useState(false); // lifted out of EditSetModal — nested-component local state was lost on the 1s ticker remount
 
-  // ── Complete a single set ───────────────────────────────────────────────────
   const completeSet = () => {
     if (!ex) return;
     const setData = {
@@ -1376,15 +1252,12 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     };
     const updated = [...exSets, setData];
     setCompletedSets(prev => ({ ...prev, [ex.id]: updated }));
-    // Seed next set from this one
     setCurrentSetNum(currentSetNum + 1);
-    // weight stays the same, reps stay the same
     setCurrentSetRir("");
     setCurrentSetNotes("");
     startRest(60);
   };
 
-  // ── Complete the whole exercise — upsert (one log per exercise per day) ──────
   const completeExercise = async () => {
     if (!ex || exSets.length === 0) return;
     setSaveStatus("saving");
@@ -1400,7 +1273,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       setDetails: exSets.map(s => ({ setNum: s.setNum, reps: s.reps, weight: s.weight, rir: s.rir ?? null, notes: s.notes || "" })),
     };
 
-    // Check if this exercise already has a log for today (upsert logic)
     const existingToday = todayLogs.find(l =>
       Number(l.exerciseId) === Number(ex.id) &&
       (currentSessionId ? l.session_id === currentSessionId : !l.session_id)
@@ -1413,7 +1285,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       setLoggedIds(prev => new Set([...prev, ex.id]));
       setExerciseDone(true);
       stopRest();
-      // Store freshLogs so advanceToNext can pass them to endWorkout
       latestLogsRef.current = freshLogs;
     } else {
       setSaveStatus("error");
@@ -1421,7 +1292,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     }
   };
 
-  // ── After exercise saved — show completion moment, then advance ────────────
   const latestLogsRef = useRef(null);
   const advanceToNext = () => {
     const fresh = latestLogsRef.current;
@@ -1436,10 +1306,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     }
   };
 
-  // ── Complete the FINAL set of an exercise — logs the set AND finishes the exercise
-  // in one action. No rest timer, no separate "Finish Exercise" tap required.
-  // If this is also the last exercise of the workout, skips the Exercise Complete
-  // screen entirely and goes straight to Workout Complete.
   const completeFinalSet = async () => {
     if (!ex) return;
     const finalSetData = {
@@ -1487,22 +1353,18 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     stopRest();
     latestLogsRef.current = freshLogs;
 
-    // Determine if this was the last exercise of the workout
     const freshToday = freshLogs
       ? freshLogs.filter(x => new Date(x.date).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA"))
       : todayLogs;
     const nextIdx = active.findIndex((e, i) => i > currentIdx && !newLoggedIds.has(e.id) && !freshToday.some(l => Number(l.exerciseId) === Number(e.id)));
 
     if (nextIdx === -1) {
-      // Last exercise of the workout — skip Exercise Complete, go straight to Workout Complete
       endWorkout(freshLogs);
     } else {
-      // More exercises remain — show Exercise Complete moment
       setExerciseDone(true);
     }
   };
 
-  // ── Skip current exercise — advances without logging, contributes no PF ────
   const skipExercise = () => {
     if (!ex) return;
     setSkippedIds(prev => new Set([...prev, ex.id]));
@@ -1515,10 +1377,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     }
   };
 
-  // ── Start / End workout ─────────────────────────────────────────────────────
   const startWorkout = () => {
-    // Capture the chosen starting-point exercise list BEFORE activeMode flips.
-    // This becomes the override so the workout engine navigates the right exercises.
     const chosenList = startingPoint === "last" && lastWorkoutExercises.length ? lastWorkoutExercises
       : startingPoint === "recommended" && aiActive.length ? aiActive
       : startingPoint === "custom" && customExercises.length ? customExercises
@@ -1530,45 +1389,31 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     setWorkoutEnded(false); setWorkoutSummary(null);
     setCompletedSets({});
     if (!workoutStartedAt) setWorkoutStartedAt(Date.now());
-    // Generate a new session ID for this workout — scopes all exercise logs to this session
-    // so a second same-day session never overwrites the first session's logs.
     setCurrentSessionId(crypto.randomUUID());
-    // Clear persisted custom workout — session is now live
     try { localStorage.removeItem("pp_custom_workout"); localStorage.removeItem("pp_starting_point"); } catch {}
-    // Don't clear pp_workout_ended — prior sessions must persist across the day.
-    // workoutEnded React state is reset above; localStorage keeps the session history.
-    // Use chosenList or templateResolved for first-exercise navigation
     const navList = chosenList || templateResolved;
     const firstUndone = navList.findIndex(e => !todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
     loadExercise(firstUndone >= 0 ? firstUndone : 0, true);
     setActiveMode(true);
   };
 
-  // endWorkout accepts optional freshLogs — avoids stale closure when called right after a state update
   const endWorkout = (freshLogs) => {
     clearDraft(DRAFT_KEYS.workout);
     const todayLocalKey = new Date().toLocaleDateString("en-CA");
     const allLogs = freshLogs || workoutLogs;
 
-    // The exercise IDs that belong to the current template (e.g. Express, Full Body, Extended).
-    // All comparisons are scoped to this set so "VS Last" always means
-    // "last time I did this same template", not "last workout day regardless of type".
     const activeExIds = new Set(active.map(e => Number(e.id)));
 
-    // Today's logs, scoped to the current template's exercises
     const tLogs = allLogs.filter(x =>
       new Date(x.date).toLocaleDateString("en-CA") === todayLocalKey &&
       activeExIds.has(Number(x.exerciseId))
     );
 
-    // All prior logs scoped to the current template's exercises
     const prevAllLogs = allLogs.filter(x =>
       new Date(x.date).toLocaleDateString("en-CA") !== todayLocalKey &&
       activeExIds.has(Number(x.exerciseId))
     );
 
-    // Find the most recent prior day that has at least one of this template's exercises —
-    // this is the "last time this template was run" anchor for the VS Last comparison.
     const prevDates = [...new Set(prevAllLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))]
       .sort((a, b) => new Date(b) - new Date(a));
     const prevSessLogs = prevDates.length
@@ -1579,8 +1424,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     const prevPF = prevSessLogs.reduce((sum, l) => { const e = ALL_EXERCISES.find(x => x.id === l.exerciseId); return sum + calcPF(l.sets, l.reps, l.weight, e?.type, e?.laterality); }, 0);
     const pfChange = prevPF > 0 ? ((curPF - prevPF) / prevPF * 100) : null;
 
-    // PRs: for each exercise in the current template completed today, check if today's SF
-    // beats the best SF ever recorded for that exercise on any prior day.
     let prs = 0;
     tLogs.forEach(l => {
       const e = ALL_EXERCISES.find(x => x.id === l.exerciseId); if (!e) return;
@@ -1593,7 +1436,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
 
     const uniqueCompleted = new Set(tLogs.map(l => Number(l.exerciseId))).size;
     const durationMinutes = workoutStartedAt ? Math.round((Date.now() - workoutStartedAt) / 60000) : null;
-    // Persist duration keyed by date so Workout History can read it back after page reload
     if (durationMinutes !== null) {
       try {
         const durStore = JSON.parse(localStorage.getItem("pp_workout_durations") || "{}");
@@ -1605,8 +1447,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
     setCurrentSessionId(null); // clear session ID — next session gets a fresh one
-    // Clear AI recommendation — it was generated before this session and is now stale.
-    // Forces Recommended card back to "Generate Workout" for any second session.
     setAiRec(null);
     try { localStorage.removeItem("pp_ai_workout_rec"); } catch {}
     appendEndedSession({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId, startingPoint: startingPoint, startedAt: workoutStartedAt });
@@ -1614,10 +1454,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     onSaveSummary && onSaveSummary(summary);
   };
 
-  // ── WORKOUT SUMMARY MODAL ──────────────────────────────────────────────────
   const renderWorkoutSummaryModal = () => {
-    // Terminal mode: workout actually ended, workoutSummary has the final frozen stats.
-    // Preview mode: user tapped "View Workout Summary" mid-workout — compute live stats from current logs.
     if (!workoutSummary && !showSummaryPreview) return null;
 
     let completed, total, sPF, prevPF, pfChange, prs, isPreview;
@@ -1625,8 +1462,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       ({ completed, total, sessionPF: sPF, prevPF, pfChange, prs } = workoutSummary);
       isPreview = false;
     } else {
-      // Live preview — recompute from current todayLogs scoped to the current template,
-      // matching the same logic as endWorkout so the mid-workout summary is consistent.
       isPreview = true;
       total = active.length;
       completed = active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).length;
@@ -1674,7 +1509,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-  // ── JUMP CONFIRMATION MODAL ────────────────────────────────────────────────
   const renderJumpConfirmModal = () => {
     if (!jumpConfirm) return null;
     return (
@@ -1704,7 +1538,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-  // ── Adjust Workout Modal ─────────────────────────────────────────────────────
   const renderAdjustWorkoutModal = () => {
     if (!showAdjustWorkout) return null;
     return (
@@ -1783,7 +1616,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-  // ── Exercise Picker Modal ────────────────────────────────────────────────────
   const renderExercisePicker = () => {
     if (!showExercisePicker) return null;
     const pickerFiltered = ALL_EXERCISES.filter(e => e.active && (
@@ -1838,7 +1670,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-  // ── Swap Modal ───────────────────────────────────────────────────────────────
   const renderSwapModal = () => {
     if (!swapModal) return null;
     const { defaultName } = swapModal;
@@ -1919,7 +1750,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-  // ── Mid-workout swap confirmation ────────────────────────────────────────────
   const renderSwapMidWorkoutConfirm = () => {
     if (!swapMidWorkoutConfirm) return null;
     const { defaultName } = swapMidWorkoutConfirm;
@@ -1949,7 +1779,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-  // ── Edit Set modal — handles both in-progress (in-memory) sets and persisted log sets ──
   const renderEditSetModal = () => {
     if (!editingSet || !editDraft) return null;
     const exMeta = editingSet.inMemory
@@ -1963,7 +1792,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       setEditSaving(true);
       const reps = editDraft.reps, weight = isBodyweightLike ? 0 : editDraft.weight, rir = editDraft.rir, notes = editDraft.notes;
       if (editingSet.inMemory) {
-        // Edit a set still in React state (current exercise, not yet saved to Supabase)
         setCompletedSets(prev => {
           const list = (prev[editingSet.exerciseId] || []).map(s => {
             if (s.setNum !== editingSet.setNum) return s;
@@ -1976,7 +1804,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
         setEditingSet(null);
         setEditDraft(null);
       } else {
-        // Edit a set already persisted to a workout_logs row — recalculate aggregate via onEditSet
         const result = await onEditSet(editingSet.logId, editingSet.setNum, { reps: +reps, weight: +weight, rir: rir === "" ? null : rir, notes });
         setEditSaving(false);
         if (result?.ok) { setEditingSet(null); setEditDraft(null); }
@@ -2048,13 +1875,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // LIST VIEW (pre-workout)
-  // ─────────────────────────────────────────────────────────────────────────────
   if (!activeMode) {
-    // Group consecutive entries that share a groupLabel (Arms Superset, Core Circuit)
-    // into a single display row, while keeping each underlying exercise as its own object.
     const displayRows = [];
     active.forEach(e => {
       if (e.groupLabel) {
@@ -2069,11 +1890,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       }
     });
 
-    // isTemplateCompleted — strict 100% check: every exercise in the template has a log today.
-    // ONLY used when workoutEnded is false (mid-session or no session yet).
-    // When workoutEnded is true, we rely solely on endedTemplate (inferred from log count)
-    // to avoid false positives where a smaller template's exercises are a subset of a
-    // larger completed session (e.g. Express exercises all appear in a Full Body session).
     const isTemplateCompleted = (t) => {
       if (workoutEnded) return false; // defer to endedTemplate when a session was formally ended
       const tExIds = flattenTemplate(t).map(entry => {
@@ -2083,7 +1899,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       return tExIds.length > 0 && tExIds.every(id => todayLogs.some(l => Number(l.exerciseId) === id));
     };
 
-    // Read all completed sessions today — supports multiple sessions per day
     const todaySessions = getEndedSessions();
     const lastSession = todaySessions[todaySessions.length - 1] || null;
     const endedTemplateId = lastSession?.templateId || null;
@@ -2094,23 +1909,15 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       : null;
     const endedTemplateName = endedTemplate?.label || null;
 
-    // selectedTemplateCompleted: true if workoutEnded and the selected template is the
-    // inferred ended template, OR (when no session has ended) all its exercises are logged.
     const selectedTemplateCompleted = isTemplateCompleted(selectedTemplate) ||
       (workoutEnded && endedTemplate?.id === selectedTemplateId);
 
-    // completedTemplateName: when workoutEnded, use endedTemplate exclusively.
-    // When not ended, use the strict check.
     const fullyCompletedTemplate = workoutEnded ? null : WORKOUT_TEMPLATES.find(t => isTemplateCompleted(t));
     const completedTemplateName = endedTemplateName || fullyCompletedTemplate?.label || null;
 
-    // isTemplateEndedOrCompleted — used for card badges and button labels.
-    // When workoutEnded: only the inferred ended template is "done".
-    // When not ended: strict check applies.
     const isTemplateEndedOrCompleted = (t) =>
       (workoutEnded ? endedTemplate?.id === t.id : isTemplateCompleted(t));
 
-    // ── Exercise picker filtered list ────────────────────────────────────────
     const pickerFiltered = ALL_EXERCISES.filter(e => e.active && (
       !exercisePickerSearch || e.name.toLowerCase().includes(exercisePickerSearch.toLowerCase()) ||
       e.muscleGroup?.toLowerCase().includes(exercisePickerSearch.toLowerCase())
@@ -2123,7 +1930,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       pickerGroups[g].push(e);
     });
 
-    // ── Preview exercise rows (shared across all three starting points) ───────
     const previewRows = (exList, opts = {}) => {
       if (!exList.length) return (
         <div style={{ color:"#4B5563", fontSize:14, textAlign:"center", padding:"24px 0" }}>
@@ -2179,10 +1985,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       });
     };
 
-    // ── Completed workout results panel (unchanged from before) ───────────────
     const completedPanel = () => {
-      // Build exercise list from todayLogs directly — survives refresh and tab switches
-      // because workoutLogs (from Supabase) and ALL_EXERCISES are always available.
       const todayStr = new Date().toLocaleDateString("en-CA");
       const panelExercises = todayLogs
         .map(l => ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId)))
@@ -2263,15 +2066,12 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       );
     };
 
-    // ── Session name helpers (todaySessions/lastSession/completedStartingPoints already derived above) ──
     const todayStr = new Date().toLocaleDateString("en-CA");
 
-    // Build today's logged exercises for completedPanel
     const todayLoggedExercises = todayLogs
       .map(l => ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId)))
       .filter(Boolean);
 
-    // ── Right panel: session record ───────────────────────────────────────────
     const sessionPanel = () => {
       if (!workoutEnded || !todaySessions.length) {
         return (
@@ -2287,7 +2087,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
         );
       }
 
-      // Multiple sessions: show collapsed cards stacked + combined totals
       if (todaySessions.length > 1) {
         const totalSF = todayLogs.reduce((sum, l) => {
           const ex = ALL_EXERCISES.find(e => Number(e.id) === Number(l.exerciseId));
@@ -2301,7 +2100,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
           } catch { return sum; }
         }, 0);
 
-        // Group logs by session (approximate: split by session order)
         const sessionCards = [...todaySessions].reverse().map((sess, idx) => {
           const name = getSessionName(sess.startedAt);
           const startTime = sess.startedAt
@@ -2346,7 +2144,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
         );
       }
 
-      // Single session: full detail view
       const sess = todaySessions[0];
       const sessionName = getSessionName(sess.startedAt);
       const startTime = sess.startedAt
@@ -2419,7 +2216,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       );
     };
 
-    // ── Left panel: starting point cards ─────────────────────────────────────
     const leftPanel = () => {
       const recDesc = workoutEnded
         ? `Based on your ${getSessionName(lastSession?.startedAt).toLowerCase()}`
@@ -2467,7 +2263,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       );
     };
 
-    // ── Recommended panel content ─────────────────────────────────────────────
     const recommendedPanel = () => (
       <div style={{ background:"#1A1D26", borderRadius:14, border:"1px solid #2A2D3A", padding:20, marginBottom:16 }}>
         {!aiRec && !aiGenerating && (
@@ -2542,7 +2337,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       </div>
     );
 
-    // ── Custom panel content ──────────────────────────────────────────────────
     const customPanel = () => (
       <div style={{ background:"#1A1D26", borderRadius:14, border:"1px solid #2A2D3A", padding:20, marginBottom:16 }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
@@ -2641,9 +2435,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ACTIVE WORKOUT MODE
-  // ─────────────────────────────────────────────────────────────────────────────
   if (!ex) return null;
   const isLastSet   = currentSetNum > targetSets;
   const readyToLift = !resting && !exerciseDone;
@@ -2974,8 +2765,6 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </button>
                 );
               }
-              // Determine whether this is also the last remaining exercise of the workout,
-              // to decide between "& Finish Exercise" vs "& Finish Workout" labeling.
               const remainingAfterThis = active.filter((e, i) => i !== currentIdx && !loggedIds.has(e.id) && !todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
               const isLastExerciseOfWorkout = remainingAfterThis.length === 0;
               const label = saveStatus === "saving" ? "Saving…"
@@ -3210,26 +2999,18 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
   );
 }
 
-
-// ─── ACHIEVEMENT ENGINE ──────────────────────────────────────────────────────
-// All achievements calculated dynamically from existing data. No DB writes.
-// Each calculate(data) returns { progress, unlocked, requirements, currentValueLabel, unlockedDate }
-
 function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase, exercises) {
   const now = new Date();
   const toCA  = d => new Date(d).toLocaleDateString("en-CA");
   const daysAgo = n => { const d = new Date(now); d.setDate(d.getDate() - n); return d; };
 
-  // Unique workout dates
   const allWorkoutDays = [...new Set(workoutLogs.map(l => toCA(l.date)))].sort();
   const totalWorkoutDays = allWorkoutDays.length;
 
-  // Phase helpers
   const phaseStart     = phase?.startDate ? new Date(phase.startDate) : null;
   const phaseDays      = phaseStart ? Math.max(0, Math.round((now - phaseStart) / 86400000)) : 0;
   const phaseCompleted = phase?.history?.length > 0;
 
-  // Body log helpers
   const sortedBody = [...bodyLogs].sort((a,b) => new Date(a.date)-new Date(b.date));
   const phaseBodyLogs = phaseStart ? sortedBody.filter(l => new Date(l.date) >= phaseStart) : sortedBody;
   const firstBodyLog  = phaseBodyLogs[0] || null;
@@ -3240,7 +3021,6 @@ function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySess
   const latestWaist   = waistLogs[waistLogs.length-1]?.waist || null;
   const waistIncrease = (firstWaist && latestWaist) ? +(latestWaist - firstWaist).toFixed(2) : null;
 
-  // SF helpers — comparable SF increase across phase
   const calcSF = (l, ex) => calcPF(l.sets, l.reps, l.weight, ex?.type, ex?.laterality);
   const phaseWorkoutLogs = phaseStart ? workoutLogs.filter(l => new Date(l.date) >= phaseStart) : workoutLogs;
   const phaseBaseEnd = phaseStart ? new Date(new Date(phaseStart).setDate(phaseStart.getDate()+7)) : null;
@@ -3261,14 +3041,12 @@ function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySess
     return { baseSF, currentSF, pct: +((currentSF - baseSF) / baseSF * 100).toFixed(1) };
   };
 
-  // Total comparable SF across all phase exercises
   const totalSFPct = (() => {
     const perEx = exercises.filter(e=>e.active).map(e => getSFProgress(e.name)).filter(Boolean);
     if (!perEx.length) return null;
     return +(perEx.reduce((s,v)=>s+v.pct,0)/perEx.length).toFixed(1);
   })();
 
-  // Rolling 28-day helpers
   const win28Start = daysAgo(28);
   const workoutDaysLast28 = [...new Set(workoutLogs.filter(l=>new Date(l.date)>=win28Start).map(l=>toCA(l.date)))].length;
   const recLast28 = (recoverySessions||[]).filter(s=>new Date(s.date+"T12:00:00")>=win28Start);
@@ -3277,14 +3055,10 @@ function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySess
   const proteinHitDays = nutritionDays.filter(d=>(d.total_protein||0)>=(d.target_protein||T.protein)).length;
   const proteinHitLast28 = nutritionLast28.filter(d=>(d.total_protein||0)>=(d.target_protein||T.protein)).length;
 
-  // Training compliance (28d): expected 3/week = 12 in 28 days
   const trainingComp28  = Math.min(workoutDaysLast28 / 12 * 100, 100);
-  // Protein compliance (28d)
   const proteinComp28   = nutritionLast28.length ? Math.min(proteinHitLast28 / nutritionLast28.length * 100, 100) : 0;
-  // Recovery compliance (28d): target 20 sessions
   const recoveryComp28  = Math.min(recLast28.length / 20 * 100, 100);
 
-  // Heel / low back trend helpers (28d window)
   const heelBackData = recLast28.filter(s => s.after_heel_pain != null);
   const avgHeel = arr => arr.length ? arr.reduce((s,r)=>s+(r.after_heel_pain||0),0)/arr.length : null;
   const avgBack = arr => arr.length ? arr.reduce((s,r)=>s+(r.after_low_back_tightness||0),0)/arr.length : null;
@@ -3293,21 +3067,17 @@ function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySess
   const heelImproved = (avgHeel(last7Rec) !== null && avgHeel(first7Rec) !== null) ? avgHeel(last7Rec) <= avgHeel(first7Rec) : false;
   const backImproved = (avgBack(last7Rec) !== null && avgBack(first7Rec) !== null) ? avgBack(last7Rec) <= avgBack(first7Rec) : false;
 
-  // Body logs last 28d
   const bodyLogsLast28 = bodyLogs.filter(l=>new Date(l.date)>=win28Start).length;
 
-  // Best single-exercise SF ever
   const bestExSF = exercises.filter(e=>e.active).reduce((best,ex) => {
     const logs = workoutLogs.filter(l=>Number(l.exerciseId)===Number(ex.id));
     const maxSF = logs.reduce((m,l)=>Math.max(m,calcSF(l,ex)),0);
     return Math.max(best,maxSF);
   },0);
 
-  // Weekly review (localStorage)
   const weeklyReview = (() => { try { const r=localStorage.getItem("pp_weekly_review"); return r?JSON.parse(r):null; } catch{return null;} })();
   const confidenceTier = (() => { try { return calcConfidence(phase,bodyLogs,workoutLogs,nutritionDays).tier; } catch{return "none";} })();
 
-  // Phase training compliance (for Phase Victory)
   const phaseWorkoutDays = phaseStart ? [...new Set(workoutLogs.filter(l=>new Date(l.date)>=phaseStart).map(l=>toCA(l.date)))].length : 0;
   const phaseExpectedDays = phaseStart ? Math.max(1, Math.round(phaseDays / 7 * 3)) : 1;
   const phaseTrainingComp = Math.min(phaseWorkoutDays / phaseExpectedDays * 100, 100);
@@ -3323,7 +3093,6 @@ function buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySess
 }
 
 const ACHIEVEMENTS = [
-  // ── TIER 1 — GOLD ────────────────────────────────────────────────────────
   {
     id: "lean_gain_signal", tier: 1, name: "Lean Gain Signal",
     category: "Body Composition", emoji: "⚖️",
@@ -3506,7 +3275,6 @@ const ACHIEVEMENTS = [
         ]};
     }
   },
-  // ── TIER 2 — SILVER ──────────────────────────────────────────────────────
   {
     id: "first_workout", tier: 2, name: "First Workout",
     category: "Training", emoji: "👟",
@@ -3688,7 +3456,6 @@ const ACHIEVEMENTS = [
   },
 ];
 
-// ─── PROGRESS TAB ─────────────────────────────────────────────────────────────
 function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase }) {
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("dashboard");
@@ -3701,7 +3468,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
 
   const exStats = exercises.filter(e => e.active).map(ex => {
     const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(ex.id));
-    // Sort by date ascending, deduplicate same-day entries keeping highest PF
     const byDate = {};
     logs.forEach(l => {
       const pf = calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
@@ -3709,8 +3475,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
     });
     const pfSeries = Object.keys(byDate).sort().map(date => ({ value: byDate[date], date }));
 
-    // Baseline: use the active recalibration baseline if one exists for this exercise,
-    // otherwise fall back to the first recorded session.
     const baseline = baselines[String(ex.id)] || null;
     const baselineEntry = baseline
       ? pfSeries.find(p => p.date >= baseline.date) || pfSeries[0]
@@ -3963,7 +3727,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
                   const pts = series.map((d, i) => `${xOf(i)},${yOf(d.value)}`).join(" ");
                   const gainColor = selStats.totalGain >= 0 ? "#4AD99A" : "#D94A4A";
 
-                  // Linear regression
                   const n = vals.length;
                   const sumX = vals.reduce((s, _, i) => s + i, 0);
                   const sumY = vals.reduce((s, v) => s + v, 0);
@@ -3974,10 +3737,8 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
                   const trendY1 = yOf(intercept);
                   const trendY2 = yOf(intercept + slope * (n - 1));
 
-                  // Y axis labels (3 ticks: min, mid, max)
                   const yTicks = [minV, minV + rangeV / 2, maxV];
 
-                  // X axis labels: first, middle, last date
                   const xLabels = [
                     { i: 0, label: fmtDate(series[0].date) },
                     { i: Math.floor((series.length - 1) / 2), label: fmtDate(series[Math.floor((series.length - 1) / 2)].date) },
@@ -4082,7 +3843,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
       {view === "history" && (
         <div>
           {(() => {
-            // Group workout logs by day
             const days = {};
             workoutLogs.forEach(l => {
               const day = new Date(l.date).toDateString();
@@ -4145,7 +3905,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         </div>
       )}
       {view === "achievements" && (() => {
-        // ── Compute all achievement results ──────────────────────────────────
         const achData = buildAchievementData(workoutLogs, bodyLogs, nutritionDays, recoverySessions, phase, exercises);
         achData.recoverySessions = recoverySessions;
         const results = ACHIEVEMENTS.map(a => {
@@ -4160,8 +3919,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         const goldUnlocked   = gold.filter(r => r.unlocked).length;
         const silverUnlocked = silver.filter(r => r.unlocked).length;
 
-        // ── Sections ─────────────────────────────────────────────────────────
-        // These sections filter by tier when a tier filter is active
         const tierFilterFn = r => achievementFilter === "gold" ? r.tier === 1
           : achievementFilter === "silver" ? r.tier === 2 : true;
         const recentlyUnlocked = [...results].filter(r => r.unlocked).filter(tierFilterFn)
@@ -4169,7 +3926,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         const nearlyComplete = [...results].filter(r => !r.unlocked && r.progress >= 0.60).filter(tierFilterFn)
           .sort((a,b) => b.progress - a.progress).slice(0,6);
 
-        // Filter for the library section
         const filterFn = r => achievementFilter === "all"        ? true
           : achievementFilter === "gold"       ? r.tier === 1
           : achievementFilter === "silver"     ? r.tier === 2
@@ -4180,7 +3936,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         const tierColor = { 1: "#FFD700", 2: "#C0C0C0" };
         const tierName  = { 1: "Tier 1 · Gold", 2: "Tier 2 · Silver" };
 
-        // ── Circular progress ring ───────────────────────────────────────────
         const Ring = ({ pct, color, size = 52, stroke = 5, children }) => {
           const r = (size - stroke*2) / 2;
           const circ = 2 * Math.PI * r;
@@ -4194,7 +3949,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
           );
         };
 
-        // ── Small hex-style icon badge ───────────────────────────────────────
         const BadgeIcon = ({ emoji, tier, unlocked, size=48 }) => {
           const tc = tierColor[tier];
           return (
@@ -4471,7 +4225,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
                 const filtered = arr.filter(filterFn);
                 if (filtered.length === 0) return null;
                 const isExpanded = expandedTier[tier] !== false; // default expanded
-                // Sort: in-progress first, then locked, then unlocked
                 const sorted = [...filtered].sort((a,b) => {
                   const order = { inprogress:0, locked:1, unlocked:2 };
                   return order[a.status] - order[b.status];
@@ -4581,9 +4334,6 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
   );
 }
 
-// ─── BODY TAB — PROJECT PRIME COMMAND CENTER ──────────────────────────────────
-
-// ── Mini bar chart for Body tab trend panels ────────────────────────────────
 function MiniBarChart({ data, color = "#4A90D9", height = 56 }) {
   if (!data || data.length < 2) return <div style={{ color: "#3A3D4A", fontSize: 11 }}>Not enough data</div>;
   const vals = data.map(d => d.value);
@@ -4604,7 +4354,6 @@ function MiniBarChart({ data, color = "#4A90D9", height = 56 }) {
   );
 }
 
-// ── KPI Card ────────────────────────────────────────────────────────────────
 function KPICard({ title, value, unit, sub, status, statusLabel, trend, trendLabel, children, accent }) {
   const statusColors = { green: "#4AD99A", yellow: "#E8A838", red: "#D94A4A", gray: "#4B5563" };
   const sc = statusColors[status] || statusColors.gray;
@@ -4632,7 +4381,6 @@ function KPICard({ title, value, unit, sub, status, statusLabel, trend, trendLab
   );
 }
 
-// ── Weekly AI Review Card ────────────────────────────────────────────────────
 function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) {
   const statusColors = { "🟢": "#4AD99A", "🟡": "#E8A838", "🔴": "#D94A4A" };
   const sc = review ? (Object.entries(statusColors).find(([k]) => review.overall_status?.startsWith(k))?.[1] || "#4A90D9") : "#4A90D9";
@@ -4741,10 +4489,6 @@ function WeeklyReviewCard({ review, onGenerate, generating, phase, phaseInfo }) 
   );
 }
 
-
-
-// ─── DEV DATA SEEDER ──────────────────────────────────────────────────────────
-// Only active when signed in as the dev account
 const DEV_EMAIL = "jdurham+dev@outlook.com";
 
 async function seedDevData(session, userId) {
@@ -4768,8 +4512,6 @@ async function seedDevData(session, userId) {
   const dateStr = d => d.toLocaleDateString("en-CA");
   const dayOffset = n => { const d = new Date(phaseStart); d.setDate(phaseStart.getDate() + n); return d; };
 
-  // ── 1. Phase ────────────────────────────────────────────────────────────────
-  // Insert phase — try with targets first, fall back without if column missing
   const phaseRes = await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
     method: "POST",
     headers: { ...headers, "Prefer": "return=representation" },
@@ -4781,7 +4523,6 @@ async function seedDevData(session, userId) {
     }]),
   });
   if (!phaseRes.ok) {
-    // Retry without targets column in case it doesn't exist
     await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
       method: "POST", headers,
       body: JSON.stringify([{
@@ -4792,7 +4533,6 @@ async function seedDevData(session, userId) {
     });
   }
 
-  // ── 2. Body logs — daily weight + weekly measurements ────────────────────
   const bodyLogs = [];
   let weight = 189.5;
   for (let d = 0; d <= 42; d++) {
@@ -4811,16 +4551,12 @@ async function seedDevData(session, userId) {
       hips:   isWeekly ? +(40.5 + d * 0.002).toFixed(1) : null,
     });
   }
-  // Insert in batches of 20
   for (let i = 0; i < bodyLogs.length; i += 20) {
     await fetch(SUPABASE_URL + "/rest/v1/body_logs", {
       method: "POST", headers, body: JSON.stringify(bodyLogs.slice(i, i + 20)),
     });
   }
 
-  // ── 3. Workout logs — 3x/week, progressive overload ─────────────────────
-  // Workout days: Mon, Wed, Fri = day offsets 0,2,4 of each week
-  // Exercise sets rotate through muscle groups
   const workoutDays = [];
   for (let w = 0; w < 6; w++) {
     for (const offset of [0, 2, 4]) {
@@ -4829,16 +4565,13 @@ async function seedDevData(session, userId) {
     }
   }
 
-  // Progressive weights: week 1 baseline, +2.5 lbs every 2 weeks per exercise
   const baseWeights = { 3: 20, 4: 15, 5: 25, 7: 10, 9: 45, 11: 20, 12: 15, 13: 15, 14: 20, 15: 25, 16: 15, 17: 15, 19: 15 };
   const workoutLogs = [];
   for (const d of workoutDays) {
     const day = dayOffset(d);
     const week = Math.floor(d / 7);
     const progress = week * 2.5;
-    // Always log warmups (ex 1,2) + rotation of main lifts
     const exIds = [1, 2]; // warmup always
-    // Alternate upper/lower
     if (d % 14 < 7) {
       exIds.push(...[3, 4, 5, 6, 7, 8]); // upper
     } else {
@@ -4867,7 +4600,6 @@ async function seedDevData(session, userId) {
     });
   }
 
-  // ── 4. Nutrition days — 6/7 days compliance, strong protein ────────────
   const nutritionLogs = [];
   for (let d = 0; d <= 42; d++) {
     if (Math.random() < 0.14) continue; // ~1 skip per week
@@ -4899,7 +4631,6 @@ async function seedDevData(session, userId) {
     });
   }
 
-  // ── 5. Recovery sessions — 5x/week ──────────────────────────────────────
   const recovTemplates = ["Daily Maintenance", "Post-Lift Reset", "Full Body Recovery"];
   const recoverySessions = [];
   for (let d = 0; d <= 42; d++) {
@@ -4943,20 +4674,16 @@ async function seedDevData(session, userId) {
   };
 }
 
-// ─── PROJECT PRIME SCORE ENGINE ───────────────────────────────────────────────
-
 function calcStrengthScore(workoutLogs, exercises, phase) {
   if (!phase?.startDate) return { score: null, pct: null, comparable: 0, window: 0 };
   const phaseStart = new Date(phase.startDate);
   const now        = new Date();
   const daysSince  = Math.round((now - phaseStart) / 86400000);
 
-  // Choose rolling window: 28-day preferred, 14-day fallback for early phase
   const windowDays = daysSince >= 28 ? 28 : 14;
   const windowStart = new Date(now);
   windowStart.setDate(now.getDate() - windowDays);
 
-  // Use phase start as baseline anchor (first 7 days) vs current window (last 14/28 days)
   const baselineEnd = new Date(phaseStart);
   baselineEnd.setDate(phaseStart.getDate() + 7);
 
@@ -4966,7 +4693,6 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
     return log.sets * log.reps; // banded
   };
 
-  // Group all phase logs by exercise
   const ssBaselines = getBaselines(); // per-exercise recalibration baselines
   const byEx = {};
   workoutLogs.forEach(l => {
@@ -4976,30 +4702,23 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
     if (d < phaseStart) return;
     const key = Number(l.exerciseId);
     if (!byEx[key]) byEx[key] = { ex, baseline: [], current: [] };
-    // If a recalibration baseline exists, use it as the baseline anchor instead of phase-start week
     const exBaseline = ssBaselines[String(key)];
     const effectiveBaselineEnd = exBaseline
       ? new Date(exBaseline.date)
       : baselineEnd;
     if (d <= effectiveBaselineEnd) byEx[key].baseline.push({ sf: calcSF(l, ex), date: d });
-    // Current: within rolling window
     if (d >= windowStart) byEx[key].current.push({ sf: calcSF(l, ex), date: d });
   });
 
-  // For each exercise with both baseline and current data, compute like-for-like progress
   const progValues = [];
   Object.values(byEx).forEach(({ ex, baseline, current }) => {
     if (baseline.length === 0 || current.length === 0) return;
-    // Use best SF in baseline period (peaked performance, not first-day only)
     const sfBaseline = Math.max.apply(null, baseline.map(e => e.sf));
-    // Use best SF in current window
     const sfCurrent  = Math.max.apply(null, current.map(e => e.sf));
     if (sfBaseline === 0) return;
     progValues.push((sfCurrent - sfBaseline) / sfBaseline * 100);
   });
 
-  // Fallback: if baseline window has no data yet (phase too new),
-  // use first-vs-last for each exercise with 2+ sessions
   if (progValues.length === 0) {
     Object.values(byEx).forEach(({ ex, baseline, current }) => {
       const allLogs = [...baseline, ...current].sort((a, b) => a.date - b.date);
@@ -5033,7 +4752,6 @@ function calcWaistScore(bodyLogs, phase) {
   if (phaseLogs.length < 1) return { score: null, change: null };
 
   const baseline = phaseLogs[0].waist;
-  // Use average of last 2 measurements to reduce noise
   const recent = phaseLogs.slice(-2);
   const current = recent.reduce((s, l) => s + l.waist, 0) / recent.length;
   const change  = +(current - baseline).toFixed(2);
@@ -5056,7 +4774,6 @@ function calcWeightScore(bodyLogs, phase) {
   const wLogs = [...bodyLogs].filter(l => l.weight && new Date(l.date) >= phaseStart).sort((a, b) => new Date(a.date) - new Date(b.date));
   if (wLogs.length < 2) return { score: null, rate: null };
 
-  // 7-day rolling averages
   const now   = new Date();
   const d7ago = new Date(now); d7ago.setDate(d7ago.getDate() - 7);
   const d14ago = new Date(now); d14ago.setDate(d14ago.getDate() - 14);
@@ -5065,7 +4782,6 @@ function calcWeightScore(bodyLogs, phase) {
   const prior  = wLogs.filter(l => new Date(l.date) >= d14ago && new Date(l.date) < d7ago);
 
   if (recent.length === 0) {
-    // Fall back to simple rate over all data
     const days = (new Date(wLogs[wLogs.length-1].date) - new Date(wLogs[0].date)) / 86400000;
     if (days < 1) return { score: null, rate: null };
     const rate = +((wLogs[wLogs.length-1].weight - wLogs[0].weight) / days * 7).toFixed(2);
@@ -5108,7 +4824,6 @@ function scoreToBand(score) {
 function calcPrimeScoreState(confidence, strengthResult, waistResult, weightResult) {
   const { tier, weighIns, workoutDays, nutritionLogs, waistSessions, daysSince } = confidence;
 
-  // Baseline thresholds — waist is weekly so only need 1 session to pass
   const hasWeight    = weighIns      >= 7;
   const hasWaist     = (waistSessions >= 1);
   const hasStrength  = strengthResult.comparable >= 2;
@@ -5130,9 +4845,6 @@ function calcPrimeScoreState(confidence, strengthResult, waistResult, weightResu
   return { mode: "active" };
 }
 
-// ─── PROJECT PRIME CONFIDENCE ENGINE ──────────────────────────────────────────
-// Separates "what the data says" from "how much we trust the data"
-
 function calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays) {
   if (!phase) return { tier: "none", score: 0, daysSince: 0, weighIns: 0, workoutDays: 0, nutritionLogs: 0, waistSessions: 0, reasons: [] };
 
@@ -5141,28 +4853,23 @@ function calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays) {
   const daysSince     = Math.max(0, Math.round((now - phaseStart) / 86400000));
   const phaseLogs     = bodyLogs.filter(l => new Date(l.date) >= phaseStart);
   const weighIns      = phaseLogs.filter(l => l.weight).length;
-  // Waist is weekly — count measurement sessions (unique dates with waist data)
   const waistSessions = [...new Set(phaseLogs.filter(l => l.waist).map(l => l.date.split("T")[0]))].length;
   const workoutDays   = [...new Set(
     workoutLogs.filter(l => new Date(l.date) >= phaseStart).map(l => l.date.split("T")[0])
   )].length;
   const nutritionLogs = nutritionDays.filter(d => new Date(d.date + "T12:00:00") >= phaseStart).length;
 
-  // Score each dimension 0-25
-  // Weight: daily — need 7 days for a full rolling window
   const timeScore      = Math.min(25, (daysSince / 21) * 25);
   const weightScore    = Math.min(25, (weighIns  / 7)  * 25);
   const trainingScore  = Math.min(25, (workoutDays / 6) * 25);
   const nutritionScore = Math.min(25, (nutritionLogs / 7) * 25);
   const score = Math.round(timeScore + weightScore + trainingScore + nutritionScore);
 
-  // Tier logic — waist only needs 1 session for medium, 2 for high (weekly cadence)
   let tier;
   if (score < 30 || daysSince < 7)        tier = "low";
   else if (score < 65 || daysSince < 14)  tier = "medium";
   else                                     tier = "high";
 
-  // High confidence requires at least 2 weekly waist sessions
   if (tier === "high" && waistSessions < 2) tier = "medium";
 
   const reasons = [];
@@ -5175,17 +4882,13 @@ function calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays) {
   return { tier, score, daysSince, weighIns, workoutDays, nutritionLogs, waistSessions, reasons };
 }
 
-// Derive the overall phase verdict using confidence tier + trend direction
 function calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase) {
   const { tier } = confidence;
 
-  // No phase — no verdict
   if (!phase) return "gray";
 
-  // Low confidence — always baseline regardless of numbers
   if (tier === "low") return "baseline";
 
-  // Medium confidence — softer thresholds, no red
   if (tier === "medium") {
     const anyBad = weightStatus === "red" || waistStatus === "red";
     if (anyBad) return "yellow";
@@ -5193,7 +4896,6 @@ function calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase) {
     return allOk ? "green" : "yellow";
   }
 
-  // High confidence — full spectrum
   const anyRed   = weightStatus === "red" || waistStatus === "red" || pfStatus === "red";
   const allGreen = weightStatus === "green" && waistStatus !== "red" && pfStatus !== "red";
   if (anyRed)   return "red";
@@ -5201,7 +4903,6 @@ function calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase) {
   return "yellow";
 }
 
-// Build the four-part coach narrative — always references trends, not single data points
 function buildCoachNarrative(confidence, weightChange, wRate, waistChange, totalPFChange, verdict, phase, weeklyReview) {
   if (weeklyReview && weeklyReview.executive_summary && !weeklyReview.executive_summary.includes("error")) {
     return weeklyReview.executive_summary;
@@ -5261,12 +4962,10 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const [reviewSaveStatus, setReviewSaveStatus] = useState(null);
   const setF = (k) => (e) => setFields(f => ({ ...f, [k]: e.target.value }));
 
-  // ── Data derivations ───────────────────────────────────────────────────────
   const sorted = [...bodyLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
   const latest = sorted[sorted.length - 1] || {};
   const phaseStart = phase?.startDate ? new Date(phase.startDate) : null;
 
-  // Get first body log at or after phase start (baseline)
   const baseline = phaseStart
     ? sorted.find(l => new Date(l.date) >= phaseStart) || sorted[0]
     : sorted[0];
@@ -5281,7 +4980,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const latestWeight = latest.weight || null;
   const baseWeight   = baseline?.weight || null;
 
-  // 7-day rolling average — more stable than single weigh-in
   const now7 = new Date();
   const d7   = new Date(now7); d7.setDate(now7.getDate() - 7);
   const d14  = new Date(now7); d14.setDate(now7.getDate() - 14);
@@ -5290,14 +4988,11 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const avg7day   = recentW7.length  ? +(recentW7.reduce((s, e)  => s + e.value, 0) / recentW7.length).toFixed(1)  : null;
   const avgPrior7 = priorW7.length   ? +(priorW7.reduce((s, e)   => s + e.value, 0) / priorW7.length).toFixed(1)   : null;
 
-  // Phase-total weight change uses rolling avg vs baseline
   const weightChange = avg7day && baseWeight ? +(avg7day - baseWeight).toFixed(1) : null;
 
-  // Weekly rate: current 7d avg minus prior 7d avg
   const wRate = avg7day !== null && avgPrior7 !== null
     ? +(avg7day - avgPrior7).toFixed(2)
     : (() => {
-        // Fallback: simple rate over all phase data when not enough for rolling windows
         if (weightSeries.length < 2) return null;
         const first = weightSeries[0], last = weightSeries[weightSeries.length - 1];
         const days = (new Date(last.date) - new Date(first.date)) / 86400000;
@@ -5305,8 +5000,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
         return +((last.value - first.value) / days * 7).toFixed(2);
       })();
 
-  // Weight KPI status (Gain phase: ideal +0.25–0.75/wk)
-  // Weight status requires 7+ weigh-ins for a valid rolling trend
   const phaseWeighIns = sorted.filter(l => l.weight && phaseStart && new Date(l.date) >= phaseStart).length;
   const weightHasTrend = phaseWeighIns >= 7 && wRate !== null;
 
@@ -5341,7 +5034,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     }
   })();
 
-  // Waist KPI — weekly measurement, rolling avg of last 2-3 vs baseline
   const latestWaist = latest.waist || null;
   const baseWaist   = baseline?.waist || null;
   const waistSorted = sorted.filter(l => l.waist && phaseStart && new Date(l.date) >= phaseStart);
@@ -5350,7 +5042,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     const last3 = waistSorted.slice(-3);
     return +(last3.reduce((s, l) => s + l.waist, 0) / last3.length).toFixed(2);
   })();
-  // Need 2+ measurements (baseline + at least one follow-up) for a valid trend
   const waistHasTrend = waistSorted.length >= 2 && waistRolling !== null && baseWaist !== null;
   const waistChange = waistRolling !== null && baseWaist ? +(waistRolling - baseWaist).toFixed(2) : null;
 
@@ -5366,14 +5057,12 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     return waistStatus === "green" ? "🟢 Stable" : waistStatus === "yellow" ? "🟡 Slight Increase" : "🔴 Increasing";
   })();
 
-  // Sub-label for waist card — no "No change from baseline" unless trend is valid
   const waistSubLabel = (() => {
     if (waistSorted.length === 0) return null;
     if (!waistHasTrend) return "Baseline: " + baseWaist + '"  ·  Next weekly measurement needed';
     return waistChange === 0 ? "No change from baseline" : (waistChange > 0 ? "+" : "") + waistChange + '" from baseline';
   })();
 
-  // Strength Factor KPI
   const pfSince = (exerciseIds, since) => {
     const sinceDate = since ? new Date(since) : null;
     const relevant = workoutLogs.filter(l => !sinceDate || new Date(l.date) >= sinceDate);
@@ -5402,8 +5091,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
       if (exIds && !exIds.includes(Number(exId))) return;
       if (entries.length < 2) return;
       const sorted = [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
-      // If a recalibration baseline exists for this exercise, use it as the start point.
-      // Otherwise fall back to phase start date.
       const exBaseline = bodyBaselines[String(exId)];
       const baselineDate = exBaseline?.date || since;
       const phaseEntries = baselineDate ? sorted.filter(e => new Date(e.date) >= new Date(baselineDate)) : sorted;
@@ -5420,7 +5107,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const upperPFChange = calcGroupPFChange(upperExIds);
   const lowerPFChange = calcGroupPFChange(lowerExIds);
 
-  // PF status requires both: 2+ comparable workouts AND 14+ days
   const pfDaysSince = phase?.startDate ? Math.round((new Date() - new Date(phase.startDate)) / 86400000) : 0;
   const pfComparableCount = strengthResult?.comparable || 0;
   const pfHasTrend = pfComparableCount >= 2 && pfDaysSince >= 14;
@@ -5441,14 +5127,12 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     return pfStatus === "green" ? "🟢 Strength Increasing" : pfStatus === "yellow" ? "🟡 Plateau" : "🔴 Declining";
   })();
 
-  // PF sub-label changes based on maturity
   const pfSubLabel = (() => {
     if (pfNeedData)    return "Log another workout session to enable comparison";
     if (pfEarlySignal) return "Initial trend — active after 14 days of comparable data";
     return "Active strength trend (" + pfDaysSince + "d of data)";
   })();
 
-  // Physique ratios
   const ratios = (() => {
     const w = latestWaist;
     if (!w) return null;
@@ -5461,7 +5145,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     ];
   })();
 
-  // Trend chart options — each includes a verdict answering "Is this helping my phase?"
   const pfByDay = (() => {
     const byDay = {};
     workoutLogs.forEach(l => {
@@ -5495,12 +5178,10 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   ];
   const activeTrendData = trendOptions.find(t => t.id === activeTrend);
 
-  // ── Generate Weekly Review ────────────────────────────────────────────────
   const generateReview = async () => {
     setGenerating(true);
     const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // Collect 7-day data snapshot
     const recentWorkouts = workoutLogs.filter(l => new Date(l.date) >= sevenDaysAgo);
     const recentNutrition = nutritionDays.filter(d => new Date(d.date + "T12:00:00") >= sevenDaysAgo);
     const recentRecovery  = (recoverySessions || []).filter(s => new Date(s.date + "T12:00:00") >= sevenDaysAgo);
@@ -5605,7 +5286,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     setGenerating(false);
   };
 
-  // Load cached review on mount
   useEffect(() => {
     try {
       const cached = localStorage.getItem("pp_weekly_review");
@@ -5613,7 +5293,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     } catch {}
   }, []);
 
-  // ── Form save ────────────────────────────────────────────────────────────
   const handleSave = async () => {
     setSaveStatus("saving");
     const ok = await onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v ? Number(v) : null])) });
@@ -5624,32 +5303,26 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
   const recent = [...sorted].reverse().slice(0, 10);
 
-  // ── Compute derived stats for Executive Hero ────────────────────────────
   const phaseName  = phase ? PHASE_CONFIG[phase.type]?.label : null;
   const phaseWeek  = phaseInfo?.week || 1;
   const phaseTotalWeeks = phase ? PHASE_CONFIG[phase.type]?.weeks : null;
 
-  // Nutrition compliance (last 7 days)
   const last7days = (() => { const d = new Date(); d.setDate(d.getDate()-7); return d; })();
   const recentNutr = nutritionDays.filter(d => new Date(d.date+"T12:00:00") >= last7days);
   const proteinDaysHit = recentNutr.filter(d => (d.total_protein||0) >= (d.target_protein || getTargets(phase).protein)).length;
   const proteinCompliance = recentNutr.length > 0 ? Math.round(proteinDaysHit / recentNutr.length * 100) : null;
 
-  // Recovery compliance (last 7 days)
   const recentRec = (recoverySessions||[]).filter(s => new Date(s.date+"T12:00:00") >= last7days);
   const recCompliance = recentRec.length > 0 ? Math.round(recentRec.filter(s => s.result_rating === "better").length / recentRec.length * 100) : null;
 
-  // Training sessions last 7 days
   const recentWorkoutDays = [...new Set(
     workoutLogs.filter(l => new Date(l.date) >= last7days).map(l => l.date.split("T")[0])
   )].length;
 
-  // ── Confidence Engine ─────────────────────────────────────────────────────
   const confidence = calcConfidence(phase, bodyLogs, workoutLogs, nutritionDays);
   const verdict    = calcVerdict(confidence, weightStatus, waistStatus, pfStatus, phase);
   const coachNarrative = buildCoachNarrative(confidence, weightChange, wRate, waistChange, totalPFChange, verdict, phase, weeklyReview);
 
-  // ── Project Prime Score (after confidence is defined) ─────────────────────
   const strengthResult = calcStrengthScore(workoutLogs, exercises, phase);
   const waistResult    = calcWaistScore(bodyLogs, phase);
   const weightResult   = calcWeightScore(bodyLogs, phase);
@@ -5664,7 +5337,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     "WRONG DIRECTION": "Weight and waist are increasing without sufficient strength improvement. The surplus is not productive. Make immediate adjustments.",
   };
 
-  // KPI statuses respect confidence tier — low confidence suppresses red
   const confidentWeightStatus = confidence.tier === "low" ? "blue" : weightStatus;
   const confidentWaistStatus  = confidence.tier === "low" ? "blue" : waistStatus;
   const confidentPFStatus     = confidence.tier === "low" ? (pfStatus === "gray" ? "gray" : "blue") : pfStatus;
@@ -5677,7 +5349,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     gray:     { emoji: "⚪", label: "LOG DATA TO SEE STATUS",          color: "#4B5563", bg: "#4B55630D", border: "#4B556333", action: "Log body measurements and workouts to unlock your assessment." },
   }[verdict];
 
-  // Confidence badge info
   const confidenceBadge = {
     low:    { label: `LOW CONFIDENCE · ${confidence.daysSince}d of data`, color: "#4A90D9" },
     medium: { label: `MEDIUM CONFIDENCE · ${confidence.daysSince}d of data`, color: "#E8A838" },
@@ -5685,9 +5356,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     none:   { label: "NO PHASE DATA", color: "#4B5563" },
   }[confidence.tier];
 
-
-  // Score history — simple localStorage read, no hooks needed in render
-  // Save today's score to localStorage
   const scoreHistoryRaw = localStorage.getItem("pp_score_history");
   const scoreHistoryData = scoreHistoryRaw ? JSON.parse(scoreHistoryRaw) : [];
   if (scoreState && scoreState.mode === "active" && primeScore) {
@@ -5697,8 +5365,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     localStorage.setItem("pp_score_history", JSON.stringify(updated));
   }
 
-  // Build 4-week trend — compute directly from raw data for past weeks
-  // so trend populates immediately without needing historical localStorage entries
   const weeklyScoreTrend = [3,2,1,0].map(function(i) {
     const weekEnd = new Date();
     weekEnd.setDate(weekEnd.getDate() - i * 7);
@@ -5707,11 +5373,9 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     const label = i === 0 ? "This Week" : "Wk -" + i;
 
     if (i === 0) {
-      // Current week — use live primeScore
       return { label, score: (scoreState && scoreState.mode !== "baseline" && primeScore) ? primeScore : null };
     }
 
-    // Past weeks — recompute score from data available at that snapshot
     if (!phase || !phase.startDate) return { label, score: null };
     const phaseStart = new Date(phase.startDate);
 
@@ -6124,7 +5788,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
         </div>
       </div>
 
-
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 — CORE KPI SCOREBOARD (4 cards only)
       ══════════════════════════════════════════════════════════════════ */}
@@ -6183,7 +5846,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
             {pfStatusLabel}
           </div>
         </div>
-
 
         {/* Physique Development */}
         <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 18 }}>
@@ -6356,7 +6018,6 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   );
 }
 
-// ─── NUTRITION TAB ────────────────────────────────────────────────────────────
 function NutritionDayCard({ d }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -6445,7 +6106,6 @@ function NutritionTab({ nutritionDays, onSaveDay, session, userId, phase }) {
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
-  // Targets come from phase (single source of truth) — edit in Phase Tracker
   const T = getTargets(phase);
   const today = new Date().toISOString().split("T")[0];
   const todayRecord = nutritionDays.find(d => d.date === today);
@@ -6709,8 +6369,6 @@ Rules: use today (${today}) if no date given. Calculate remaining = targets - to
   );
 }
 
-// ─── RECOVERY TAB ────────────────────────────────────────────────────────────
-
 const RECOVERY_CUES = {
   "Alfredson straight-knee eccentric calf raise": "3×15 each leg. Rise with both feet, lower slowly on one leg with knee straight.",
   "Alfredson bent-knee eccentric calf raise": "3×15 each leg. Same protocol with knee slightly bent to bias soleus.",
@@ -6799,7 +6457,6 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
   const [lastSession, setLastSession] = useState(null);
   const [draftPrompt, setDraftPrompt] = useState(null); // null | { status, draft }
 
-  // ── Check for draft on mount ───────────────────────────────────────────────
   useEffect(() => {
     const draft = loadDraft(DRAFT_KEYS.recovery);
     const status = getDraftStatus(draft);
@@ -6809,7 +6466,6 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
     }
   }, []);
 
-  // ── Save draft whenever meaningful state changes ───────────────────────────
   useEffect(() => {
     if (!selectedTemplate) return;
     saveDraft(DRAFT_KEYS.recovery, {
@@ -6882,13 +6538,11 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
     };
     const ok = await onSaveSession(sessionData);
     if (ok !== false) {
-      // Success — clear draft, advance to summary
       clearDraft(DRAFT_KEYS.recovery);
       setLastSession({ ...sessionData, duration });
       setSaving(false);
       setSessionStep("summary");
     } else {
-      // Save failed — keep draft, show error
       setSaveError("Save failed. Your session progress is preserved. Try again.");
       setSaving(false);
     }
@@ -6919,7 +6573,6 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
     );
   };
 
-  // ── ACTIVE SESSION ─────────────────────────────────────────────────────────
   if (selectedTemplate && ["before", "checklist", "after"].includes(sessionStep)) {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, height: "calc(100dvh - 160px)" }}>
@@ -7105,7 +6758,6 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
     );
   }
 
-  // ── SESSION SUMMARY ────────────────────────────────────────────────────────
   if (selectedTemplate && sessionStep === "summary" && lastSession) {
     const ratingConfig = { better: { color: "#4AD99A", label: "✅ Better", icon: "🎉" }, neutral: { color: "#E8A838", label: "➡️ Neutral", icon: "😐" }, worse: { color: "#D94A4A", label: "❌ Worse", icon: "😔" } };
     const rc = ratingConfig[lastSession.result_rating] || ratingConfig.neutral;
@@ -7136,7 +6788,6 @@ function RecoveryTab({ recoverySessions, onSaveSession }) {
     );
   }
 
-  // ── MAIN VIEWS ─────────────────────────────────────────────────────────────
   return (
     <div>
       {/* Draft recovery prompt */}
@@ -7360,9 +7011,6 @@ function RecoverySessionCard({ s }) {
   );
 }
 
-// ─── PHASE TRACKER ────────────────────────────────────────────────────────────
-
-// ── PhaseTargetsCard — editable daily targets, stored on the phase object ────
 function PhaseTargetsCard({ phase, setPhase }) {
   const defaults = { calories: phase?.type === "cut" ? 1600 : 2650, protein: 191, carbs: 220, fat: 65 };
   const current = { ...defaults, ...(phase?.targets || {}) };
@@ -7371,7 +7019,6 @@ function PhaseTargetsCard({ phase, setPhase }) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
 
-  // Re-sync draft when phase.targets changes (e.g. after DB round-trip)
   useEffect(() => {
     if (!editing) {
       const fresh = { calories: phase?.type === "cut" ? 1600 : 2650, protein: 191, carbs: 220, fat: 65, ...(phase?.targets || {}) };
@@ -7640,7 +7287,6 @@ function PhaseTracker({ phase, setPhase }) {
   );
 }
 
-// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState("jdurham@outlook.com");
   const [password, setPassword] = useState("");
@@ -7678,7 +7324,6 @@ function LoginScreen({ onLogin }) {
     });
     const data = await res.json();
     if (data.id || data.user?.id || data.access_token) {
-      // If email confirmation is disabled, log straight in
       if (data.access_token) {
         onLogin(data.access_token, data.user.id, data.refresh_token, data.user?.email || email.trim());
       } else {
@@ -7759,7 +7404,6 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ─── ROOT ─────────────────────────────────────────────────────────────────────
 function App() {
   const [tab, setTab] = useState("workout");
   const [showPhaseModal, setShowPhaseModal] = useState(false);
@@ -7781,8 +7425,6 @@ function App() {
   const [devConfirmText, setDevConfirmText] = useState("");
   const isDevUser = userEmail === DEV_EMAIL;
 
-  // ── Session restore ────────────────────────────────────────────────────────
-  // ── loadAll — fetches all data for user from Supabase ──────────────────────
   const loadAll = useCallback(async (token, uid) => {
     setLoading(true); setDbError(false);
     try {
@@ -7795,7 +7437,6 @@ function App() {
         sbGet(`phase_data?user_id=eq.${uid}&order=created_at.desc&limit=1`, token),
       ]);
 
-      // If any request returns 401, session expired — force re-login
       if ([wData, bData, ndData, rlData, rsData, pData].some(d => d?._unauthorized)) {
         localStorage.removeItem("pp_session");
         sessionStorage.removeItem("pp_session");
@@ -7818,7 +7459,6 @@ function App() {
       const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date, setDetails: r.set_details || r.setDetails || null, session_id: r.session_id || null, position: r.position ?? null })).sort((a, b) => new Date(a.date) - new Date(b.date) || (a.position ?? 999) - (b.position ?? 999));
       const bLogs = merged(bData, lsBody).map(r => ({ id: r.id, weight: r.weight, chest: r.chest, waist: r.waist, hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date }));
 
-      // Load nutrition entries for each day
       let nDays = ndData || [];
       if (nDays.length > 0) {
         const dayIds = nDays.map(d => d.id).join(",");
@@ -7846,9 +7486,6 @@ function App() {
     setLoading(false);
   }, []);
 
-  // ── Boot: refresh token FIRST, then load data ─────────────────────────────
-  // This prevents the "empty app" bug when the access token expires overnight.
-  // We refresh before setting session state so loadAll always gets a valid token.
   useEffect(() => {
     const boot = async () => {
       const stored = localStorage.getItem("pp_session") || sessionStorage.getItem("pp_session");
@@ -7871,17 +7508,14 @@ function App() {
             localStorage.setItem("pp_session", newStored);
             sessionStorage.setItem("pp_session", newStored);
           } else if (data.error === "invalid_grant") {
-            // Refresh token fully expired — require sign-in again
             localStorage.removeItem("pp_session"); sessionStorage.removeItem("pp_session");
             setLoading(false); return;
           }
-          // If refresh fails for other reasons (network), fall through with existing token
         } catch {}
       }
 
       setSession(token);
       setUserId(uid);
-      // Extract email from JWT
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
         if (payload.email) setUserEmail(payload.email);
@@ -7891,7 +7525,6 @@ function App() {
     boot();
   }, []);
 
-  // ── Auto-refresh every 45 minutes while app is open ───────────────────────
   useEffect(() => {
     if (!session) return;
     const doRefresh = async () => {
@@ -7919,10 +7552,8 @@ function App() {
   }, [userId]);
 
   const signOut = () => {
-    // Clear session tokens
     localStorage.removeItem("pp_session");
     sessionStorage.removeItem("pp_session");
-    // Clear ALL local data caches so next user starts from DB only
     Object.values(LS_KEYS).forEach(k => { try { localStorage.removeItem(k); } catch {} });
     localStorage.removeItem("pp_weekly_review");
     localStorage.removeItem("pp_score_history");
@@ -7936,35 +7567,25 @@ function App() {
     localStorage.removeItem("pp_custom_workout");
     localStorage.removeItem("pp_starting_point");
     if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
-    // Clear all React state
     setSession(null); setUserId(null); setUserEmail(null); setTab("workout");
     setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]);
     setRecoveryLogs([]); setRecoverySessions([]); setPhase(null);
   };
 
-  // ── Workout handlers ───────────────────────────────────────────────────────
-  // addWorkoutLog — upserts: PATCH if existingId provided, POST otherwise
-  // Always succeeds locally (localStorage fallback). Returns { ok, freshLogs }.
-  // entry.setDetails (optional) — array of { setNum, reps, weight, rir, notes } — persisted to
-  // the set_details JSONB column. Older rows/logs without setDetails remain aggregate-only.
   const addWorkoutLog = async (exerciseId, entry, existingId = null) => {
     const payload = { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId, set_details: entry.setDetails || null, session_id: entry.session_id || null, position: entry.position ?? null };
 
     if (existingId) {
-      // Optimistically update state first
       const optimistic = workoutLogs.map(l => l.id === existingId ? { ...l, ...entry, exerciseId, setDetails: entry.setDetails || l.setDetails || null } : l);
       setWorkoutLogs(optimistic); lsSet(LS_KEYS.workout, optimistic);
-      // Then try DB patch (failure is non-fatal — local state already updated)
       sbPatch(`workout_logs?id=eq.${existingId}`, payload, session).catch(() => {});
       return { ok: true, freshLogs: optimistic };
     }
 
-    // INSERT — optimistic local add first
     const localEntry = { exerciseId, ...entry, _localId: Date.now() };
     const optimistic = [...workoutLogs, localEntry];
     setWorkoutLogs(optimistic); lsSet(LS_KEYS.workout, optimistic);
 
-    // Then sync to DB
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/workout_logs`, {
         method: "POST",
@@ -7985,14 +7606,9 @@ function App() {
     } catch (e) {
       console.error("[addWorkoutLog] POST threw:", e);
     }
-    // DB failed but local entry exists — still report ok so UI advances (offline-friendly),
-    // but the local entry has no real id, so it can't be edited at the set level until it syncs.
     return { ok: true, freshLogs: optimistic };
   };
 
-  // editWorkoutSet — edits one set within a log's set_details, recalculates the aggregate
-  // row (sets/reps/weight) from the corrected set_details, and persists both.
-  // Returns { ok, freshLogs }.
   const editWorkoutSet = async (logId, setNum, updatedFields) => {
     const log = workoutLogs.find(l => l.id === logId);
     console.log("[editWorkoutSet] logId:", logId, "setNum:", setNum, "updatedFields:", updatedFields);
@@ -8010,7 +7626,6 @@ function App() {
     return result;
   };
 
-  // ── Body handlers ──────────────────────────────────────────────────────────
   const addBodyLog = async (entry) => {
     const rows = await sbPost("body_logs", { ...entry, user_id: userId }, session);
     if (rows?.[0]) {
@@ -8020,7 +7635,6 @@ function App() {
       lsSet(LS_KEYS.body, updated);
       return true;
     }
-    // Save to localStorage as fallback
     const localEntry = { ...entry, _pending: true };
     const updated = [...bodyLogs, localEntry];
     setBodyLogs(updated);
@@ -8028,7 +7642,6 @@ function App() {
     return false;
   };
 
-  // ── Nutrition handlers ─────────────────────────────────────────────────────
   const saveNutritionDay = async (parsed, rawText) => {
     try {
       const dayPayload = {
@@ -8052,7 +7665,6 @@ function App() {
         raw_import: rawText ? rawText.slice(0, 4000) : null,
       };
 
-      // Delete existing same-date record first
       const existing = nutritionDays.find(d => d.date === parsed.date);
       if (existing?.id) await sbDelete(`nutrition_days?id=eq.${existing.id}`, session);
 
@@ -8064,7 +7676,6 @@ function App() {
       }
       const dayId = rows[0].id;
 
-      // Insert meal entries
       const entries = parsed.entries || [];
       const entryRows = [];
       for (const e of entries) {
@@ -8092,7 +7703,6 @@ function App() {
     }
   };
 
-  // ── Recovery handlers ──────────────────────────────────────────────────────
   const saveRecoveryLog = async (entry) => {
     try {
       const existing = recoveryLogs.find(r => r.date === entry.date);
@@ -8151,7 +7761,6 @@ function App() {
     }
   };
 
-  // ── Workout summary handler ────────────────────────────────────────────────
   const saveWorkoutSummary = async (summary) => {
     try {
       await sbPost("workout_summaries", {
@@ -8165,9 +7774,7 @@ function App() {
     } catch {}
   };
 
-  // ── Phase handlers ─────────────────────────────────────────────────────────
   const savePhase = async (newPhase) => {
-    // Supabase date columns require YYYY-MM-DD format — strip any timestamp suffix
     const toDateStr = (d) => d ? d.split("T")[0] : d;
     const payload = {
       type: newPhase.type,
@@ -8180,7 +7787,6 @@ function App() {
       const ok = await sbPatch(`phase_data?id=eq.${newPhase.id}`, payload, session);
       if (!ok) {
         console.error("savePhase PATCH failed — id:", newPhase.id, "payload:", payload);
-        // Attempt to re-fetch phase to confirm state
         const refreshed = await sbGet(`phase_data?user_id=eq.${userId}&order=created_at.desc&limit=1`, session);
         if (refreshed?.[0]) {
           newPhase = { ...newPhase, id: refreshed[0].id };
@@ -8192,11 +7798,9 @@ function App() {
       if (rows?.[0]) newPhase = { ...newPhase, id: rows[0].id };
     }
     setPhase(newPhase);
-    // Clear old separate nutrition targets — phase is now the source of truth
     try { localStorage.removeItem("pp_nutrition_targets"); } catch {}
   };
 
-  // ── Derived state ──────────────────────────────────────────────────────────
   const totalExercises = workoutLogs.length;
   const phaseCfg  = phase ? PHASE_CONFIG[phase.type] : null;
   const phaseInfo = phase && phaseCfg ? (() => {
@@ -8208,14 +7812,12 @@ function App() {
     return { remaining, week, totalWeeks: phaseCfg.weeks };
   })() : null;
 
-  // ── Screens ────────────────────────────────────────────────────────────────
   if (!session) return <LoginScreen onLogin={(token, uid, refreshToken, email) => {
     const data = JSON.stringify({ token, uid, refreshToken });
     localStorage.setItem("pp_session", data);
     sessionStorage.setItem("pp_session", data);
     setSession(token); setUserId(uid);
     if (email) setUserEmail(email);
-    // Also fetch email from JWT if not passed
     if (!email) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
@@ -8322,7 +7924,6 @@ function App() {
                         loadAll(session, userId);
                       } else {
                         setSeeding(true); setDevModal(null); setDevConfirmText("");
-                        // Clear all dev data for this user_id
                         const h = { "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + session, "Content-Type": "application/json" };
                         await Promise.all([
                           fetch(SUPABASE_URL + "/rest/v1/workout_logs?user_id=eq." + userId,    { method: "DELETE", headers: h }),
@@ -8331,7 +7932,6 @@ function App() {
                           fetch(SUPABASE_URL + "/rest/v1/recovery_sessions?user_id=eq." + userId, { method: "DELETE", headers: h }),
                           fetch(SUPABASE_URL + "/rest/v1/phase_data?user_id=eq." + userId,      { method: "DELETE", headers: h }),
                         ]);
-                        // Clear localStorage caches so stale data doesn't flood back in via merge logic
                         localStorage.removeItem(LS_KEYS.workout);
                         localStorage.removeItem(LS_KEYS.body);
                         localStorage.removeItem("pp_weekly_review");
@@ -8379,7 +7979,6 @@ function App() {
               <button onClick={async () => {
                   if (seeding) return;
                   setSeeding(true);
-                  // 1. Clear Supabase
                   const h = { "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + session, "Content-Type": "application/json" };
                   await Promise.all([
                     fetch(SUPABASE_URL + "/rest/v1/workout_logs?user_id=eq." + userId,    { method: "DELETE", headers: h }),
@@ -8388,7 +7987,6 @@ function App() {
                     fetch(SUPABASE_URL + "/rest/v1/recovery_sessions?user_id=eq." + userId, { method: "DELETE", headers: h }),
                     fetch(SUPABASE_URL + "/rest/v1/phase_data?user_id=eq." + userId,      { method: "DELETE", headers: h }),
                   ]);
-                  // 2. Clear localStorage
                   localStorage.removeItem(LS_KEYS.workout);
                   localStorage.removeItem(LS_KEYS.body);
                   localStorage.removeItem("pp_weekly_review");
@@ -8400,7 +7998,6 @@ function App() {
                   localStorage.removeItem("pp_exercise_baselines");
                   localStorage.removeItem("pp_workout_durations");
                   if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
-                  // 3. Seed fresh data
                   const result = await seedDevData(session, userId);
                   setSeedResult(result);
                   setSeeding(false);
