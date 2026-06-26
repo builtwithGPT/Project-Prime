@@ -2814,10 +2814,10 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>WEIGHT (lbs)</div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
                     <button onClick={() => setCurrentSetWeight(w => String(Math.max(0, +w - 5)))}
-                      style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>−</button>
-                    <div style={{ fontSize: 38, fontWeight: 800, color: "#E8EAF0", minWidth: 68, fontVariantNumeric: "tabular-nums" }}>{currentSetWeight}</div>
+                      style={{ width: 48, height: 48, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 24, color: "#E8EAF0", cursor: "pointer" }}>−</button>
+                    <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", minWidth: 64, fontVariantNumeric: "tabular-nums" }}>{currentSetWeight}</div>
                     <button onClick={() => setCurrentSetWeight(w => String(Math.min(400, +w + 5)))}
-                      style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+                      style={{ width: 48, height: 48, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 24, color: "#E8EAF0", cursor: "pointer" }}>+</button>
                   </div>
                 </div>
               )}
@@ -2827,10 +2827,10 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
                   <button onClick={() => setCurrentSetReps(r => String(Math.max(1, +r - 1)))}
-                    style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>−</button>
-                  <div style={{ fontSize: 38, fontWeight: 800, color: "#E8EAF0", minWidth: 68, fontVariantNumeric: "tabular-nums" }}>{currentSetReps}</div>
+                    style={{ width: 48, height: 48, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 24, color: "#E8EAF0", cursor: "pointer" }}>−</button>
+                  <div style={{ fontSize: 34, fontWeight: 800, color: "#E8EAF0", minWidth: 64, fontVariantNumeric: "tabular-nums" }}>{currentSetReps}</div>
                   <button onClick={() => setCurrentSetReps(r => String(Math.min(100, +r + 1)))}
-                    style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+                    style={{ width: 48, height: 48, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 24, color: "#E8EAF0", cursor: "pointer" }}>+</button>
                 </div>
               </div>
             </div>
@@ -2866,7 +2866,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               if (!isFinalSetOfExercise) {
                 return (
                   <button onClick={completeSet}
-                    style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 22, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4A90D944" }}>
+                    style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 16, height: 72, width: "100%", fontSize: 20, fontWeight: 800, cursor: "pointer", letterSpacing: "0.04em", boxShadow: "0 4px 24px #4A90D944", marginTop: 6 }}>
                     ✓ COMPLETE SET {currentSetNum}
                   </button>
                 );
@@ -2881,7 +2881,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               return (
                 <button onClick={completeFinalSet} disabled={saveStatus === "saving"}
                   style={{ background: saveStatus === "saving" ? "#2A2D3A" : "#4AD99A", color: saveStatus === "saving" ? "#4B5563" : "#0F1117",
-                    border: "none", borderRadius: 16, height: 80, width: "100%", fontSize: 19, fontWeight: 800, cursor: "pointer", letterSpacing: "0.02em", boxShadow: "0 4px 24px #4AD99A44" }}>
+                    border: "none", borderRadius: 16, height: 72, width: "100%", fontSize: 17, fontWeight: 800, cursor: "pointer", letterSpacing: "0.02em", boxShadow: "0 4px 24px #4AD99A44", marginTop: 6 }}>
                   {label}
                 </button>
               );
