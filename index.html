@@ -2326,31 +2326,32 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
                 {workoutEnded && completedStartingPoint === "last" && completedPanel()}
-                {!workoutEnded && <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
-                  <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>
-                    🔁 Most Recent Workout
-                  </div>
-                  {lastWorkoutExercises.length > 0 && (
-                    <div style={{ color:"#4B5563",fontSize:12 }}>{lastWorkoutExercises.length} exercises</div>
-                  )}
-                </div>
-                {lastWorkoutExercises.length === 0 ? (
-                  <div style={{ color:"#4B5563",fontSize:13,textAlign:"center",padding:"20px 0" }}>
-                    No completed workouts found yet. Complete your first workout to use this option.
-                  </div>
-                ) : (
+                {!workoutEnded && (
                   <>
-                    <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
-                      {previewRows(lastWorkoutExercises, { swappable: true })}
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                      <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>🔁 Most Recent Workout</div>
+                      {lastWorkoutExercises.length > 0 && (
+                        <div style={{ color:"#4B5563",fontSize:12 }}>{lastWorkoutExercises.length} exercises</div>
+                      )}
                     </div>
-                    <button onClick={startWorkout}
-                      style={{ width:"100%",background:"#4AD99A",color:"#0F1117",border:"none",
-                        borderRadius:12,height:56,fontSize:17,fontWeight:800,cursor:"pointer" }}>
-                      Start Workout
-                    </button>
+                    {lastWorkoutExercises.length === 0 ? (
+                      <div style={{ color:"#4B5563",fontSize:13,textAlign:"center",padding:"20px 0" }}>
+                        No completed workouts found yet. Complete your first workout to use this option.
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
+                          {previewRows(lastWorkoutExercises, { swappable: true })}
+                        </div>
+                        <button onClick={startWorkout}
+                          style={{ width:"100%",background:"#4AD99A",color:"#0F1117",border:"none",
+                            borderRadius:12,height:56,fontSize:17,fontWeight:800,cursor:"pointer" }}>
+                          Start Workout
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
-                </div>}
               </div>
             )}
 
@@ -2358,31 +2359,34 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {startingPoint === "custom" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {workoutEnded && completedStartingPoint === "custom" && completedPanel()}
-                {!workoutEnded && <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
-                  <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>✏️ Custom Workout</div>
-                  <button onClick={() => setShowExercisePicker(true)}
-                    style={{ background:"#7B68EE22",color:"#7B68EE",border:"1px solid #7B68EE44",
-                      borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer" }}>
-                    + Add Exercise
-                  </button>
-                </div>
-                {customExercises.length === 0 ? (
-                  <div style={{ color:"#4B5563",fontSize:13,textAlign:"center",padding:"20px 0" }}>
-                    Tap + Add Exercise to build your workout.
-                  </div>
-                ) : (
+                {!workoutEnded && (
                   <>
-                    <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
-                      {previewRows(customExercises, { editable: true })}
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                      <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>✏️ Custom Workout</div>
+                      <button onClick={() => setShowExercisePicker(true)}
+                        style={{ background:"#7B68EE22",color:"#7B68EE",border:"1px solid #7B68EE44",
+                          borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer" }}>
+                        + Add Exercise
+                      </button>
                     </div>
-                    <button onClick={startWorkout}
-                      style={{ width:"100%",background:"#7B68EE",color:"#fff",border:"none",
-                        borderRadius:12,height:56,fontSize:17,fontWeight:800,cursor:"pointer" }}>
-                      Start Workout ({customExercises.length} exercises)
-                    </button>
+                    {customExercises.length === 0 ? (
+                      <div style={{ color:"#4B5563",fontSize:13,textAlign:"center",padding:"20px 0" }}>
+                        Tap + Add Exercise to build your workout.
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:16 }}>
+                          {previewRows(customExercises, { editable: true })}
+                        </div>
+                        <button onClick={startWorkout}
+                          style={{ width:"100%",background:"#7B68EE",color:"#fff",border:"none",
+                            borderRadius:12,height:56,fontSize:17,fontWeight:800,cursor:"pointer" }}>
+                          Start Workout ({customExercises.length} exercises)
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
-                </div>}
               </div>
             )}
           </div>
