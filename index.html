@@ -2363,10 +2363,16 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
               {previewRows(aiActive, { swappable: true })}
             </div>
-            <button onClick={startWorkout}
-              style={{ width:"100%", background:"#4A90D9", color:"#0F1117", border:"none", borderRadius:12, height:56, fontSize:17, fontWeight:800, cursor:"pointer" }}>
-              Start Workout
-            </button>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => { setCustomExercises(aiActive.map(e => ({...e}))); setStartingPoint("custom"); }}
+                style={{ flex:1, background:"#2A2D3A", color:"#8B92A5", border:"none", borderRadius:12, height:56, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                ✏️ Edit First
+              </button>
+              <button onClick={startWorkout}
+                style={{ flex:2, background:"#4A90D9", color:"#0F1117", border:"none", borderRadius:12, height:56, fontSize:17, fontWeight:800, cursor:"pointer" }}>
+                Start Workout
+              </button>
+            </div>
           </div>
         )}
       </div>
