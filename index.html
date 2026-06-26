@@ -940,6 +940,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   // Custom workout builder state
   const [customExercises, setCustomExercises] = useState([]); // array of exercise objects
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showAdjustWorkout, setShowAdjustWorkout] = useState(false); // mid-workout adjust modal
   const [exercisePickerSearch, setExercisePickerSearch] = useState("");
   // Exercise edit modal (add/remove/reorder — distinct from swap)
   const [editExModal, setEditExModal] = useState(null); // null | { exerciseIdx }
@@ -1696,6 +1697,103 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               Cancel — Stay Here
             </button>
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Adjust Workout Modal ─────────────────────────────────────────────────────
+  const renderAdjustWorkoutModal = () => {
+    if (!showAdjustWorkout) return null;
+    return (
+      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:700,
+        display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}
+        onClick={() => setShowAdjustWorkout(false)}>
+        <div style={{ background:"#1A1D26", borderRadius:16, border:"1px solid #2A2D3A",
+          padding:24, maxWidth:480, width:"100%", maxHeight:"88vh", display:"flex", flexDirection:"column" }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+            <div style={{ color:"#E8EAF0", fontSize:16, fontWeight:800 }}>Adjust Workout</div>
+            <button onClick={() => setShowAdjustWorkout(false)}
+              style={{ background:"#2A2D3A", border:"none", color:"#8B92A5", fontSize:16, cursor:"pointer", width:30, height:30, borderRadius:6 }}>×</button>
+          </div>
+
+          <div style={{ overflowY:"auto", flex:1, display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
+            {active.map((e, i) => {
+              const isDone = loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id);
+              const isCurrent = i === currentIdx;
+              const isLocked = isDone; // completed exercises are locked
+              // Unfinished exercises that can be reordered (not done, not current)
+              const canMoveUp   = !isLocked && i > 0 && !active.slice(0, i).some((_, j) => j >= currentIdx && !loggedIds.has(active[j].id) ? false : true);
+              const firstUnlocked = active.findIndex(e2 => !loggedIds.has(e2.id) && !todayLogs.some(l => l.exerciseId === e2.id));
+              const canEdit = !isLocked;
+              return (
+                <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10,
+                  padding:"10px 12px", borderRadius:10,
+                  background: isCurrent ? "#4A90D911" : isDone ? "#0F1117" : "#0F1117",
+                  border: isCurrent ? "1px solid #4A90D944" : "1px solid #2A2D3A",
+                  opacity: isDone ? 0.5 : 1 }}>
+                  <div style={{ width:22, height:22, borderRadius:"50%", flexShrink:0,
+                    background: isDone ? "#4AD99A" : isCurrent ? "#4A90D9" : "#2A2D3A",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:11, fontWeight:800, color: isDone ? "#0F1117" : isCurrent ? "#fff" : "#4B5563" }}>
+                    {isDone ? "✓" : i+1}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ color: isDone ? "#4B5563" : "#E8EAF0", fontSize:13, fontWeight:600,
+                      whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.name}</div>
+                    <div style={{ color:"#3A3D4A", fontSize:11 }}>{e.muscleGroup}</div>
+                  </div>
+                  {isDone ? (
+                    <span style={{ color:"#3A3D4A", fontSize:11 }}>🔒 locked</span>
+                  ) : (
+                    <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                      <button
+                        disabled={i <= firstUnlocked}
+                        onClick={() => {
+                          // Find the previous unlocked exercise and swap
+                          let target = i - 1;
+                          while (target >= 0 && (loggedIds.has(active[target].id) || todayLogs.some(l => l.exerciseId === active[target].id))) target--;
+                          if (target < 0) return;
+                          const arr = [...(workoutExerciseOverride || templateActive)];
+                          [arr[i], arr[target]] = [arr[target], arr[i]];
+                          setWorkoutExerciseOverride(arr);
+                        }}
+                        style={{ width:28, height:28, background: i <= firstUnlocked ? "#1A1D26" : "#2A2D3A",
+                          border:"none", borderRadius:6, color: i <= firstUnlocked ? "#3A3D4A" : "#8B92A5",
+                          fontSize:13, cursor: i <= firstUnlocked ? "default" : "pointer" }}>↑</button>
+                      <button
+                        disabled={i >= active.length - 1}
+                        onClick={() => {
+                          const arr = [...(workoutExerciseOverride || templateActive)];
+                          [arr[i], arr[i+1]] = [arr[i+1], arr[i]];
+                          setWorkoutExerciseOverride(arr);
+                        }}
+                        style={{ width:28, height:28, background: i >= active.length-1 ? "#1A1D26" : "#2A2D3A",
+                          border:"none", borderRadius:6, color: i >= active.length-1 ? "#3A3D4A" : "#8B92A5",
+                          fontSize:13, cursor: i >= active.length-1 ? "default" : "pointer" }}>↓</button>
+                      <button
+                        onClick={() => {
+                          const arr = [...(workoutExerciseOverride || templateActive)];
+                          arr.splice(i, 1);
+                          setWorkoutExerciseOverride(arr);
+                          // If removed current exercise, load the next available
+                          if (i === currentIdx) loadExercise(Math.min(i, arr.length - 1));
+                        }}
+                        style={{ width:28, height:28, background:"#D94A4A22", border:"none",
+                          borderRadius:6, color:"#D94A4A", fontSize:13, cursor:"pointer" }}>×</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <button onClick={() => { setShowAdjustWorkout(false); setShowExercisePicker(true); }}
+            style={{ width:"100%", background:"#2A2D3A", color:"#8B92A5", border:"none",
+              borderRadius:10, height:44, fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            ＋ Add Exercise
+          </button>
         </div>
       </div>
     );
@@ -2574,6 +2672,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       {renderSwapModal()}
       {renderSwapMidWorkoutConfirm()}
       {renderExercisePicker()}
+      {renderAdjustWorkoutModal()}
 
       {/* ── MAIN PANEL ───────────────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
@@ -3078,10 +3177,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   <span style={{ fontSize: 14 }}>⇄</span> Replace Exercise
                 </button>
               )}
-              <button disabled
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "none", color: "#3A3D4A", fontSize: 13, padding: "8px 4px", cursor: "not-allowed", textAlign: "left", borderRadius: 6 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 14 }}>＋</span> Add Exercise</span>
-                <span style={{ background: "#2A2D3A", color: "#4B5563", fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Coming Soon</span>
+              <button onClick={() => setShowAdjustWorkout(true)}
+                style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
+                <span style={{ fontSize: 14 }}>✏️</span> Adjust Workout
               </button>
               <button onClick={() => setShowSummaryPreview(true)}
                 style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
