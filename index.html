@@ -1701,6 +1701,61 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     );
   };
 
+  // ── Exercise Picker Modal ────────────────────────────────────────────────────
+  const renderExercisePicker = () => {
+    if (!showExercisePicker) return null;
+    const pickerFiltered = ALL_EXERCISES.filter(e => e.active && (
+      !exercisePickerSearch || e.name.toLowerCase().includes(exercisePickerSearch.toLowerCase()) ||
+      e.muscleGroup?.toLowerCase().includes(exercisePickerSearch.toLowerCase())
+    ) && (activeMode
+      ? !templateActive.find(a => a.id === e.id)
+      : !customExercises.find(c => c.id === e.id)
+    ));
+    const pickerGroups = {};
+    pickerFiltered.forEach(e => { const g = e.muscleGroup || "Other"; if (!pickerGroups[g]) pickerGroups[g] = []; pickerGroups[g].push(e); });
+    return (
+      <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:700,
+        display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}
+        onClick={() => setShowExercisePicker(false)}>
+        <div style={{ background:"#1A1D26",borderRadius:16,border:"1px solid #2A2D3A",
+          padding:24,maxWidth:480,width:"100%",maxHeight:"88vh",display:"flex",flexDirection:"column" }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
+            <div style={{ color:"#E8EAF0",fontSize:16,fontWeight:800 }}>Add Exercise</div>
+            <button onClick={() => setShowExercisePicker(false)}
+              style={{ background:"#2A2D3A",border:"none",color:"#8B92A5",fontSize:16,cursor:"pointer",width:30,height:30,borderRadius:6 }}>×</button>
+          </div>
+          <input placeholder="Search exercises..." value={exercisePickerSearch}
+            onChange={e => setExercisePickerSearch(e.target.value)}
+            style={{ background:"#0F1117",border:"1px solid #2A2D3A",borderRadius:8,
+              padding:"10px 14px",color:"#E8EAF0",fontSize:14,marginBottom:16,outline:"none" }}/>
+          <div style={{ overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:8 }}>
+            {Object.entries(pickerGroups).map(([group, exes]) => (
+              <div key={group}>
+                <div style={{ color:"#4B5563",fontSize:10,fontWeight:700,textTransform:"uppercase",
+                  letterSpacing:"0.1em",padding:"4px 0",marginBottom:4 }}>{group}</div>
+                {exes.map(ex => {
+                  const tc = ex.type === "weighted" ? "#4A90D9" : ex.type === "bodyweight" ? "#4AD99A" : "#E8A838";
+                  return (
+                    <button key={ex.id} onClick={() => addCustomExercise(ex)}
+                      style={{ width:"100%",background:"#0F1117",border:"1px solid #2A2D3A",
+                        borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",marginBottom:4,
+                        display:"flex",alignItems:"center",gap:10 }}>
+                      <div style={{ flex:1 }}><div style={{ color:"#E8EAF0",fontSize:13,fontWeight:600 }}>{ex.name}</div></div>
+                      <span style={{ background:tc+"22",color:tc,fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3 }}>
+                        {ex.type === "weighted" ? "Weighted" : ex.type === "bodyweight" ? "Bodyweight" : "Banded"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ── Swap Modal ───────────────────────────────────────────────────────────────
   const renderSwapModal = () => {
     if (!swapModal) return null;
@@ -2451,59 +2506,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
         {renderSwapModal()}
         {renderSwapMidWorkoutConfirm()}
 
-        {/* Exercise picker modal */}
-        {showExercisePicker && (
-          <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:600,
-            display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}
-            onClick={() => setShowExercisePicker(false)}>
-            <div style={{ background:"#1A1D26",borderRadius:16,border:"1px solid #2A2D3A",
-              padding:24,maxWidth:480,width:"100%",maxHeight:"88vh",display:"flex",flexDirection:"column" }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
-                <div style={{ color:"#E8EAF0",fontSize:16,fontWeight:800 }}>Add Exercise</div>
-                <button onClick={() => setShowExercisePicker(false)}
-                  style={{ background:"#2A2D3A",border:"none",color:"#8B92A5",fontSize:16,cursor:"pointer",width:30,height:30,borderRadius:6 }}>×</button>
-              </div>
-              <input placeholder="Search exercises..." value={exercisePickerSearch}
-                onChange={e => setExercisePickerSearch(e.target.value)}
-                style={{ background:"#0F1117",border:"1px solid #2A2D3A",borderRadius:8,
-                  padding:"10px 14px",color:"#E8EAF0",fontSize:14,marginBottom:16,outline:"none" }}/>
-              <div style={{ overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:8 }}>
-                {(() => {
-                  const pickerFiltered = ALL_EXERCISES.filter(e => e.active && (
-                    !exercisePickerSearch || e.name.toLowerCase().includes(exercisePickerSearch.toLowerCase()) ||
-                    e.muscleGroup?.toLowerCase().includes(exercisePickerSearch.toLowerCase())
-                  ) && (activeMode
-                    ? !templateActive.find(a => a.id === e.id)
-                    : !customExercises.find(c => c.id === e.id)
-                  ));
-                  const pickerGroups = {};
-                  pickerFiltered.forEach(e => { const g = e.muscleGroup || "Other"; if (!pickerGroups[g]) pickerGroups[g] = []; pickerGroups[g].push(e); });
-                  return Object.entries(pickerGroups).map(([group, exes]) => (
-                    <div key={group}>
-                      <div style={{ color:"#4B5563",fontSize:10,fontWeight:700,textTransform:"uppercase",
-                        letterSpacing:"0.1em",padding:"4px 0",marginBottom:4 }}>{group}</div>
-                      {exes.map(ex => {
-                        const tc = ex.type === "weighted" ? "#4A90D9" : ex.type === "bodyweight" ? "#4AD99A" : "#E8A838";
-                        return (
-                          <button key={ex.id} onClick={() => addCustomExercise(ex)}
-                            style={{ width:"100%",background:"#0F1117",border:"1px solid #2A2D3A",
-                              borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",marginBottom:4,
-                              display:"flex",alignItems:"center",gap:10 }}>
-                            <div style={{ flex:1 }}><div style={{ color:"#E8EAF0",fontSize:13,fontWeight:600 }}>{ex.name}</div></div>
-                            <span style={{ background:tc+"22",color:tc,fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:3 }}>
-                              {ex.type === "weighted" ? "Weighted" : ex.type === "bodyweight" ? "Bodyweight" : "Banded"}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Exercise picker modal — rendered via renderExercisePicker() */}
+        {renderExercisePicker()}
 
         {/* Draft recovery prompt */}
         {workoutDraftPrompt && (
@@ -2569,6 +2573,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       {renderEditSetModal()}
       {renderSwapModal()}
       {renderSwapMidWorkoutConfirm()}
+      {renderExercisePicker()}
 
       {/* ── MAIN PANEL ───────────────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
