@@ -1233,8 +1233,20 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
 
   // ── Custom workout exercise management ────────────────────────────────────
   const addCustomExercise = (ex) => {
-    if (customExercises.find(e => e.id === ex.id)) return; // no duplicates
-    setCustomExercises(prev => [...prev, { ...ex, groupLabel: null, slotDefaultName: ex.name }]);
+    const newEntry = { ...ex, groupLabel: null, slotDefaultName: ex.name };
+    if (activeMode) {
+      // Mid-workout: append to workoutExerciseOverride so exercise appears in active sidebar
+      if (templateActive.find(e => e.id === ex.id)) { // no duplicates against live list
+        setShowExercisePicker(false); setExercisePickerSearch(""); return;
+      }
+      setWorkoutExerciseOverride(prev => [...(prev || templateActive), newEntry]);
+    } else {
+      // Pre-workout: add to custom builder
+      if (customExercises.find(e => e.id === ex.id)) return;
+      const next = [...customExercises, newEntry];
+      setCustomExercises(next);
+      try { saveCustomWorkout(next); } catch {}
+    }
     setShowExercisePicker(false);
     setExercisePickerSearch("");
   };
@@ -2461,7 +2473,10 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   const pickerFiltered = ALL_EXERCISES.filter(e => e.active && (
                     !exercisePickerSearch || e.name.toLowerCase().includes(exercisePickerSearch.toLowerCase()) ||
                     e.muscleGroup?.toLowerCase().includes(exercisePickerSearch.toLowerCase())
-                  ) && !customExercises.find(c => c.id === e.id));
+                  ) && (activeMode
+                    ? !templateActive.find(a => a.id === e.id)
+                    : !customExercises.find(c => c.id === e.id)
+                  ));
                   const pickerGroups = {};
                   pickerFiltered.forEach(e => { const g = e.muscleGroup || "Other"; if (!pickerGroups[g]) pickerGroups[g] = []; pickerGroups[g].push(e); });
                   return Object.entries(pickerGroups).map(([group, exes]) => (
