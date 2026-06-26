@@ -2108,11 +2108,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       );
     };
 
-    // ── Session name helpers ─────────────────────────────────────────────────
+    // ── Session name helpers (todaySessions/lastSession/completedStartingPoints already derived above) ──
     const todayStr = new Date().toLocaleDateString("en-CA");
-    const todaySessions = getEndedSessions(); // array of completed sessions today
-    const lastSession   = todaySessions[todaySessions.length - 1] || null;
-    const completedStartingPoints = new Set(todaySessions.map(s => s.startingPoint).filter(Boolean));
 
     // Build today's logged exercises for completedPanel
     const todayLoggedExercises = todayLogs
