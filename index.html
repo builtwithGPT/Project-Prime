@@ -129,6 +129,29 @@ const EXERCISE_LIBRARY_EXTENSIONS = [
 // Used by the swap system to resolve exercise metadata for any name
 const ALL_EXERCISES = [...INITIAL_EXERCISES, ...EXERCISE_LIBRARY_EXTENSIONS];
 
+// ─── WORKOUT SESSION HISTORY (today's completed sessions) ────────────────────
+// pp_workout_ended stores an ARRAY of completed sessions today.
+// Format: [{ date, ended, templateId, startingPoint }, ...]
+function getEndedSessions() {
+  try {
+    const s = localStorage.getItem("pp_workout_ended");
+    if (!s) return [];
+    const parsed = JSON.parse(s);
+    const today = new Date().toLocaleDateString("en-CA");
+    const todayOld = new Date().toDateString();
+    if (!Array.isArray(parsed)) {
+      const isToday = parsed.ended && (parsed.date === today || parsed.date === todayOld);
+      return isToday ? [parsed] : [];
+    }
+    return parsed.filter(e => e.date === today || e.date === todayOld);
+  } catch { return []; }
+}
+function appendEndedSession(entry) {
+  const sessions = getEndedSessions();
+  sessions.push(entry);
+  try { localStorage.setItem("pp_workout_ended", JSON.stringify(sessions)); } catch {}
+}
+
 // ─── EXERCISE SLOTS ───────────────────────────────────────────────────────────
 // Each slot maps a program purpose to its default exercise and approved replacements.
 // Swaps are stored per-user in localStorage and applied at template resolution time.
@@ -1482,7 +1505,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     setWorkoutEnded(false); setWorkoutSummary(null);
     setCompletedSets({});
     if (!workoutStartedAt) setWorkoutStartedAt(Date.now());
-    localStorage.removeItem("pp_workout_ended");
+    // Don't clear pp_workout_ended — prior sessions must persist across the day.
+    // workoutEnded React state is reset above; localStorage keeps the session history.
     // Use chosenList or templateResolved for first-exercise navigation
     const navList = chosenList || templateResolved;
     const firstUndone = navList.findIndex(e => !todayLogs.some(l => Number(l.exerciseId) === Number(e.id)));
@@ -1550,7 +1574,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId, durationMinutes };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
-    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId, startingPoint: startingPoint }));
+    appendEndedSession({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId, startingPoint: startingPoint });
     setLoggedIds(new Set());
     onSaveSummary && onSaveSummary(summary);
   };
@@ -1890,31 +1914,12 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       return tExIds.length > 0 && tExIds.every(id => todayLogs.some(l => Number(l.exerciseId) === id));
     };
 
-    // When workoutEnded=true, read the templateId saved to pp_workout_ended at the moment
-    // endWorkout() ran. This is the only reliable source — inferring from exercise count
-    // breaks when exercises are swapped (replacement IDs 100+ change the count) or when
-    // multiple templates share exercises. The saved templateId is always exact.
-    const endedTemplateId = (() => {
-      try {
-        const s = localStorage.getItem("pp_workout_ended");
-        if (!s) return null;
-        const { date, ended, templateId } = JSON.parse(s);
-        const todayOld = new Date().toDateString();
-        const isToday = ended && (date === todayKey || date === todayOld);
-        return isToday ? (templateId || null) : null;
-      } catch { return null; }
-    })();
-    // Which starting point card was used for the completed workout today
-    const completedStartingPoint = (() => {
-      try {
-        const s = localStorage.getItem("pp_workout_ended");
-        if (!s) return null;
-        const { date, ended, startingPoint: sp } = JSON.parse(s);
-        const todayOld = new Date().toDateString();
-        const isToday = ended && (date === todayKey || date === todayOld);
-        return isToday ? (sp || null) : null;
-      } catch { return null; }
-    })();
+    // Read all completed sessions today — supports multiple sessions per day
+    const todaySessions = getEndedSessions();
+    const lastSession = todaySessions[todaySessions.length - 1] || null;
+    const endedTemplateId = lastSession?.templateId || null;
+    const completedStartingPoints = new Set(todaySessions.map(s => s.startingPoint).filter(Boolean));
+    const completedStartingPoint = lastSession?.startingPoint || null;
     const endedTemplate = workoutEnded && endedTemplateId
       ? WORKOUT_TEMPLATES.find(t => t.id === endedTemplateId) || null
       : null;
@@ -2195,9 +2200,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                 // A card is "completed today" if the majority of its exercise list
                 // was logged today. Recommended uses aiActive, Last uses lastWorkoutExercises.
                 // Custom has no reference list so it never shows Done Today.
-                // Only the card that was actually used to start the workout gets Done Today.
-                // completedStartingPoint is saved to localStorage by endWorkout().
-                const cardDoneToday = (cardId) => completedStartingPoint === cardId;
+                // Done Today if this card's startingPoint appears in any session today
+                const cardDoneToday = (cardId) => completedStartingPoints.has(cardId);
                 return [
                   { id:"recommended", label:"Recommended", icon:"🧠", desc:"AI-powered workout for today", color:"#4A90D9" },
                   { id:"last",        label:"Last Workout", icon:"🔁", desc:"Repeat your most recent session", color:"#4AD99A" },
@@ -2241,8 +2245,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {startingPoint === "recommended" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
-                {workoutEnded && completedStartingPoint === "recommended" && completedPanel()}
-                {(!workoutEnded || completedStartingPoint !== "recommended") && !aiRec && !aiGenerating && (
+                {workoutEnded && completedStartingPoints.has("recommended") && completedPanel()}
+                {(!workoutEnded || !completedStartingPoints.has("recommended")) && !aiRec && !aiGenerating && (
                   <div style={{ textAlign:"center",padding:"20px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>🧠</div>
                     <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700,marginBottom:6 }}>Prime AI Workout</div>
@@ -2258,7 +2262,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {(!workoutEnded || completedStartingPoint !== "recommended") && aiGenerating && (
+                {(!workoutEnded || !completedStartingPoints.has("recommended")) && aiGenerating && (
                   <div style={{ textAlign:"center",padding:"32px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>⏳</div>
                     <div style={{ color:"#4A90D9",fontSize:14,fontWeight:700 }}>Prime is thinking...</div>
@@ -2266,7 +2270,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {(!workoutEnded || completedStartingPoint !== "recommended") && aiRec && !aiGenerating && (
+                {(!workoutEnded || !completedStartingPoints.has("recommended")) && aiRec && !aiGenerating && (
                   <div>
                     {/* AI rec header */}
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14 }}>
@@ -2325,8 +2329,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {startingPoint === "last" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
-                {workoutEnded && completedStartingPoint === "last" && completedPanel()}
-                {(!workoutEnded || completedStartingPoint !== "last") && (
+                {workoutEnded && completedStartingPoints.has("last") && completedPanel()}
+                {(!workoutEnded || !completedStartingPoints.has("last")) && (
                   <>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                       <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>🔁 Most Recent Workout</div>
@@ -2358,8 +2362,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {/* ── CUSTOM WORKOUT panel ── */}
             {startingPoint === "custom" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
-                {workoutEnded && completedStartingPoint === "custom" && completedPanel()}
-                {(!workoutEnded || completedStartingPoint !== "custom") && (
+                {workoutEnded && completedStartingPoints.has("custom") && completedPanel()}
+                {(!workoutEnded || !completedStartingPoints.has("custom")) && (
                   <>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                       <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>✏️ Custom Workout</div>
