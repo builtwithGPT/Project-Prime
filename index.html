@@ -2195,35 +2195,55 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {/* ── Three starting-point cards ── */}
             <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24 }}>
               {(() => {
-                // Has the user logged any exercises today? (true even after + Add Workout resets workoutEnded)
                 const todayStr = new Date().toLocaleDateString("en-CA");
-                const hasTodayLogs = workoutLogs.some(l => new Date(l.date).toLocaleDateString("en-CA") === todayStr);
+                const todayLoggedIds = new Set(
+                  workoutLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === todayStr)
+                    .map(l => Number(l.exerciseId))
+                );
+                // A card is "completed today" if the majority of its exercise list
+                // was logged today. Recommended uses aiActive, Last uses lastWorkoutExercises.
+                // Custom has no reference list so it never shows Done Today.
+                const cardDoneToday = (cardId) => {
+                  if (!todayLoggedIds.size) return false;
+                  const list = cardId === "recommended" ? aiActive
+                    : cardId === "last" ? lastWorkoutExercises
+                    : [];
+                  if (!list.length) return false;
+                  const logged = list.filter(e => todayLoggedIds.has(Number(e.id))).length;
+                  return logged >= Math.ceil(list.length / 2); // majority completed
+                };
                 return [
                   { id:"recommended", label:"Recommended", icon:"🧠", desc:"AI-powered workout for today", color:"#4A90D9" },
                   { id:"last",        label:"Last Workout", icon:"🔁", desc:"Repeat your most recent session", color:"#4AD99A" },
                   { id:"custom",      label:"Custom",       icon:"✏️", desc:"Build from scratch", color:"#7B68EE" },
                 ].map(card => {
                   const isSelected = startingPoint === card.id;
+                  const isDone = cardDoneToday(card.id);
+                  const btnLabel = isDone && isSelected ? "✓ Completed"
+                    : isDone ? "View Results"
+                    : isSelected ? "✓ Selected"
+                    : "Choose";
                   return (
                     <div key={card.id} onClick={() => setStartingPoint(card.id)}
                       style={{ background:"#1A1D26",borderRadius:14,
-                        border: isSelected ? `1px solid ${card.color}88` : "1px solid #2A2D3A",
+                        border: isSelected ? `1px solid ${card.color}88` : isDone ? `1px solid ${card.color}44` : "1px solid #2A2D3A",
                         boxShadow: isSelected ? `0 0 0 1px ${card.color}33` : "none",
                         padding:18,cursor:"pointer",display:"flex",flexDirection:"column",gap:6 }}>
                       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
                         <div style={{ fontSize:22 }}>{card.icon}</div>
-                        {hasTodayLogs && <span style={{ background:"#4AD99A22",color:"#4AD99A",
+                        {isDone && <span style={{ background:"#4AD99A22",color:"#4AD99A",
                           fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,textTransform:"uppercase" }}>
                           ✓ Done Today
                         </span>}
                       </div>
                       <div style={{ color:"#E8EAF0",fontSize:14,fontWeight:800 }}>{card.label}</div>
                       <div style={{ color:"#8B92A5",fontSize:11.5,lineHeight:1.5 }}>{card.desc}</div>
-                      <div style={{ marginTop:6,background:isSelected?card.color:"transparent",
-                        color:isSelected?"#0F1117":card.color,
+                      <div style={{ marginTop:6,
+                        background: isDone && isSelected ? card.color : isSelected ? card.color : isDone ? card.color+"22" : "transparent",
+                        color: isSelected || (isDone && !isSelected) ? (isSelected ? "#0F1117" : card.color) : card.color,
                         border:`1px solid ${card.color}66`,borderRadius:8,
                         padding:"8px 0",fontSize:12,fontWeight:700,textAlign:"center" }}>
-                        {isSelected ? "✓ Selected" : "Choose"}
+                        {btnLabel}
                       </div>
                     </div>
                   );
