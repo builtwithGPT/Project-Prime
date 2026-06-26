@@ -8120,6 +8120,39 @@ function App() {
                 style={{ background: seeding ? "#2A2D3A" : "#E8A838", color: seeding ? "#4B5563" : "#0F1117", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: seeding ? "default" : "pointer" }}>
                 🌱 Seed Dev Data
               </button>
+              <button onClick={async () => {
+                  if (seeding) return;
+                  setSeeding(true);
+                  // 1. Clear Supabase
+                  const h = { "apikey": SUPABASE_ANON_KEY, "Authorization": "Bearer " + session, "Content-Type": "application/json" };
+                  await Promise.all([
+                    fetch(SUPABASE_URL + "/rest/v1/workout_logs?user_id=eq." + userId,    { method: "DELETE", headers: h }),
+                    fetch(SUPABASE_URL + "/rest/v1/body_logs?user_id=eq." + userId,       { method: "DELETE", headers: h }),
+                    fetch(SUPABASE_URL + "/rest/v1/nutrition_days?user_id=eq." + userId,  { method: "DELETE", headers: h }),
+                    fetch(SUPABASE_URL + "/rest/v1/recovery_sessions?user_id=eq." + userId, { method: "DELETE", headers: h }),
+                    fetch(SUPABASE_URL + "/rest/v1/phase_data?user_id=eq." + userId,      { method: "DELETE", headers: h }),
+                  ]);
+                  // 2. Clear localStorage
+                  localStorage.removeItem(LS_KEYS.workout);
+                  localStorage.removeItem(LS_KEYS.body);
+                  localStorage.removeItem("pp_weekly_review");
+                  localStorage.removeItem("pp_score_history");
+                  localStorage.removeItem("pp_workout_ended");
+                  localStorage.removeItem("pp_draft_workout");
+                  localStorage.removeItem("pp_draft_recovery");
+                  localStorage.removeItem("pp_ai_workout_rec");
+                  localStorage.removeItem("pp_exercise_baselines");
+                  localStorage.removeItem("pp_workout_durations");
+                  if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
+                  // 3. Seed fresh data
+                  const result = await seedDevData(session, userId);
+                  setSeedResult(result);
+                  setSeeding(false);
+                  loadAll(session, userId);
+                }} disabled={seeding}
+                style={{ background: seeding ? "#2A2D3A" : "#4A90D9", color: seeding ? "#4B5563" : "#0F1117", border: "none", borderRadius: 7, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: seeding ? "default" : "pointer", whiteSpace: "nowrap" }}>
+                ⚡ Clear & Seed
+              </button>
             </div>
           </div>
         </>
