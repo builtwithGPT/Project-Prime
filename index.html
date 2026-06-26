@@ -7631,6 +7631,10 @@ function App() {
     localStorage.removeItem("pp_workout_ended");
     localStorage.removeItem("pp_draft_workout");
     localStorage.removeItem("pp_draft_recovery");
+    localStorage.removeItem("pp_ai_workout_rec");
+    localStorage.removeItem("pp_exercise_baselines");
+    localStorage.removeItem("pp_workout_durations");
+    if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
     // Clear all React state
     setSession(null); setUserId(null); setUserEmail(null); setTab("workout");
     setWorkoutLogs([]); setBodyLogs([]); setNutritionDays([]);
@@ -8034,6 +8038,10 @@ function App() {
                         localStorage.removeItem("pp_workout_ended");
                         localStorage.removeItem("pp_draft_workout");
                         localStorage.removeItem("pp_draft_recovery");
+                        localStorage.removeItem("pp_ai_workout_rec");
+                        localStorage.removeItem("pp_exercise_baselines");
+                        localStorage.removeItem("pp_workout_durations");
+                        if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
                         setSeedResult(null); setSeeding(false);
                         loadAll(session, userId);
                       }
