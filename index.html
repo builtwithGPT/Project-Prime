@@ -1720,60 +1720,56 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
           </div>
 
           <div style={{ overflowY:"auto", flex:1, display:"flex", flexDirection:"column", gap:6, marginBottom:14, WebkitOverflowScrolling:"touch" }}>
-            {(() => {
-              const isDoneEx  = (e) => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id));
-              const doneLogs  = active.filter(isDoneEx);
-              const upcoming  = active.filter(e => !isDoneEx(e));
-              const renderRow = (ex2) => {
-                const origIdx = active.findIndex(e => e.id === ex2.id);
-                const isDone  = isDoneEx(ex2);
-                const isCurrent = origIdx === currentIdx;
-                const upOk   = !isDone && origIdx > 0;
-                const downOk = !isDone && origIdx < active.length - 1;
-                const applyChange = (fn) => {
-                  const arr = [...(workoutExerciseOverride || active)];
-                  fn(arr);
-                  setWorkoutExerciseOverride([...arr]);
-                };
-                return (
-                  <div key={ex2.id + "-" + origIdx} style={{ display:"flex", alignItems:"center", gap:10,
-                    padding:"10px 12px", borderRadius:10,
-                    background: isCurrent ? "#4A90D911" : "#0F1117",
-                    border: isCurrent ? "1px solid #4A90D944" : "1px solid #2A2D3A",
-                    opacity: isDone ? 0.5 : 1 }}>
-                    <div style={{ width:22, height:22, borderRadius:"50%", flexShrink:0,
-                      background: isDone ? "#4AD99A" : isCurrent ? "#4A90D9" : "#2A2D3A",
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      fontSize:11, fontWeight:800, color: isDone ? "#0F1117" : isCurrent ? "#fff" : "#4B5563" }}>
-                      {isDone ? "✓" : origIdx+1}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ color: isDone ? "#4B5563" : "#E8EAF0", fontSize:13, fontWeight:600,
-                        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ex2.name}</div>
-                      <div style={{ color:"#3A3D4A", fontSize:11 }}>{ex2.muscleGroup}</div>
-                    </div>
-                    {isDone ? (
-                      <span style={{ color:"#3A3D4A", fontSize:11, flexShrink:0 }}>🔒</span>
-                    ) : (
-                      <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                        <button onPointerDown={(ev) => { ev.stopPropagation(); if (!upOk) return; applyChange(arr => { [arr[origIdx], arr[origIdx-1]] = [arr[origIdx-1], arr[origIdx]]; }); }}
-                          style={{ width:44, height:44, background: upOk ? "#2A2D3A" : "#1A1D26", border:"none", borderRadius:8, color: upOk ? "#E8EAF0" : "#3A3D4A", fontSize:16, cursor: upOk ? "pointer" : "default", fontWeight:700, touchAction:"manipulation" }}>↑</button>
-                        <button onPointerDown={(ev) => { ev.stopPropagation(); if (!downOk) return; applyChange(arr => { [arr[origIdx], arr[origIdx+1]] = [arr[origIdx+1], arr[origIdx]]; }); }}
-                          style={{ width:44, height:44, background: downOk ? "#2A2D3A" : "#1A1D26", border:"none", borderRadius:8, color: downOk ? "#E8EAF0" : "#3A3D4A", fontSize:16, cursor: downOk ? "pointer" : "default", fontWeight:700, touchAction:"manipulation" }}>↓</button>
-                        <button onPointerDown={(ev) => { ev.stopPropagation(); applyChange(arr => { arr.splice(origIdx, 1); if (origIdx === currentIdx) loadExercise(Math.min(origIdx, arr.length-1)); }); }}
-                          style={{ width:44, height:44, background:"#D94A4A33", border:"1px solid #D94A4A66", borderRadius:8, color:"#D94A4A", fontSize:16, cursor:"pointer", fontWeight:700, touchAction:"manipulation" }}>×</button>
-                      </div>
-                    )}
+            {active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).length > 0 && (
+              <div style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", paddingBottom:2 }}>🔒 Completed</div>
+            )}
+            {active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).map(ex2 => {
+              const origIdx = active.findIndex(e => e.id === ex2.id);
+              const isDone = true;
+              const isCurrent = origIdx === currentIdx;
+              return (
+                <div key={"done-" + ex2.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, background:"#0F1117", border:"1px solid #2A2D3A", opacity:0.5 }}>
+                  <div style={{ width:22, height:22, borderRadius:"50%", flexShrink:0, background:"#4AD99A", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:"#0F1117" }}>✓</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ color:"#4B5563", fontSize:13, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ex2.name}</div>
+                    <div style={{ color:"#3A3D4A", fontSize:11 }}>{ex2.muscleGroup}</div>
                   </div>
-                );
+                  <span style={{ color:"#3A3D4A", fontSize:11, flexShrink:0 }}>🔒</span>
+                </div>
+              );
+            })}
+            {active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).length > 0 &&
+             active.filter(e => !loggedIds.has(e.id) && !todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).length > 0 && (
+              <div style={{ color:"#8B92A5", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", padding:"6px 0 2px", borderTop:"1px solid #2A2D3A" }}>Upcoming</div>
+            )}
+            {active.filter(e => !loggedIds.has(e.id) && !todayLogs.some(l => Number(l.exerciseId) === Number(e.id))).map(ex2 => {
+              const origIdx = active.findIndex(e => e.id === ex2.id);
+              const isCurrent = origIdx === currentIdx;
+              const upOk   = origIdx > 0;
+              const downOk = origIdx < active.length - 1;
+              const applyChange = (fn) => {
+                const arr = [...(workoutExerciseOverride || active)];
+                fn(arr);
+                setWorkoutExerciseOverride([...arr]);
               };
-              return [
-                doneLogs.length > 0 ? <div key="hdr-done" style={{ color:"#4B5563", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", paddingBottom:2 }}>🔒 Completed</div> : null,
-                ...doneLogs.map(renderRow),
-                doneLogs.length > 0 && upcoming.length > 0 ? <div key="hdr-upcoming" style={{ color:"#8B92A5", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", padding:"6px 0 2px", borderTop:"1px solid #2A2D3A" }}>Upcoming</div> : null,
-                ...upcoming.map(renderRow),
-              ].filter(Boolean);
-            })()}
+              return (
+                <div key={"todo-" + ex2.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, background: isCurrent ? "#4A90D911" : "#0F1117", border: isCurrent ? "1px solid #4A90D944" : "1px solid #2A2D3A" }}>
+                  <div style={{ width:22, height:22, borderRadius:"50%", flexShrink:0, background: isCurrent ? "#4A90D9" : "#2A2D3A", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color: isCurrent ? "#fff" : "#4B5563" }}>{origIdx+1}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ color:"#E8EAF0", fontSize:13, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ex2.name}</div>
+                    <div style={{ color:"#3A3D4A", fontSize:11 }}>{ex2.muscleGroup}</div>
+                  </div>
+                  <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                    <button onPointerDown={(ev) => { ev.stopPropagation(); if (!upOk) return; applyChange(arr => { [arr[origIdx], arr[origIdx-1]] = [arr[origIdx-1], arr[origIdx]]; }); }}
+                      style={{ width:44, height:44, background: upOk ? "#2A2D3A" : "#1A1D26", border:"none", borderRadius:8, color: upOk ? "#E8EAF0" : "#3A3D4A", fontSize:16, cursor: upOk ? "pointer" : "default", fontWeight:700, touchAction:"manipulation" }}>↑</button>
+                    <button onPointerDown={(ev) => { ev.stopPropagation(); if (!downOk) return; applyChange(arr => { [arr[origIdx], arr[origIdx+1]] = [arr[origIdx+1], arr[origIdx]]; }); }}
+                      style={{ width:44, height:44, background: downOk ? "#2A2D3A" : "#1A1D26", border:"none", borderRadius:8, color: downOk ? "#E8EAF0" : "#3A3D4A", fontSize:16, cursor: downOk ? "pointer" : "default", fontWeight:700, touchAction:"manipulation" }}>↓</button>
+                    <button onPointerDown={(ev) => { ev.stopPropagation(); applyChange(arr => { arr.splice(origIdx, 1); if (origIdx === currentIdx) loadExercise(Math.min(origIdx, arr.length-1)); }); }}
+                      style={{ width:44, height:44, background:"#D94A4A33", border:"1px solid #D94A4A66", borderRadius:8, color:"#D94A4A", fontSize:16, cursor:"pointer", fontWeight:700, touchAction:"manipulation" }}>×</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <button onClick={() => { setShowAdjustWorkout(false); setShowExercisePicker(true); }}
