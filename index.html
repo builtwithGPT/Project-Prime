@@ -2831,7 +2831,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               width: `${(active.filter(e => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)).length / active.length) * 100}%` }} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3, overflowY: "auto", flex: 1, minHeight: 0 }}>
-            {active.map((e, i) => {
+            {[...active.map((e, i) => ({ e, i })).filter(({e}) => loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id)),
+              ...active.map((e, i) => ({ e, i })).filter(({e}) => !loggedIds.has(e.id) && !todayLogs.some(l => l.exerciseId === e.id))
+            ].map(({ e, i }) => {
               const isActive = i === currentIdx && !reviewExerciseId;
               const isDone   = loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id);
               const isSkipped = skippedIds.has(e.id) && !isDone;
