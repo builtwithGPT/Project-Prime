@@ -2735,46 +2735,46 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
 
         {/* ── REST TIMER STATE ─────────────────────────────────────────────── */}
         {!exerciseDone && resting && (
-          <div style={{ background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 16, padding: 28, flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20 }}>
-            <div style={{ color: "#4B5563", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>RESTING</div>
+          <div style={{ background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 16, padding: "16px 20px", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>RESTING</div>
 
             {/* Circular countdown */}
-            <div style={{ position: "relative", width: 160, height: 160 }}>
-              <svg width="160" height="160" style={{ transform: "rotate(-90deg)" }}>
-                <circle cx="80" cy="80" r="70" fill="none" stroke="#2A2D3A" strokeWidth="8" />
-                <circle cx="80" cy="80" r="70" fill="none" stroke="#4AD99A" strokeWidth="8"
-                  strokeDasharray={`${2 * Math.PI * 70}`}
-                  strokeDashoffset={`${2 * Math.PI * 70 * (1 - restSeconds / restTotal)}`}
+            <div style={{ position: "relative", width: 120, height: 120 }}>
+              <svg width="120" height="120" style={{ transform: "rotate(-90deg)" }}>
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#2A2D3A" strokeWidth="7" />
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#4AD99A" strokeWidth="7"
+                  strokeDasharray={`${2 * Math.PI * 52}`}
+                  strokeDashoffset={`${2 * Math.PI * 52 * (1 - restSeconds / restTotal)}`}
                   strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s linear" }} />
               </svg>
               <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ fontSize: 48, fontWeight: 800, color: "#4AD99A", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                <div style={{ fontSize: 34, fontWeight: 800, color: "#4AD99A", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                   {String(Math.floor(restSeconds / 60)).padStart(2, "0")}:{String(restSeconds % 60).padStart(2, "0")}
                 </div>
-                <div style={{ color: "#4B5563", fontSize: 11, marginTop: 4 }}>remaining</div>
+                <div style={{ color: "#4B5563", fontSize: 10, marginTop: 3 }}>remaining</div>
               </div>
             </div>
 
             {/* Next set preview */}
-            <div style={{ background: "#1A1D26", borderRadius: 10, padding: "14px 24px", border: "1px solid #2A2D3A", textAlign: "center" }}>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>
+            <div style={{ background: "#1A1D26", borderRadius: 10, padding: "10px 20px", border: "1px solid #2A2D3A", textAlign: "center" }}>
+              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>
                 {isLastSet ? "FINISHING EXERCISE" : `UP NEXT — SET ${currentSetNum} OF ${targetSets}`}
               </div>
-              <div style={{ color: "#E8EAF0", fontSize: 22, fontWeight: 800 }}>
+              <div style={{ color: "#E8EAF0", fontSize: 18, fontWeight: 800 }}>
                 {isLastSet ? "All sets complete" : `${currentSetWeight} lbs × ${currentSetReps} reps`}
               </div>
             </div>
 
             {/* Timer controls */}
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
               {[["−30s", () => adjustRest(-30)], ["Reset", resetRest], ["+30s", () => adjustRest(30)]].map(([label, fn]) => (
                 <button key={label} onClick={fn}
-                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "10px 18px", fontSize: 14, cursor: "pointer" }}>
+                  style={{ background: "#2A2D3A", color: "#8B92A5", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
                   {label}
                 </button>
               ))}
               <button onClick={skipRest}
-                style={{ background: "#4A90D922", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                style={{ background: "#4A90D922", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                 Skip Rest →
               </button>
             </div>
