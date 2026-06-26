@@ -2242,7 +2242,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
                 {workoutEnded && completedStartingPoint === "recommended" && completedPanel()}
-                {!workoutEnded && !aiRec && !aiGenerating && (
+                {(!workoutEnded || completedStartingPoint !== "recommended") && !aiRec && !aiGenerating && (
                   <div style={{ textAlign:"center",padding:"20px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>🧠</div>
                     <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700,marginBottom:6 }}>Prime AI Workout</div>
@@ -2258,7 +2258,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {!workoutEnded && aiGenerating && (
+                {(!workoutEnded || completedStartingPoint !== "recommended") && aiGenerating && (
                   <div style={{ textAlign:"center",padding:"32px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>⏳</div>
                     <div style={{ color:"#4A90D9",fontSize:14,fontWeight:700 }}>Prime is thinking...</div>
@@ -2266,7 +2266,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {!workoutEnded && aiRec && !aiGenerating && (
+                {(!workoutEnded || completedStartingPoint !== "recommended") && aiRec && !aiGenerating && (
                   <div>
                     {/* AI rec header */}
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14 }}>
@@ -2326,7 +2326,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
                 {workoutEnded && completedStartingPoint === "last" && completedPanel()}
-                {!workoutEnded && (
+                {(!workoutEnded || completedStartingPoint !== "last") && (
                   <>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                       <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>🔁 Most Recent Workout</div>
@@ -2359,7 +2359,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {startingPoint === "custom" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {workoutEnded && completedStartingPoint === "custom" && completedPanel()}
-                {!workoutEnded && (
+                {(!workoutEnded || completedStartingPoint !== "custom") && (
                   <>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                       <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>✏️ Custom Workout</div>
