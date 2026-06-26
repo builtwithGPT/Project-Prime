@@ -1518,6 +1518,8 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     // Generate a new session ID for this workout — scopes all exercise logs to this session
     // so a second same-day session never overwrites the first session's logs.
     setCurrentSessionId(crypto.randomUUID());
+    // Clear persisted custom workout — session is now live
+    try { localStorage.removeItem("pp_custom_workout"); localStorage.removeItem("pp_starting_point"); } catch {}
     // Don't clear pp_workout_ended — prior sessions must persist across the day.
     // workoutEnded React state is reset above; localStorage keeps the session history.
     // Use chosenList or templateResolved for first-exercise navigation
@@ -2285,7 +2287,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
           <div style={{ background:"#1A1D26", borderRadius:14,
             border: startingPoint === "recommended" ? "2px solid #4A90D988" : "1px solid #2A2D3A",
             padding:16, cursor:"pointer", flex:1 }}
-            onClick={() => setStartingPoint("recommended")}>
+            onClick={() => { setStartingPoint("recommended"); try { localStorage.setItem("pp_starting_point", "recommended"); } catch {} }}>
             <div style={{ fontSize:20, marginBottom:8 }}>🧠</div>
             <div style={{ color:"#E8EAF0", fontSize:13, fontWeight:700, marginBottom:3 }}>Prime recommends</div>
             <div style={{ color:"#8B92A5", fontSize:11, marginBottom:12, lineHeight:1.5 }}>{recDesc}</div>
@@ -2301,7 +2303,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
           <div style={{ background:"#1A1D26", borderRadius:14,
             border: startingPoint === "custom" ? "2px solid #7B68EE88" : "1px solid #2A2D3A",
             padding:16, cursor:"pointer", flex:1 }}
-            onClick={() => setStartingPoint("custom")}>
+            onClick={() => { setStartingPoint("custom"); try { localStorage.setItem("pp_starting_point", "custom"); } catch {} }}>
             <div style={{ fontSize:20, marginBottom:8 }}>✏️</div>
             <div style={{ color:"#E8EAF0", fontSize:13, fontWeight:700, marginBottom:3 }}>Build your own</div>
             <div style={{ color:"#8B92A5", fontSize:11, marginBottom:12, lineHeight:1.5 }}>{customDesc}</div>
@@ -2789,79 +2791,71 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
 
         {/* ── CURRENT SET PANEL ────────────────────────────────────────────── */}
         {!exerciseDone && !resting && (
-          <div style={{ background: "#1A1D26", border: "2px solid #4A90D944", borderRadius: 16, padding: "20px 24px", flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ background: "#1A1D26", border: "2px solid #4A90D944", borderRadius: 16, padding: "14px 20px", flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
 
-            {/* Set counter */}
-            <div style={{ textAlign: "center" }}>
-              <div style={{ color: "#4A90D9", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 4 }}>CURRENT SET</div>
-              <div style={{ fontSize: 15, color: "#8B92A5" }}>
-                Set <span style={{ color: "#E8EAF0", fontWeight: 800, fontSize: 22 }}>{Math.min(currentSetNum, targetSets)}</span> of <span style={{ fontWeight: 700 }}>{targetSets}</span>
-              </div>
-            </div>
-
-            {/* Weight + Reps controls */}
-            <div style={{ display: "grid", gridTemplateColumns: ex.type === "weighted" ? "1fr 1fr" : "1fr", gap: 14 }}>
-              {ex.type === "weighted" && (
-                <div style={{ background: "#0F1117", borderRadius: 12, padding: 16, textAlign: "center" }}>
-                  <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>WEIGHT (lbs)</div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                    <button onClick={() => setCurrentSetWeight(w => String(Math.max(0, +w - 5)))}
-                      style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>−</button>
-                    <div style={{ fontSize: 48, fontWeight: 800, color: "#E8EAF0", minWidth: 80, fontVariantNumeric: "tabular-nums" }}>{currentSetWeight}</div>
-                    <button onClick={() => setCurrentSetWeight(w => String(Math.min(400, +w + 5)))}
-                      style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>+</button>
-                  </div>
-                </div>
-              )}
-              <div style={{ background: "#0F1117", borderRadius: 12, padding: 16, textAlign: "center" }}>
-                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
-                  {ex.laterality === "unilateral" ? "REPS / SIDE" : "REPS"}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                  <button onClick={() => setCurrentSetReps(r => String(Math.max(1, +r - 1)))}
-                    style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>−</button>
-                  <div style={{ fontSize: 48, fontWeight: 800, color: "#E8EAF0", minWidth: 80, fontVariantNumeric: "tabular-nums" }}>{currentSetReps}</div>
-                  <button onClick={() => setCurrentSetReps(r => String(Math.min(100, +r + 1)))}
-                    style={{ width: 64, height: 64, background: "#2A2D3A", border: "none", borderRadius: 12, fontSize: 30, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+            {/* Set counter + SF inline */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ color: "#4A90D9", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>CURRENT SET</div>
+                <div style={{ fontSize: 13, color: "#8B92A5", marginTop: 2 }}>
+                  Set <span style={{ color: "#E8EAF0", fontWeight: 800, fontSize: 18 }}>{Math.min(currentSetNum, targetSets)}</span> of <span style={{ fontWeight: 700 }}>{targetSets}</span>
                 </div>
               </div>
-            </div>
-
-            {/* RIR (Reps In Reserve) + live SF */}
-            <div>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8, textAlign: "center" }}>
-                Reps In Reserve (RIR)
-              </div>
-              <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 6 }}>
-                {["0","1","2","3","4","5+"].map(r => (
-                  <button key={r} onClick={() => setCurrentSetRir(r)}
-                    style={{ width: 44, height: 40, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer",
-                      background: currentSetRir === r ? "#4A90D9" : "#2A2D3A",
-                      color:      currentSetRir === r ? "#fff"     : "#4B5563" }}>
-                    {r}
-                  </button>
-                ))}
-              </div>
-              {currentSetRir !== "" && (
-                <div style={{ textAlign: "center", color: "#4B5563", fontSize: 11 }}>
-                  {currentSetRir === "0" ? "Taken to failure" : `${currentSetRir} reps in reserve`}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ textAlign: "right" }}>
-                <div style={{ color: "#E8A838", fontSize: 22, fontWeight: 800 }}>{stagedPF.toLocaleString()}</div>
+                <div style={{ color: "#E8A838", fontSize: 20, fontWeight: 800 }}>{stagedPF.toLocaleString()}</div>
                 <div style={{ color: "#4B5563", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Set SF</div>
               </div>
             </div>
 
-            {/* Notes (optional) */}
-            <div>
-              <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Notes (optional)</div>
-              <input value={currentSetNotes} onChange={e => setCurrentSetNotes(e.target.value)}
-                placeholder="Add a note for this set..."
-                style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 8, padding: "10px 12px", color: "#E8EAF0", fontSize: 13 }} />
+            {/* Weight + Reps controls — compact */}
+            <div style={{ display: "grid", gridTemplateColumns: ex.type === "weighted" ? "1fr 1fr" : "1fr", gap: 10 }}>
+              {ex.type === "weighted" && (
+                <div style={{ background: "#0F1117", borderRadius: 12, padding: "10px 12px", textAlign: "center" }}>
+                  <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>WEIGHT (lbs)</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                    <button onClick={() => setCurrentSetWeight(w => String(Math.max(0, +w - 5)))}
+                      style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>−</button>
+                    <div style={{ fontSize: 38, fontWeight: 800, color: "#E8EAF0", minWidth: 68, fontVariantNumeric: "tabular-nums" }}>{currentSetWeight}</div>
+                    <button onClick={() => setCurrentSetWeight(w => String(Math.min(400, +w + 5)))}
+                      style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ background: "#0F1117", borderRadius: 12, padding: "10px 12px", textAlign: "center" }}>
+                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+                  {ex.laterality === "unilateral" ? "REPS / SIDE" : "REPS"}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  <button onClick={() => setCurrentSetReps(r => String(Math.max(1, +r - 1)))}
+                    style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>−</button>
+                  <div style={{ fontSize: 38, fontWeight: 800, color: "#E8EAF0", minWidth: 68, fontVariantNumeric: "tabular-nums" }}>{currentSetReps}</div>
+                  <button onClick={() => setCurrentSetReps(r => String(Math.min(100, +r + 1)))}
+                    style={{ width: 52, height: 52, background: "#2A2D3A", border: "none", borderRadius: 10, fontSize: 26, color: "#E8EAF0", cursor: "pointer" }}>+</button>
+                </div>
+              </div>
+            </div>
+
+            {/* RIR + Notes on one row */}
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>RIR</div>
+                <div style={{ display: "flex", gap: 5 }}>
+                  {["0","1","2","3","4","5+"].map(r => (
+                    <button key={r} onClick={() => setCurrentSetRir(r)}
+                      style={{ flex: 1, height: 36, border: "none", borderRadius: 7, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        background: currentSetRir === r ? "#4A90D9" : "#2A2D3A",
+                        color:      currentSetRir === r ? "#fff"     : "#4B5563" }}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Notes</div>
+                <input value={currentSetNotes} onChange={e => setCurrentSetNotes(e.target.value)}
+                  placeholder="Optional..."
+                  style={{ width: "100%", background: "#0F1117", border: "1px solid #2A2D3A", borderRadius: 7, padding: "8px 10px", color: "#E8EAF0", fontSize: 12, boxSizing: "border-box" }} />
+              </div>
             </div>
 
             {/* COMPLETE SET button — the hero. On the final set, this single tap both
@@ -7804,6 +7798,8 @@ function App() {
     localStorage.removeItem("pp_ai_workout_rec");
     localStorage.removeItem("pp_exercise_baselines");
     localStorage.removeItem("pp_workout_durations");
+    localStorage.removeItem("pp_custom_workout");
+    localStorage.removeItem("pp_starting_point");
     if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
     // Clear all React state
     setSession(null); setUserId(null); setUserEmail(null); setTab("workout");
@@ -8211,6 +8207,8 @@ function App() {
                         localStorage.removeItem("pp_ai_workout_rec");
                         localStorage.removeItem("pp_exercise_baselines");
                         localStorage.removeItem("pp_workout_durations");
+                        localStorage.removeItem("pp_custom_workout");
+                        localStorage.removeItem("pp_starting_point");
                         if (userId) localStorage.removeItem(`pp_swaps_${userId}`);
                         setSeedResult(null); setSeeding(false);
                         loadAll(session, userId);
