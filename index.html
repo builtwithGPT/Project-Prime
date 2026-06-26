@@ -1719,18 +1719,21 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
           </div>
 
           <div style={{ overflowY:"auto", flex:1, display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
-            {active.map((e, i) => {
-              const isDone = loggedIds.has(e.id) || todayLogs.some(l => l.exerciseId === e.id);
+            {active.map((ex2, i) => {
+              const isDone = loggedIds.has(ex2.id) || todayLogs.some(l => Number(l.exerciseId) === Number(ex2.id));
               const isCurrent = i === currentIdx;
-              const isLocked = isDone; // completed exercises are locked
-              // Unfinished exercises that can be reordered (not done, not current)
-              const canMoveUp   = !isLocked && i > 0 && !active.slice(0, i).some((_, j) => j >= currentIdx && !loggedIds.has(active[j].id) ? false : true);
-              const firstUnlocked = active.findIndex(e2 => !loggedIds.has(e2.id) && !todayLogs.some(l => l.exerciseId === e2.id));
-              const canEdit = !isLocked;
+              // Simple: can move up if not done and not first unlocked, can move down if not done and not last
+              const upOk   = !isDone && i > 0;
+              const downOk = !isDone && i < active.length - 1;
+              const applyChange = (fn) => {
+                const arr = [...(workoutExerciseOverride || active)];
+                fn(arr);
+                setWorkoutExerciseOverride([...arr]);
+              };
               return (
-                <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10,
+                <div key={ex2.id + "-" + i} style={{ display:"flex", alignItems:"center", gap:10,
                   padding:"10px 12px", borderRadius:10,
-                  background: isCurrent ? "#4A90D911" : isDone ? "#0F1117" : "#0F1117",
+                  background: isCurrent ? "#4A90D911" : "#0F1117",
                   border: isCurrent ? "1px solid #4A90D944" : "1px solid #2A2D3A",
                   opacity: isDone ? 0.5 : 1 }}>
                   <div style={{ width:22, height:22, borderRadius:"50%", flexShrink:0,
@@ -1741,47 +1744,27 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ color: isDone ? "#4B5563" : "#E8EAF0", fontSize:13, fontWeight:600,
-                      whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.name}</div>
-                    <div style={{ color:"#3A3D4A", fontSize:11 }}>{e.muscleGroup}</div>
+                      whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{ex2.name}</div>
+                    <div style={{ color:"#3A3D4A", fontSize:11 }}>{ex2.muscleGroup}</div>
                   </div>
                   {isDone ? (
-                    <span style={{ color:"#3A3D4A", fontSize:11 }}>🔒 locked</span>
+                    <span style={{ color:"#3A3D4A", fontSize:11 }}>🔒</span>
                   ) : (
                     <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                      <button
-                        disabled={i <= firstUnlocked}
-                        onClick={() => {
-                          // Find the previous unlocked exercise and swap
-                          let target = i - 1;
-                          while (target >= 0 && (loggedIds.has(active[target].id) || todayLogs.some(l => l.exerciseId === active[target].id))) target--;
-                          if (target < 0) return;
-                          const arr = [...(workoutExerciseOverride || templateActive)];
-                          [arr[i], arr[target]] = [arr[target], arr[i]];
-                          setWorkoutExerciseOverride(arr);
-                        }}
-                        style={{ width:28, height:28, background: i <= firstUnlocked ? "#1A1D26" : "#2A2D3A",
-                          border:"none", borderRadius:6, color: i <= firstUnlocked ? "#3A3D4A" : "#8B92A5",
-                          fontSize:13, cursor: i <= firstUnlocked ? "default" : "pointer" }}>↑</button>
-                      <button
-                        disabled={i >= active.length - 1}
-                        onClick={() => {
-                          const arr = [...(workoutExerciseOverride || templateActive)];
-                          [arr[i], arr[i+1]] = [arr[i+1], arr[i]];
-                          setWorkoutExerciseOverride(arr);
-                        }}
-                        style={{ width:28, height:28, background: i >= active.length-1 ? "#1A1D26" : "#2A2D3A",
-                          border:"none", borderRadius:6, color: i >= active.length-1 ? "#3A3D4A" : "#8B92A5",
-                          fontSize:13, cursor: i >= active.length-1 ? "default" : "pointer" }}>↓</button>
-                      <button
-                        onClick={() => {
-                          const arr = [...(workoutExerciseOverride || templateActive)];
+                      <button onClick={() => { if (!upOk) return; applyChange(arr => { [arr[i], arr[i-1]] = [arr[i-1], arr[i]]; }); }}
+                        style={{ width:32, height:32, background: upOk ? "#2A2D3A" : "#1A1D26",
+                          border:"none", borderRadius:6, color: upOk ? "#E8EAF0" : "#3A3D4A",
+                          fontSize:14, cursor: upOk ? "pointer" : "default", fontWeight:700 }}>↑</button>
+                      <button onClick={() => { if (!downOk) return; applyChange(arr => { [arr[i], arr[i+1]] = [arr[i+1], arr[i]]; }); }}
+                        style={{ width:32, height:32, background: downOk ? "#2A2D3A" : "#1A1D26",
+                          border:"none", borderRadius:6, color: downOk ? "#E8EAF0" : "#3A3D4A",
+                          fontSize:14, cursor: downOk ? "pointer" : "default", fontWeight:700 }}>↓</button>
+                      <button onClick={() => applyChange(arr => {
                           arr.splice(i, 1);
-                          setWorkoutExerciseOverride(arr);
-                          // If removed current exercise, load the next available
                           if (i === currentIdx) loadExercise(Math.min(i, arr.length - 1));
-                        }}
-                        style={{ width:28, height:28, background:"#D94A4A22", border:"none",
-                          borderRadius:6, color:"#D94A4A", fontSize:13, cursor:"pointer" }}>×</button>
+                        })}
+                        style={{ width:32, height:32, background:"#D94A4A22", border:"1px solid #D94A4A44",
+                          borderRadius:6, color:"#D94A4A", fontSize:14, cursor:"pointer", fontWeight:700 }}>×</button>
                     </div>
                   )}
                 </div>
