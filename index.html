@@ -1550,7 +1550,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId, durationMinutes };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
-    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId }));
+    localStorage.setItem("pp_workout_ended", JSON.stringify({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId, startingPoint: startingPoint }));
     setLoggedIds(new Set());
     onSaveSummary && onSaveSummary(summary);
   };
@@ -1904,6 +1904,17 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
         return isToday ? (templateId || null) : null;
       } catch { return null; }
     })();
+    // Which starting point card was used for the completed workout today
+    const completedStartingPoint = (() => {
+      try {
+        const s = localStorage.getItem("pp_workout_ended");
+        if (!s) return null;
+        const { date, ended, startingPoint: sp } = JSON.parse(s);
+        const todayOld = new Date().toDateString();
+        const isToday = ended && (date === todayKey || date === todayOld);
+        return isToday ? (sp || null) : null;
+      } catch { return null; }
+    })();
     const endedTemplate = workoutEnded && endedTemplateId
       ? WORKOUT_TEMPLATES.find(t => t.id === endedTemplateId) || null
       : null;
@@ -2196,22 +2207,13 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24 }}>
               {(() => {
                 const todayStr = new Date().toLocaleDateString("en-CA");
-                const todayLoggedIds = new Set(
-                  workoutLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === todayStr)
-                    .map(l => Number(l.exerciseId))
-                );
+                // todayLoggedIds retained for potential future use
                 // A card is "completed today" if the majority of its exercise list
                 // was logged today. Recommended uses aiActive, Last uses lastWorkoutExercises.
                 // Custom has no reference list so it never shows Done Today.
-                const cardDoneToday = (cardId) => {
-                  if (!todayLoggedIds.size) return false;
-                  const list = cardId === "recommended" ? aiActive
-                    : cardId === "last" ? lastWorkoutExercises
-                    : [];
-                  if (!list.length) return false;
-                  const logged = list.filter(e => todayLoggedIds.has(Number(e.id))).length;
-                  return logged >= Math.ceil(list.length / 2); // majority completed
-                };
+                // Only the card that was actually used to start the workout gets Done Today.
+                // completedStartingPoint is saved to localStorage by endWorkout().
+                const cardDoneToday = (cardId) => completedStartingPoint === cardId;
                 return [
                   { id:"recommended", label:"Recommended", icon:"🧠", desc:"AI-powered workout for today", color:"#4A90D9" },
                   { id:"last",        label:"Last Workout", icon:"🔁", desc:"Repeat your most recent session", color:"#4AD99A" },
