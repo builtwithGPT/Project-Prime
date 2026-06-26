@@ -1574,6 +1574,10 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId, durationMinutes };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
+    // Clear AI recommendation — it was generated before this session and is now stale.
+    // Forces Recommended card back to "Generate Workout" for any second session.
+    setAiRec(null);
+    try { localStorage.removeItem("pp_ai_workout_rec"); } catch {}
     appendEndedSession({ date: new Date().toLocaleDateString("en-CA"), ended: true, templateId: selectedTemplateId, startingPoint: startingPoint });
     setLoggedIds(new Set());
     onSaveSummary && onSaveSummary(summary);
@@ -2201,10 +2205,12 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                 // was logged today. Recommended uses aiActive, Last uses lastWorkoutExercises.
                 // Custom has no reference list so it never shows Done Today.
                 // Done Today logic:
-                // - "last" card: done today if ANY workout was completed today (it becomes the record)
-                // - "recommended" / "custom": done today only if that specific card was used
+                // - "last": done today if ANY workout was completed (it is the session record)
+                // - "recommended": never shows Done Today — always forward-looking
+                // - "custom": done today only if Custom was the starting point
                 const cardDoneToday = (cardId) => {
                   if (cardId === "last") return workoutEnded;
+                  if (cardId === "recommended") return false;
                   return completedStartingPoints.has(cardId);
                 };
                 return [
