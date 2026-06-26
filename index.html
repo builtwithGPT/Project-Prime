@@ -2179,29 +2179,13 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             <h2 style={{ margin:0,fontSize:22,fontWeight:700,color:"#E8EAF0" }}>Today's Workout</h2>
             <div style={{ color:"#8B92A5",fontSize:13,marginTop:3 }}>{fmtDateLong(new Date())}</div>
           </div>
-          {workoutEnded && (
-            <button onClick={() => {
-                // Clear ended state locally so the starting-point cards appear.
-                // Does NOT clear pp_workout_ended in localStorage — the completed
-                // results can be viewed by reloading. Override clears so the new
-                // session starts fresh from whatever the user picks.
-                setWorkoutEnded(false);
-                setWorkoutExerciseOverride(null);
-                setWorkoutSummary(null);
-                setCompletedSets({});
-                setLoggedIds(new Set());
-                setWorkoutStartedAt(null);
-              }}
-              style={{ background:"#2A2D3A",color:"#4A90D9",border:"1px solid #4A90D944",borderRadius:10,padding:"10px 20px",fontSize:14,fontWeight:700,cursor:"pointer" }}>
-              + Add Workout
-            </button>
-          )}
+          {/* + Add Workout button removed — cards always visible; user just picks a new starting point */}
         </div>
 
         {/* Additional workout confirmation removed — + Add Workout now goes directly to starting-point cards */}
 
-        {/* If workout completed today — show results */}
-        {workoutEnded ? completedPanel() : (
+        {/* Always show the three-card layout. Results appear inside the relevant card panel. */}
+        {true && (
           <div>
             {/* ── Three starting-point cards ── */}
             <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24 }}>
@@ -2256,7 +2240,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {/* ── RECOMMENDED panel ── */}
             {startingPoint === "recommended" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
-                {!aiRec && !aiGenerating && (
+                {/* Show completed results inline when workout ended from this card */}
+                {workoutEnded && completedStartingPoint === "recommended" && completedPanel()}
+                {!workoutEnded && !aiRec && !aiGenerating && (
                   <div style={{ textAlign:"center",padding:"20px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>🧠</div>
                     <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700,marginBottom:6 }}>Prime AI Workout</div>
@@ -2272,7 +2258,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {aiGenerating && (
+                {!workoutEnded && aiGenerating && (
                   <div style={{ textAlign:"center",padding:"32px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>⏳</div>
                     <div style={{ color:"#4A90D9",fontSize:14,fontWeight:700 }}>Prime is thinking...</div>
@@ -2280,7 +2266,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {aiRec && !aiGenerating && (
+                {!workoutEnded && aiRec && !aiGenerating && (
                   <div>
                     {/* AI rec header */}
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14 }}>
@@ -2338,7 +2324,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {/* ── LAST WORKOUT panel ── */}
             {startingPoint === "last" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                {/* Show completed results inline when workout ended from this card */}
+                {workoutEnded && completedStartingPoint === "last" && completedPanel()}
+                {!workoutEnded && <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                   <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>
                     🔁 Most Recent Workout
                   </div>
@@ -2362,13 +2350,15 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                     </button>
                   </>
                 )}
+                </div>}
               </div>
             )}
 
             {/* ── CUSTOM WORKOUT panel ── */}
             {startingPoint === "custom" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                {workoutEnded && completedStartingPoint === "custom" && completedPanel()}
+                {!workoutEnded && <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                   <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>✏️ Custom Workout</div>
                   <button onClick={() => setShowExercisePicker(true)}
                     style={{ background:"#7B68EE22",color:"#7B68EE",border:"1px solid #7B68EE44",
@@ -2392,6 +2382,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                     </button>
                   </>
                 )}
+                </div>}
               </div>
             )}
           </div>
