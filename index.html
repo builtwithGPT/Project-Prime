@@ -936,15 +936,14 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   // When an override is set (user started from non-template source), use it.
   const templateActive = workoutExerciseOverride || templateResolved;
 
-  // "Last Workout" exercise list — reconstruct from most recent completed workout day
+  // "Last Workout" exercise list — reconstruct from most recent day with logs.
+  // Always includes today if today has logs (covers the case where user completed a
+  // workout and then tapped + Add Workout, which resets workoutEnded to false).
   const lastWorkoutExercises = (() => {
     if (!workoutLogs.length) return [];
-    const today = new Date().toLocaleDateString("en-CA");
-    // Find most recent completed day (not today if nothing ended today)
     const days = [...new Set(workoutLogs.map(l => new Date(l.date).toLocaleDateString("en-CA")))]
-      .filter(d => d !== today || workoutEnded)
       .sort().reverse();
-    const lastDay = workoutEnded ? days[0] : days[0];
+    const lastDay = days[0]; // most recent day with any logs
     if (!lastDay) return [];
     const dayLogs = workoutLogs.filter(l => new Date(l.date).toLocaleDateString("en-CA") === lastDay);
     return dayLogs
@@ -1965,13 +1964,16 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               {ex.aiNotes && <div style={{ color:"#4A90D9", fontSize:11, marginTop:2 }}>{ex.aiNotes}</div>}
             </div>
             <div style={{ textAlign:"right", flexShrink:0 }}>
-              {aiHint ? (
+              {aiHint && (
                 <div style={{ color:"#E8A838", fontSize:12, fontWeight:700 }}>{aiHint}</div>
-              ) : lastE ? (
-                <div style={{ color:"#8B92A5", fontSize:11 }}>{lastE.sets}×{lastE.reps}{lastE.weight ? ` @ ${lastE.weight}` : ""}</div>
-              ) : (
-                <div style={{ color:"#3A3D4A", fontSize:11 }}>No history</div>
               )}
+              {lastE ? (
+                <div style={{ color:"#8B92A5", fontSize:11, marginTop: aiHint ? 2 : 0 }}>
+                  Last: {lastE.sets}×{lastE.reps}{lastE.weight ? ` @ ${lastE.weight} lbs` : ""}
+                </div>
+              ) : !aiHint ? (
+                <div style={{ color:"#3A3D4A", fontSize:11 }}>No history</div>
+              ) : null}
             </div>
             {opts.editable && (
               <div style={{ display:"flex", gap:4, flexShrink:0 }}>
@@ -2192,30 +2194,41 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
           <div>
             {/* ── Three starting-point cards ── */}
             <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24 }}>
-              {[
-                { id:"recommended", label:"Recommended", icon:"🧠", desc:"AI-powered workout for today", color:"#4A90D9" },
-                { id:"last",        label:"Last Workout", icon:"🔁", desc:"Repeat your most recent session", color:"#4AD99A" },
-                { id:"custom",      label:"Custom",       icon:"✏️", desc:"Build from scratch", color:"#7B68EE" },
-              ].map(card => {
-                const isSelected = startingPoint === card.id;
-                return (
-                  <div key={card.id} onClick={() => setStartingPoint(card.id)}
-                    style={{ background:"#1A1D26",borderRadius:14,
-                      border: isSelected ? `1px solid ${card.color}88` : "1px solid #2A2D3A",
-                      boxShadow: isSelected ? `0 0 0 1px ${card.color}33` : "none",
-                      padding:18,cursor:"pointer",display:"flex",flexDirection:"column",gap:6 }}>
-                    <div style={{ fontSize:22 }}>{card.icon}</div>
-                    <div style={{ color:"#E8EAF0",fontSize:14,fontWeight:800 }}>{card.label}</div>
-                    <div style={{ color:"#8B92A5",fontSize:11.5,lineHeight:1.5 }}>{card.desc}</div>
-                    <div style={{ marginTop:6,background:isSelected?card.color:"transparent",
-                      color:isSelected?"#0F1117":card.color,
-                      border:`1px solid ${card.color}66`,borderRadius:8,
-                      padding:"8px 0",fontSize:12,fontWeight:700,textAlign:"center" }}>
-                      {isSelected ? "✓ Selected" : "Choose"}
+              {(() => {
+                // Has the user logged any exercises today? (true even after + Add Workout resets workoutEnded)
+                const todayStr = new Date().toLocaleDateString("en-CA");
+                const hasTodayLogs = workoutLogs.some(l => new Date(l.date).toLocaleDateString("en-CA") === todayStr);
+                return [
+                  { id:"recommended", label:"Recommended", icon:"🧠", desc:"AI-powered workout for today", color:"#4A90D9" },
+                  { id:"last",        label:"Last Workout", icon:"🔁", desc:"Repeat your most recent session", color:"#4AD99A" },
+                  { id:"custom",      label:"Custom",       icon:"✏️", desc:"Build from scratch", color:"#7B68EE" },
+                ].map(card => {
+                  const isSelected = startingPoint === card.id;
+                  return (
+                    <div key={card.id} onClick={() => setStartingPoint(card.id)}
+                      style={{ background:"#1A1D26",borderRadius:14,
+                        border: isSelected ? `1px solid ${card.color}88` : "1px solid #2A2D3A",
+                        boxShadow: isSelected ? `0 0 0 1px ${card.color}33` : "none",
+                        padding:18,cursor:"pointer",display:"flex",flexDirection:"column",gap:6 }}>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
+                        <div style={{ fontSize:22 }}>{card.icon}</div>
+                        {hasTodayLogs && <span style={{ background:"#4AD99A22",color:"#4AD99A",
+                          fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,textTransform:"uppercase" }}>
+                          ✓ Done Today
+                        </span>}
+                      </div>
+                      <div style={{ color:"#E8EAF0",fontSize:14,fontWeight:800 }}>{card.label}</div>
+                      <div style={{ color:"#8B92A5",fontSize:11.5,lineHeight:1.5 }}>{card.desc}</div>
+                      <div style={{ marginTop:6,background:isSelected?card.color:"transparent",
+                        color:isSelected?"#0F1117":card.color,
+                        border:`1px solid ${card.color}66`,borderRadius:8,
+                        padding:"8px 0",fontSize:12,fontWeight:700,textAlign:"center" }}>
+                        {isSelected ? "✓ Selected" : "Choose"}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
 
             {/* ── RECOMMENDED panel ── */}
