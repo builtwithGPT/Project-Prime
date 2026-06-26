@@ -1008,7 +1008,8 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
 
   // ── Top-level mode ──────────────────────────────────────────────────────────
   const [activeMode, setActiveMode]     = useState(false);
-  const [workoutStartedAt, setWorkoutStartedAt] = useState(null); // ms timestamp — drives elapsed-time stat
+  const [workoutStartedAt, setWorkoutStartedAt] = useState(null);
+  const [currentSessionId, setCurrentSessionId] = useState(null); // uuid for current session — scopes logs so second sessions don't overwrite first // ms timestamp — drives elapsed-time stat
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   // todayKey — local YYYY-MM-DD used as the session key
   const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
@@ -1385,7 +1386,10 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     };
 
     // Check if this exercise already has a log for today (upsert logic)
-    const existingToday = todayLogs.find(l => Number(l.exerciseId) === Number(ex.id));
+    const existingToday = todayLogs.find(l =>
+      Number(l.exerciseId) === Number(ex.id) &&
+      (currentSessionId ? l.session_id === currentSessionId : !l.session_id)
+    );
     const result = await onLogExercise(ex.id, entry, existingToday?.id || null);
     const ok = result?.ok ?? result; // support both old bool and new {ok, freshLogs}
     const freshLogs = result?.freshLogs || null;
@@ -1446,9 +1450,14 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
       notes:  finalExSets.map(s => `Set ${s.setNum}: ${s.reps}r@${s.weight}lbs${s.rir !== null && s.rir !== undefined && s.rir !== "" ? ` RIR${s.rir}` : ""}`).join(" | "),
       date:   new Date().toISOString(),
       setDetails: finalExSets.map(s => ({ setNum: s.setNum, reps: s.reps, weight: s.weight, rir: s.rir ?? null, notes: s.notes || "" })),
+      session_id: currentSessionId || null,
+      position:   currentIdx,
     };
 
-    const existingToday = todayLogs.find(l => Number(l.exerciseId) === Number(ex.id));
+    const existingToday = todayLogs.find(l =>
+      Number(l.exerciseId) === Number(ex.id) &&
+      (currentSessionId ? l.session_id === currentSessionId : !l.session_id)
+    );
     const result = await onLogExercise(ex.id, entry, existingToday?.id || null);
     const ok = result?.ok ?? result;
     const freshLogs = result?.freshLogs || null;
@@ -1506,6 +1515,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     setWorkoutEnded(false); setWorkoutSummary(null);
     setCompletedSets({});
     if (!workoutStartedAt) setWorkoutStartedAt(Date.now());
+    // Generate a new session ID for this workout — scopes all exercise logs to this session
+    // so a second same-day session never overwrites the first session's logs.
+    setCurrentSessionId(crypto.randomUUID());
     // Don't clear pp_workout_ended — prior sessions must persist across the day.
     // workoutEnded React state is reset above; localStorage keeps the session history.
     // Use chosenList or templateResolved for first-exercise navigation
@@ -1575,6 +1587,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
     const summary = { completed: uniqueCompleted, total: active.length, sessionPF: curPF, prevPF, pfChange, prs, templateId: selectedTemplateId, durationMinutes };
     setWorkoutSummary(summary);
     setActiveMode(false); setWorkoutEnded(true); setCompletedSets({});
+    setCurrentSessionId(null); // clear session ID — next session gets a fresh one
     // Clear AI recommendation — it was generated before this session and is now stale.
     // Forces Recommended card back to "Generate Workout" for any second session.
     setAiRec(null);
@@ -7676,7 +7689,7 @@ function App() {
         return [...remote, ...pending];
       };
 
-      const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date, setDetails: r.set_details || r.setDetails || null })).sort((a, b) => new Date(a.date) - new Date(b.date));
+      const wLogs = merged(wData, lsWorkout).map(r => ({ id: r.id, exerciseId: r.exercise_id || r.exerciseId, sets: r.sets, reps: r.reps, weight: r.weight, notes: r.notes, date: r.date, setDetails: r.set_details || r.setDetails || null, session_id: r.session_id || null, position: r.position ?? null })).sort((a, b) => new Date(a.date) - new Date(b.date) || (a.position ?? 999) - (b.position ?? 999));
       const bLogs = merged(bData, lsBody).map(r => ({ id: r.id, weight: r.weight, chest: r.chest, waist: r.waist, hips: r.hips, glutes: r.glutes, thighs: r.thighs, arms: r.arms, date: r.date }));
 
       // Load nutrition entries for each day
@@ -7807,7 +7820,7 @@ function App() {
   // entry.setDetails (optional) — array of { setNum, reps, weight, rir, notes } — persisted to
   // the set_details JSONB column. Older rows/logs without setDetails remain aggregate-only.
   const addWorkoutLog = async (exerciseId, entry, existingId = null) => {
-    const payload = { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId, set_details: entry.setDetails || null };
+    const payload = { exercise_id: exerciseId, sets: entry.sets, reps: entry.reps, weight: entry.weight, notes: entry.notes, date: entry.date, user_id: userId, set_details: entry.setDetails || null, session_id: entry.session_id || null, position: entry.position ?? null };
 
     if (existingId) {
       // Optimistically update state first
