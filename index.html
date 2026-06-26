@@ -941,6 +941,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   const [customExercises, setCustomExercises] = useState([]); // array of exercise objects
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showAdjustWorkout, setShowAdjustWorkout] = useState(false); // mid-workout adjust modal
+  const [activeQuickAction, setActiveQuickAction] = useState(null); // "skip" | "replace" | "adjust"
   const [exercisePickerSearch, setExercisePickerSearch] = useState("");
   // Exercise edit modal (add/remove/reorder — distinct from swap)
   const [editExModal, setEditExModal] = useState(null); // null | { exerciseIdx }
@@ -3149,23 +3150,56 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
         {!exerciseDone && (
           <div style={{ background: "#1A1D26", borderRadius: 12, border: "1px solid #2A2D3A", padding: 16, flexShrink: 0 }}>
             <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Quick Actions</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <button onClick={skipExercise}
-                style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+
+              <button onClick={() => setActiveQuickAction(activeQuickAction === "skip" ? null : "skip")}
+                style={{ display: "flex", alignItems: "center", gap: 10, background: activeQuickAction === "skip" ? "#2A2D3A" : "none", border: "none", color: activeQuickAction === "skip" ? "#E8EAF0" : "#8B92A5", fontSize: 13, padding: "8px 8px", cursor: "pointer", textAlign: "left", borderRadius: 8, width: "100%" }}>
                 <span style={{ fontSize: 14 }}>⏭</span> Skip Exercise
               </button>
-              {EXERCISE_NAME_TO_SLOT[ex?.slotDefaultName || ex?.name] && (
-                <button onClick={() => openSwapModal(ex.slotDefaultName || ex.name, currentIdx)}
-                  style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
-                  <span style={{ fontSize: 14 }}>⇄</span> Replace Exercise
-                </button>
+              {activeQuickAction === "skip" && (
+                <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px", marginBottom: 4 }}>
+                  <div style={{ color: "#8B92A5", fontSize: 12, lineHeight: 1.5, marginBottom: 8 }}>Marks this exercise as skipped and moves to the next one. Won't count toward your session SF.</div>
+                  <button onClick={() => { setActiveQuickAction(null); skipExercise(); }}
+                    style={{ width: "100%", background: "#2A2D3A", color: "#E8EAF0", border: "none", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    ⏭ Confirm Skip
+                  </button>
+                </div>
               )}
-              <button onClick={() => setShowAdjustWorkout(true)}
-                style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
+
+              {EXERCISE_NAME_TO_SLOT[ex?.slotDefaultName || ex?.name] && (
+                <div>
+                  <button onClick={() => setActiveQuickAction(activeQuickAction === "replace" ? null : "replace")}
+                    style={{ display: "flex", alignItems: "center", gap: 10, background: activeQuickAction === "replace" ? "#2A2D3A" : "none", border: "none", color: activeQuickAction === "replace" ? "#E8EAF0" : "#8B92A5", fontSize: 13, padding: "8px 8px", cursor: "pointer", textAlign: "left", borderRadius: 8, width: "100%" }}>
+                    <span style={{ fontSize: 14 }}>⇄</span> Replace Exercise
+                  </button>
+                  {activeQuickAction === "replace" && (
+                    <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px", marginBottom: 4 }}>
+                      <div style={{ color: "#8B92A5", fontSize: 12, lineHeight: 1.5, marginBottom: 8 }}>Swaps this exercise for another in the same muscle group. Your preference will be remembered.</div>
+                      <button onClick={() => { setActiveQuickAction(null); openSwapModal(ex.slotDefaultName || ex.name, currentIdx); }}
+                        style={{ width: "100%", background: "#4A90D922", color: "#4A90D9", border: "1px solid #4A90D944", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                        ⇄ Choose Replacement
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={() => setActiveQuickAction(activeQuickAction === "adjust" ? null : "adjust")}
+                style={{ display: "flex", alignItems: "center", gap: 10, background: activeQuickAction === "adjust" ? "#2A2D3A" : "none", border: "none", color: activeQuickAction === "adjust" ? "#E8EAF0" : "#8B92A5", fontSize: 13, padding: "8px 8px", cursor: "pointer", textAlign: "left", borderRadius: 8, width: "100%" }}>
                 <span style={{ fontSize: 14 }}>✏️</span> Adjust Workout
               </button>
+              {activeQuickAction === "adjust" && (
+                <div style={{ background: "#0F1117", borderRadius: 8, padding: "10px 12px", marginBottom: 4 }}>
+                  <div style={{ color: "#8B92A5", fontSize: 12, lineHeight: 1.5, marginBottom: 8 }}>Reorder, remove, or add exercises to the rest of your workout. Completed exercises are locked.</div>
+                  <button onClick={() => { setActiveQuickAction(null); setShowAdjustWorkout(true); }}
+                    style={{ width: "100%", background: "#7B68EE22", color: "#7B68EE", border: "1px solid #7B68EE44", borderRadius: 7, padding: "8px 0", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    ✏️ Open Adjust Workout
+                  </button>
+                </div>
+              )}
+
               <button onClick={() => setShowSummaryPreview(true)}
-                style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 4px", cursor: "pointer", textAlign: "left", borderRadius: 6 }}>
+                style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", color: "#8B92A5", fontSize: 13, padding: "8px 8px", cursor: "pointer", textAlign: "left", borderRadius: 6, width: "100%" }}>
                 <span style={{ fontSize: 14 }}>📊</span> View Workout Summary
               </button>
             </div>
