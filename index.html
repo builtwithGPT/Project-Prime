@@ -1013,16 +1013,7 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
   // todayKey — local YYYY-MM-DD used as the session key
   const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
 
-  const [workoutEnded, setWorkoutEnded] = useState(() => {
-    try {
-      const s = localStorage.getItem("pp_workout_ended");
-      if (!s) return false;
-      const { date, ended } = JSON.parse(s);
-      // Accept both old format (toDateString) and new format (en-CA) for migration
-      const todayOld = new Date().toDateString();
-      return ended && (date === todayKey || date === todayOld);
-    } catch { return false; }
-  });
+  const [workoutEnded, setWorkoutEnded] = useState(() => getEndedSessions().length > 0);
   // Initialise selectedTemplateId to the template that was actually run today,
   // so the list view shows the correct Today's Results panel on load/reload.
   const [selectedTemplateId, setSelectedTemplateId] = useState(() => {
