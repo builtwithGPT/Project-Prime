@@ -2200,8 +2200,13 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                 // A card is "completed today" if the majority of its exercise list
                 // was logged today. Recommended uses aiActive, Last uses lastWorkoutExercises.
                 // Custom has no reference list so it never shows Done Today.
-                // Done Today if this card's startingPoint appears in any session today
-                const cardDoneToday = (cardId) => completedStartingPoints.has(cardId);
+                // Done Today logic:
+                // - "last" card: done today if ANY workout was completed today (it becomes the record)
+                // - "recommended" / "custom": done today only if that specific card was used
+                const cardDoneToday = (cardId) => {
+                  if (cardId === "last") return workoutEnded;
+                  return completedStartingPoints.has(cardId);
+                };
                 return [
                   { id:"recommended", label:"Recommended", icon:"🧠", desc:"AI-powered workout for today", color:"#4A90D9" },
                   { id:"last",        label:"Last Workout", icon:"🔁", desc:"Repeat your most recent session", color:"#4AD99A" },
@@ -2245,8 +2250,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {startingPoint === "recommended" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
-                {workoutEnded && completedStartingPoints.has("recommended") && completedPanel()}
-                {(!workoutEnded || !completedStartingPoints.has("recommended")) && !aiRec && !aiGenerating && (
+                {/* Recommended is always forward-looking — no completedPanel here.
+                    Completed results are shown on the Last Workout card. */}
+                {!aiRec && !aiGenerating && (
                   <div style={{ textAlign:"center",padding:"20px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>🧠</div>
                     <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700,marginBottom:6 }}>Prime AI Workout</div>
@@ -2262,7 +2268,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {(!workoutEnded || !completedStartingPoints.has("recommended")) && aiGenerating && (
+                {aiGenerating && (
                   <div style={{ textAlign:"center",padding:"32px 0" }}>
                     <div style={{ fontSize:32,marginBottom:12 }}>⏳</div>
                     <div style={{ color:"#4A90D9",fontSize:14,fontWeight:700 }}>Prime is thinking...</div>
@@ -2270,7 +2276,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                   </div>
                 )}
 
-                {(!workoutEnded || !completedStartingPoints.has("recommended")) && aiRec && !aiGenerating && (
+                {aiRec && !aiGenerating && (
                   <div>
                     {/* AI rec header */}
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14 }}>
@@ -2329,8 +2335,9 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
             {startingPoint === "last" && (
               <div style={{ background:"#1A1D26",borderRadius:14,border:"1px solid #2A2D3A",padding:20,marginBottom:20 }}>
                 {/* Show completed results inline when workout ended from this card */}
-                {workoutEnded && completedStartingPoints.has("last") && completedPanel()}
-                {(!workoutEnded || !completedStartingPoints.has("last")) && (
+                {/* After any workout today: Last Workout = completed session record.
+                    Before any workout: Last Workout = yesterday's session launcher. */}
+                {workoutEnded ? completedPanel() : (
                   <>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
                       <div style={{ color:"#E8EAF0",fontSize:15,fontWeight:700 }}>🔁 Most Recent Workout</div>
