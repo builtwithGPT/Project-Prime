@@ -999,6 +999,11 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
       .filter(Boolean);
   })();
 
+  // ── Top-level mode — must be declared BEFORE active derivation (active reads activeMode) ──
+  const [activeMode, setActiveMode]     = useState(false);
+  const [workoutStartedAt, setWorkoutStartedAt] = useState(null);
+  const [currentSessionId, setCurrentSessionId] = useState(null); // uuid for current session — scopes logs so second sessions don't overwrite first
+
   // The active list the LIST VIEW uses — overridden by starting point choice
   // Active workout engine always uses templateActive (unchanged)
   const active = activeMode ? templateActive
@@ -1006,11 +1011,6 @@ function WorkoutTab({ exercises, workoutLogs, onLogExercise, onEditSet, onSaveSu
     : startingPoint === "recommended" ? (aiActive.length ? aiActive : templateActive)
     : startingPoint === "custom"      ? customExercises
     : templateActive;
-
-  // ── Top-level mode ──────────────────────────────────────────────────────────
-  const [activeMode, setActiveMode]     = useState(false);
-  const [workoutStartedAt, setWorkoutStartedAt] = useState(null);
-  const [currentSessionId, setCurrentSessionId] = useState(null); // uuid for current session — scopes logs so second sessions don't overwrite first // ms timestamp — drives elapsed-time stat
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   // todayKey — local YYYY-MM-DD used as the session key
   const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
@@ -1718,7 +1718,7 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
               style={{ background:"#2A2D3A", border:"none", color:"#8B92A5", fontSize:16, cursor:"pointer", width:30, height:30, borderRadius:6 }}>×</button>
           </div>
 
-          <div style={{ overflowY:"auto", flex:1, display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
+          <div style={{ overflowY:"auto", flex:1, display:"flex", flexDirection:"column", gap:6, marginBottom:14, WebkitOverflowScrolling:"touch" }}>
             {active.map((ex2, i) => {
               const isDone = loggedIds.has(ex2.id) || todayLogs.some(l => Number(l.exerciseId) === Number(ex2.id));
               const isCurrent = i === currentIdx;
@@ -1751,20 +1751,20 @@ Nutrition (7 days): ${proteinHit}/${recentNutr.length} days hit protein target o
                     <span style={{ color:"#3A3D4A", fontSize:11 }}>🔒</span>
                   ) : (
                     <div style={{ display:"flex", gap:4, flexShrink:0 }}>
-                      <button onClick={() => { if (!upOk) return; applyChange(arr => { [arr[i], arr[i-1]] = [arr[i-1], arr[i]]; }); }}
-                        style={{ width:32, height:32, background: upOk ? "#2A2D3A" : "#1A1D26",
-                          border:"none", borderRadius:6, color: upOk ? "#E8EAF0" : "#3A3D4A",
-                          fontSize:14, cursor: upOk ? "pointer" : "default", fontWeight:700 }}>↑</button>
-                      <button onClick={() => { if (!downOk) return; applyChange(arr => { [arr[i], arr[i+1]] = [arr[i+1], arr[i]]; }); }}
-                        style={{ width:32, height:32, background: downOk ? "#2A2D3A" : "#1A1D26",
-                          border:"none", borderRadius:6, color: downOk ? "#E8EAF0" : "#3A3D4A",
-                          fontSize:14, cursor: downOk ? "pointer" : "default", fontWeight:700 }}>↓</button>
-                      <button onClick={() => applyChange(arr => {
+                      <button onPointerDown={(ev) => { ev.stopPropagation(); if (!upOk) return; applyChange(arr => { [arr[i], arr[i-1]] = [arr[i-1], arr[i]]; }); }}
+                        style={{ width:44, height:44, background: upOk ? "#2A2D3A" : "#1A1D26",
+                          border:"none", borderRadius:8, color: upOk ? "#E8EAF0" : "#3A3D4A",
+                          fontSize:16, cursor: upOk ? "pointer" : "default", fontWeight:700, touchAction:"manipulation" }}>↑</button>
+                      <button onPointerDown={(ev) => { ev.stopPropagation(); if (!downOk) return; applyChange(arr => { [arr[i], arr[i+1]] = [arr[i+1], arr[i]]; }); }}
+                        style={{ width:44, height:44, background: downOk ? "#2A2D3A" : "#1A1D26",
+                          border:"none", borderRadius:8, color: downOk ? "#E8EAF0" : "#3A3D4A",
+                          fontSize:16, cursor: downOk ? "pointer" : "default", fontWeight:700, touchAction:"manipulation" }}>↓</button>
+                      <button onPointerDown={(ev) => { ev.stopPropagation(); applyChange(arr => {
                           arr.splice(i, 1);
                           if (i === currentIdx) loadExercise(Math.min(i, arr.length - 1));
-                        })}
-                        style={{ width:32, height:32, background:"#D94A4A22", border:"1px solid #D94A4A44",
-                          borderRadius:6, color:"#D94A4A", fontSize:14, cursor:"pointer", fontWeight:700 }}>×</button>
+                        }); }}
+                        style={{ width:44, height:44, background:"#D94A4A33", border:"1px solid #D94A4A66",
+                          borderRadius:8, color:"#D94A4A", fontSize:16, cursor:"pointer", fontWeight:700, touchAction:"manipulation" }}>×</button>
                     </div>
                   )}
                 </div>
