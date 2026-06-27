@@ -5214,55 +5214,155 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     const phaseType = phase?.type === "gain" ? "Gain" : "Cut";
     const isGainPhase = phase?.type === "gain";
 
+    // ── Calibration analysis: classify each active exercise by session history ──
+    const calibrationSummary = exercises.filter(e => e.active).map(ex => {
+      const exLogs = workoutLogs
+        .filter(l => Number(l.exerciseId) === Number(ex.id))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+      const recentExLogs = exLogs.filter(l => new Date(l.date) >= sevenDaysAgo);
+      const comparableSessions = exLogs.length;
+      let calibrationStatus;
+      if (comparableSessions === 0) calibrationStatus = "no_data";
+      else if (comparableSessions === 1) calibrationStatus = "uncalibrated";
+      else if (comparableSessions === 2) calibrationStatus = "emerging";
+      else calibrationStatus = "calibrated";
+      const thisWeekSF = recentExLogs.reduce((best, l) => Math.max(best, calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality)), 0);
+      const priorSF = exLogs.slice(0, -recentExLogs.length || undefined).reduce((best, l) => Math.max(best, calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality)), 0);
+      const sfChange = thisWeekSF > 0 && priorSF > 0 ? Math.round(((thisWeekSF - priorSF) / priorSF) * 100) : null;
+      return { name: ex.name, muscleGroup: ex.muscleGroup, calibrationStatus, comparableSessions, sfChangePct: sfChange };
+    }).filter(e => e.comparableSessions > 0);
+
+    const calibratedCount   = calibrationSummary.filter(e => e.calibrationStatus === "calibrated").length;
+    const uncalibratedCount = calibrationSummary.filter(e => e.calibrationStatus === "uncalibrated" || e.calibrationStatus === "emerging").length;
+    const calibrationNote   = uncalibratedCount > 0
+      ? `${uncalibratedCount} exercise(s) still establishing working weights (uncalibrated/emerging). Strength Factor gains from these should be described as working weight calibration, not confirmed progressive overload.`
+      : `All ${calibratedCount} tracked exercises have established baselines. Strength Factor changes can be interpreted as genuine trend data.`;
+
+    // ── Behavior log for the week ─────────────────────────────────────────────
+    const proteinDaysHit = recentNutrition.filter(d => (d.total_protein || 0) >= getTargets(phase).protein).length;
+    const workoutsPlanned = 3; // reasonable weekly target
+    const behaviorLog = {
+      workoutsCompleted: [...new Set(recentWorkouts.map(l => l.date.split("T")[0]))].length,
+      recoverySessions: recentRecovery.length,
+      proteinDaysHit,
+      nutritionDaysLogged: recentNutrition.length,
+    };
+
+    // ── Confidence tier instructions ──────────────────────────────────────────
     let confidenceInstructions;
     if (conf.tier === "low") {
-      confidenceInstructions = "CRITICAL: Data confidence is LOW (only " + conf.daysSince + " days, " + conf.weighIns + " weigh-ins). You MUST:\n" +
-        "- Set overall_status to 🔵 Establishing Baseline\n" +
-        "- Do NOT recommend calorie changes\n" +
-        "- Do NOT flag weight gain as excessive fat\n" +
-        "- Do NOT issue course correction warnings\n" +
-        "- Focus executive_summary on early positive signals and expected fluctuations\n" +
-        "- Explain that initial weight changes reflect glycogen, hydration, and food volume not fat gain\n" +
-        "- Recommend building consistency, not making adjustments";
+      confidenceInstructions = `CONFIDENCE: LOW (${conf.daysSince} days since phase start, ${conf.weighIns} weigh-ins).
+REQUIRED BEHAVIOR:
+- Set overall_status to 🔵 Establishing Baseline
+- Do NOT recommend calorie changes
+- Do NOT flag weight changes as excessive — early phase weight is dominated by glycogen, hydration, and food volume, not fat
+- Do NOT issue course correction warnings
+- Prefer observation language: "Continue collecting data", "Too early to draw conclusions"
+- Focus wins on behaviors: workouts completed, nutrition logged, recovery sessions done
+- One data point is not a trend. Multiple data points are not yet a trend either at this stage.`;
     } else if (conf.tier === "medium") {
-      confidenceInstructions = "Data confidence is MEDIUM (" + conf.daysSince + " days). You MAY:\n" +
-        "- Use On Track or Monitor status (NOT Course Correction unless clearly warranted)\n" +
-        "- Note emerging trends cautiously\n" +
-        "- Suggest monitoring but NOT major plan changes\n" +
-        "- Phrase recommendations as continue monitoring not adjust immediately";
+      confidenceInstructions = `CONFIDENCE: MEDIUM (${conf.daysSince} days).
+REQUIRED BEHAVIOR:
+- Use 🟢 On Track or 🟡 Monitor status only — NOT 🔴 Course Correction unless a clear multi-week pattern exists
+- Note emerging trends with hedged language: "early signs suggest", "worth watching"
+- Do NOT recommend major plan changes — recommend continued monitoring
+- Do NOT treat one week of data as a reliable trend
+- Prefer: "Current evidence suggests..." over "You should..."`;
     } else {
-      confidenceInstructions = "Data confidence is HIGH (" + conf.daysSince + " days). Full assessment permitted. Use all status levels as appropriate.";
+      confidenceInstructions = `CONFIDENCE: HIGH (${conf.daysSince} days, sufficient data for trend interpretation).
+REQUIRED BEHAVIOR:
+- Full assessment permitted
+- Still prefer conservative language: "current evidence suggests" over absolute statements
+- One bad week does not override a positive multi-week trend
+- Recommend the smallest effective change, not the largest`;
     }
 
     const statusOptions = conf.tier === "low"
       ? "🔵 Establishing Baseline"
       : "🟢 Excellent Progress or 🟢 On Track or 🟡 Monitor or 🔴 Course Correction Needed";
 
-    const weightCriteria = isGainPhase ? "increases 0.25-0.75 lbs/week" : "decreases 0.5-1.5 lbs/week";
-    const waistCriteria  = isGainPhase ? "stays stable or increases minimally under 0.5 inches per month" : "decreases consistently";
-    const pfCriteria     = isGainPhase ? "increases week over week" : "stays stable or increases";
+    const weightCriteria = isGainPhase ? "increases 0.25-0.75 lbs/week on average over multiple weeks" : "decreases 0.5-1.5 lbs/week";
+    const waistCriteria  = isGainPhase ? "stays stable or increases minimally (under 0.5 inches/month) — waist is a major counterweight to scale weight interpretation" : "decreases consistently";
+    const pfCriteria     = isGainPhase ? "increases over time — but distinguish calibrated from uncalibrated exercise gains" : "stays stable or increases";
 
-    const prompt = "You are an elite personal coach reviewing Project Prime fitness data. Return ONLY a JSON object (no markdown, no explanation).\n\n" +
-      confidenceInstructions + "\n\nDATA:\n" + JSON.stringify(snapshot, null, 2) +
+    const systemPrompt = `You are an experienced, calm, evidence-driven strength coach reviewing Project Prime weekly data.
+
+COACHING PHILOSOPHY:
+- Interpret data, do not just report it
+- Never overreact to short-term fluctuations
+- One workout, one weigh-in, one meal is never a trend
+- Require multiple consistent observations before recommending major changes
+- Coach for long-term success, not daily perfection
+- Reward behaviors (consistency, compliance) more than outcomes (scale weight)
+- Recovery sessions are part of training — acknowledge mobility and pain improvements
+- When confidence is low: observe. When confidence is medium: monitor. When confidence is high: act conservatively.
+
+COACHING LANGUAGE:
+- Prefer: "Current evidence suggests...", "Continue monitoring...", "Consider...", "This trend is worth watching"
+- Avoid: "You should...", "You need to...", "Immediate adjustment required"
+- Sound like a calm experienced coach, not a spreadsheet or an alarm system
+
+STRENGTH FACTOR CALIBRATION RULE:
+- Exercises with 0-1 prior sessions are UNCALIBRATED. Large SF gains = working weight discovery, not real progress. Say so.
+- Exercises with 2 sessions are EMERGING. Treat gains cautiously.
+- Exercises with 3+ sessions are CALIBRATED. SF changes can be interpreted as genuine trend data.
+- If overall SF is up but uncalibrated exercises dominate, say: "Strength is trending up, but several lifts are still establishing working weights. Continue collecting data before treating this as a confirmed strength trend."
+
+BODY WEIGHT RULE:
+- Never let weight alone drive coaching conclusions
+- Always interpret weight alongside: waist trend, strength trend, recovery, nutrition consistency, phase timing
+- Early gain phase weight is especially noisy — it reflects glycogen loading, increased food volume, and hydration, not necessarily fat gain
+- Only recommend calorie changes after multiple weeks of evidence across weight AND waist
+
+PRIORITY ORDER for coaching conclusions:
+1. Strength trend (calibration-adjusted)
+2. Waist trend
+3. Recovery and energy trend
+4. Weight trend (last, and only as part of full picture)
+
+MEDICAL/SUPPLEMENT RULE:
+- Do NOT reference TRT, hormones, peptides, creatine, or supplements unless they appear explicitly in the data provided
+- Only use context that is in the dataset
+
+WINS should reflect behaviors, not just outcomes:
+- Workouts completed
+- Recovery sessions done
+- Protein target achieved
+- Nutrition logged consistently
+- Sleep improved
+- Waist remained stable
+- Exercise selection consistent with constraints
+
+NEXT ACTIONS should be prioritized:
+1. Continue progressive overload
+2. Complete planned workouts
+3. Maintain recovery routine
+4. Maintain nutrition consistency
+(Only recommend calorie adjustments after multiple weeks of clear evidence)
+
+Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
+
+    const prompt = systemPrompt + "\n\n" +
+      confidenceInstructions + "\n\n" +
+      "CALIBRATION STATUS:\n" + calibrationNote + "\n\n" +
+      "EXERCISE CALIBRATION DETAIL:\n" + JSON.stringify(calibrationSummary, null, 2) + "\n\n" +
+      "BEHAVIOR LOG THIS WEEK:\n" + JSON.stringify(behaviorLog, null, 2) + "\n\n" +
+      "FULL DATA SNAPSHOT:\n" + JSON.stringify(snapshot, null, 2) +
       "\n\nProject Prime success criteria for a " + phaseType + " Phase:\n" +
-      "- Weight " + weightCriteria + "\n" +
-      "- Waist " + waistCriteria + "\n" +
-      "- Strength Factor " + pfCriteria + "\n" +
+      "- Weight: " + weightCriteria + "\n" +
+      "- Waist: " + waistCriteria + "\n" +
+      "- Strength Factor: " + pfCriteria + "\n" +
       "- Protein target hit consistently\n" +
       "- Recovery sessions improving\n\n" +
-      "Return ONLY this JSON:\n{\n" +
+      "Return ONLY this JSON schema:\n{\n" +
       '  "overall_status": "' + statusOptions + '",\n' +
-      '  "executive_summary": "2-3 sentence coaching summary: Observation what happened. Confidence how much to trust it. Interpretation what it likely means. Action what to do.",\n' +
-      '  "major_wins": ["win 1", "win 2", "win 3"],\n' +
-      '  "areas_to_monitor": ["area 1", "area 2"],\n' +
-      '  "next_week_recommendations": ["action 1", "action 2", "action 3"]\n}';
+      '  "executive_summary": "2-3 sentences. Observation (what happened this week). Confidence (how much to trust it given data quality and calibration). Interpretation (what it likely means in context). Avoid absolute statements.",\n' +
+      '  "major_wins": ["behavior or outcome win 1", "behavior or outcome win 2", "behavior or outcome win 3"],\n' +
+      '  "areas_to_monitor": ["specific thing to watch 1", "specific thing to watch 2"],\n' +
+      '  "next_week_recommendations": ["Priority 1 action", "Priority 2 action", "Priority 3 action"]\n}';
 
     try {
-      const text = await callAI(
-        "You are an elite Project Prime fitness coach. Return only valid JSON, no markdown, no explanation.",
-        prompt,
-        1000
-      );
+      const text = await callAI(systemPrompt, prompt, 1200);
       const parsed = JSON.parse(text);
       const reviewObj = {
         ...parsed,
