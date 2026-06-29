@@ -3735,8 +3735,9 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
                   const sumY = vals.reduce((s, v) => s + v, 0);
                   const sumXY = vals.reduce((s, v, i) => s + i * v, 0);
                   const sumX2 = vals.reduce((s, _, i) => s + i * i, 0);
-                  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-                  const intercept = (sumY - slope * sumX) / n;
+                  const denom = n * sumX2 - sumX * sumX;
+                  const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+                  const intercept = n > 0 ? (sumY - slope * sumX) / n : (vals[0] || 0);
                   const trendY1 = yOf(intercept);
                   const trendY2 = yOf(intercept + slope * (n - 1));
 
@@ -4601,7 +4602,7 @@ async function seedDevData(session, userId) {
           reps: parseInt(ex.defaultReps) || 10,
           weight: seedWeight(ex, w),
           notes: `Seeded ${ex.defaultSets}x${ex.defaultReps}`,
-          session_id: crypto.randomUUID(),
+          session_id: `seed-${d}-${sessionIdx}`,
           position: pos,
         });
       });
@@ -4672,6 +4673,7 @@ async function seedDevData(session, userId) {
       before_low_back_tightness: Math.round(Math.random() * 2),
       after_low_back_tightness: Math.round(Math.random()),
       result_rating: afterEnergy > beforeEnergy ? "better" : "neutral",
+      items: [],
     });
   }
   for (let i = 0; i < recoverySessions.length; i += 20) {
