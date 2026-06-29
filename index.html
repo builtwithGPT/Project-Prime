@@ -4559,43 +4559,89 @@ async function seedDevData(session, userId) {
     });
   }
 
+  // ── Dynamic workout seeding from ALL_EXERCISES ───────────────────────────
+  // Fully dynamic: any exercise added to ALL_EXERCISES is automatically seeded.
+  // Exercises are grouped by muscleGroup and rotated across 6 weeks of workouts.
+  // Each exercise gets at least 3 sessions (enough for calibration + trend).
+
+  const activeExercises = ALL_EXERCISES.filter(e => e.active);
+
+  // Group exercises by muscleGroup for realistic rotation
+  const exByGroup = {};
+  activeExercises.forEach(e => {
+    const g = e.muscleGroup || "Other";
+    if (!exByGroup[g]) exByGroup[g] = [];
+    exByGroup[g].push(e);
+  });
+
+  // Upper groups trained on even weeks, lower on odd (realistic split)
+  const upperGroups = ["Chest", "Back", "Shoulders", "Arms", "Core"];
+  const lowerGroups = ["Legs", "Glutes", "Hamstrings", "Warm-up"];
+  const upperEx = activeExercises.filter(e => upperGroups.includes(e.muscleGroup));
+  const lowerEx = activeExercises.filter(e => lowerGroups.includes(e.muscleGroup));
+
+  // Realistic starting weights by type (will scale with progress)
+  const seedBaseWeight = (ex) => {
+    if (ex.type !== "weighted") return 0;
+    const group = ex.muscleGroup || "";
+    if (group === "Chest")       return 25;
+    if (group === "Back")        return 25;
+    if (group === "Shoulders")   return 15;
+    if (group === "Arms")        return 15;
+    if (group === "Legs")        return 35;
+    if (group === "Glutes")      return 40;
+    if (group === "Hamstrings")  return 30;
+    if (group === "Core")        return 10;
+    return 20;
+  };
+
+  // 6 weeks × 3 sessions/week = 18 workout days
   const workoutDays = [];
   for (let w = 0; w < 6; w++) {
     for (const offset of [0, 2, 4]) {
       const d = w * 7 + offset;
-      if (d <= 84) workoutDays.push(d);
+      if (d <= 42) workoutDays.push({ d, week: w, isUpper: offset < 3 ? (w % 2 === 0) : (w % 2 === 1) });
     }
   }
 
-  const baseWeights = { 3: 20, 4: 15, 5: 25, 7: 10, 9: 45, 11: 20, 12: 15, 13: 15, 14: 20, 15: 25, 16: 15, 17: 15, 19: 15 };
   const workoutLogs = [];
-  for (const d of workoutDays) {
+  const sessionIdMap = {}; // track one session_id per workout day
+
+  workoutDays.forEach(({ d, week, isUpper }, sessionIdx) => {
     const day = dayOffset(d);
-    const week = Math.floor(d / 7);
-    const progress = week * 2.5;
-    const exIds = [1, 2]; // warmup always
-    if (d % 14 < 7) {
-      exIds.push(...[3, 4, 5, 6, 7, 8]); // upper
-    } else {
-      exIds.push(...[9, 11, 14, 15, 16]); // lower + shoulders + arms
-    }
-    for (const exId of exIds) {
-      const ex = INITIAL_EXERCISES[exId - 1];
-      if (!ex) continue;
+    const progress = week * 2.5; // realistic ~2.5lb progression per week on weighted
+    const sessionId = "seed-" + d + "-" + sessionIdx;
+
+    // Pick exercises for this session: 4-6 from appropriate groups
+    const pool = isUpper ? upperEx : lowerEx;
+    // Rotate through pool so all exercises get coverage across 18 sessions
+    const startIdx = (sessionIdx * 4) % Math.max(1, pool.length);
+    const sessionExercises = [
+      ...pool.slice(startIdx, startIdx + 5),
+      ...pool.slice(0, Math.max(0, (startIdx + 5) - pool.length)),
+    ].slice(0, 5);
+
+    sessionExercises.forEach((ex, position) => {
       const sets = parseInt(ex.defaultSets) || 3;
       const reps = parseInt(ex.defaultReps) || 10;
-      const baseW = baseWeights[exId] || 0;
-      const weight = ex.type === "weighted" ? Math.round((baseW + progress) / 2.5) * 2.5 : 0;
+      const baseW = seedBaseWeight(ex);
+      // Laterality: unilateral exercises use same weight convention
+      const weight = ex.type === "weighted"
+        ? Math.round((baseW + progress) / 2.5) * 2.5
+        : 0;
+      const sf = calcPF(sets, reps, weight, ex.type, ex.laterality);
       workoutLogs.push({
         user_id: userId,
-        exercise_id: exId,
+        exercise_id: ex.id,
         date: day.toISOString(),
-        sets, reps,
-        weight,
-        notes: "Set 1: " + reps + "r@" + weight + "lbs | Set 2: " + reps + "r@" + weight + "lbs | Set 3: " + reps + "r@" + weight + "lbs",
+        sets, reps, weight,
+        notes: "Seeded: " + sets + "x" + reps + (weight ? " @" + weight + "lbs" : " BW"),
+        session_id: sessionId,
+        position,
       });
-    }
-  }
+    });
+  });
+
   for (let i = 0; i < workoutLogs.length; i += 20) {
     await fetch(SUPABASE_URL + "/rest/v1/workout_logs", {
       method: "POST", headers, body: JSON.stringify(workoutLogs.slice(i, i + 20)),
