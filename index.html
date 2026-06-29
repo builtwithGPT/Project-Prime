@@ -4612,14 +4612,14 @@ async function seedDevData(session, userId) {
     const progress = week * 2.5; // realistic ~2.5lb progression per week on weighted
     const sessionId = "seed-" + d + "-" + sessionIdx;
 
-    // Pick exercises for this session: 4-6 from appropriate groups
+    // Pick exercises for this session: 5 from appropriate groups
     const pool = isUpper ? upperEx : lowerEx;
-    // Rotate through pool so all exercises get coverage across 18 sessions
     const startIdx = (sessionIdx * 4) % Math.max(1, pool.length);
-    const sessionExercises = [
-      ...pool.slice(startIdx, startIdx + 5),
-      ...pool.slice(0, Math.max(0, (startIdx + 5) - pool.length)),
-    ].slice(0, 5);
+    const sessionExercises = [];
+    for (let k = 0; k < 5; k++) {
+      const ex = pool[(startIdx + k) % pool.length];
+      if (ex && !sessionExercises.find(e => e.id === ex.id)) sessionExercises.push(ex);
+    }
 
     sessionExercises.forEach((ex, position) => {
       const sets = parseInt(ex.defaultSets) || 3;
