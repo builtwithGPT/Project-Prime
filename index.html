@@ -3474,7 +3474,8 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
     const byDate = {};
     logs.forEach(l => {
       const pf = calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
-      if (!byDate[l.date] || pf > byDate[l.date]) byDate[l.date] = pf;
+      const dateKey = new Date(l.date).toLocaleDateString("en-CA");
+      if (!byDate[dateKey] || pf > byDate[dateKey]) byDate[dateKey] = pf;
     });
     const pfSeries = Object.keys(byDate).sort().map(date => ({ value: byDate[date], date }));
 
