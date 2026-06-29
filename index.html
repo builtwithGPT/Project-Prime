@@ -4600,12 +4600,12 @@ async function seedDevData(session, userId) {
 
   for (var si = 0; si < workoutDays.length; si++) {
     var wday = workoutDays[si];
-    var d = wday.d;
+    var wd = wday.d;
     var week = wday.week;
     var isUpper = wday.isUpper;
-    var day = dayOffset(d);
+    var day = dayOffset(wd);
     var progress = week * 2.5;
-    var sessionId = "seed-" + d + "-" + si;
+    var sessionId = "seed-" + wd + "-" + si;
     var pool = isUpper ? upperEx : lowerEx;
     if (!pool.length) continue;
     var startIdx = (si * 4) % pool.length;
@@ -4621,19 +4621,19 @@ async function seedDevData(session, userId) {
       }
     }
     for (var p = 0; p < sessionExercises.length; p++) {
-      var ex2 = sessionExercises[p];
-      var sets = parseInt(ex2.defaultSets) || 3;
-      var reps = parseInt(ex2.defaultReps) || 10;
-      var baseW = seedBaseWeight(ex2);
-      var weight = ex2.type === "weighted" ? Math.round((baseW + progress) / 2.5) * 2.5 : 0;
+      var sex = sessionExercises[p];
+      var sSets = parseInt(sex.defaultSets) || 3;
+      var sReps = parseInt(sex.defaultReps) || 10;
+      var sBaseW = seedBaseWeight(sex);
+      var sWeight = sex.type === "weighted" ? Math.round((sBaseW + progress) / 2.5) * 2.5 : 0;
       workoutLogs.push({
         user_id: userId,
-        exercise_id: ex2.id,
+        exercise_id: sex.id,
         date: day.toISOString(),
-        sets: sets,
-        reps: reps,
-        weight: weight,
-        notes: "Seeded: " + sets + "x" + reps + (weight ? " @" + weight + "lbs" : " BW"),
+        sets: sSets,
+        reps: sReps,
+        weight: sWeight,
+        notes: "Seeded: " + sSets + "x" + sReps + (sWeight ? " @" + sWeight + "lbs" : " BW"),
         session_id: sessionId,
         position: p,
       });
