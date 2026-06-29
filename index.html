@@ -4564,83 +4564,105 @@ async function seedDevData(session, userId) {
   // Exercises are grouped by muscleGroup and rotated across 6 weeks of workouts.
   // Each exercise gets at least 3 sessions (enough for calibration + trend).
 
-  const activeExercises = ALL_EXERCISES.filter(function(e) { return e.active; });
-
-  var upperEx = activeExercises.filter(function(e) {
-    return e.muscleGroup === "Chest" || e.muscleGroup === "Back" || e.muscleGroup === "Shoulders" || e.muscleGroup === "Arms" || e.muscleGroup === "Core";
-  });
-  var lowerEx = activeExercises.filter(function(e) {
-    return e.muscleGroup === "Legs" || e.muscleGroup === "Glutes" || e.muscleGroup === "Hamstrings" || e.muscleGroup === "Warm-up";
-  });
-
-  function seedBaseWeight(ex) {
-    if (ex.type !== "weighted") return 0;
-    if (ex.muscleGroup === "Chest") return 25;
-    if (ex.muscleGroup === "Back") return 25;
-    if (ex.muscleGroup === "Shoulders") return 15;
-    if (ex.muscleGroup === "Arms") return 15;
-    if (ex.muscleGroup === "Legs") return 35;
-    if (ex.muscleGroup === "Glutes") return 40;
-    if (ex.muscleGroup === "Hamstrings") return 30;
-    if (ex.muscleGroup === "Core") return 10;
-    return 20;
+  const SEED_WL = [
+    {exercise_id:3,sets:4,reps:10,weight:25,session_id:"seed-0-0",position:0,d:0},
+    {exercise_id:4,sets:4,reps:10,weight:25,session_id:"seed-0-0",position:1,d:0},
+    {exercise_id:5,sets:3,reps:10,weight:25,session_id:"seed-0-0",position:2,d:0},
+    {exercise_id:6,sets:3,reps:5,weight:0,session_id:"seed-0-0",position:3,d:0},
+    {exercise_id:7,sets:3,reps:12,weight:25,session_id:"seed-0-0",position:4,d:0},
+    {exercise_id:7,sets:3,reps:12,weight:25,session_id:"seed-2-1",position:0,d:2},
+    {exercise_id:8,sets:3,reps:10,weight:0,session_id:"seed-2-1",position:1,d:2},
+    {exercise_id:15,sets:3,reps:10,weight:15,session_id:"seed-2-1",position:2,d:2},
+    {exercise_id:16,sets:3,reps:12,weight:15,session_id:"seed-2-1",position:3,d:2},
+    {exercise_id:17,sets:3,reps:12,weight:15,session_id:"seed-2-1",position:4,d:2},
+    {exercise_id:17,sets:3,reps:12,weight:15,session_id:"seed-4-2",position:0,d:4},
+    {exercise_id:18,sets:3,reps:12,weight:15,session_id:"seed-4-2",position:1,d:4},
+    {exercise_id:19,sets:3,reps:15,weight:0,session_id:"seed-4-2",position:2,d:4},
+    {exercise_id:20,sets:3,reps:15,weight:10,session_id:"seed-4-2",position:3,d:4},
+    {exercise_id:21,sets:3,reps:10,weight:0,session_id:"seed-4-2",position:4,d:4},
+    {exercise_id:115,sets:3,reps:15,weight:0,session_id:"seed-7-3",position:0,d:7},
+    {exercise_id:116,sets:3,reps:10,weight:32,session_id:"seed-7-3",position:1,d:7},
+    {exercise_id:117,sets:3,reps:12,weight:0,session_id:"seed-7-3",position:2,d:7},
+    {exercise_id:118,sets:3,reps:10,weight:0,session_id:"seed-7-3",position:3,d:7},
+    {exercise_id:119,sets:3,reps:15,weight:0,session_id:"seed-7-3",position:4,d:7},
+    {exercise_id:119,sets:3,reps:15,weight:0,session_id:"seed-9-4",position:0,d:9},
+    {exercise_id:120,sets:3,reps:10,weight:37,session_id:"seed-9-4",position:1,d:9},
+    {exercise_id:121,sets:3,reps:10,weight:37,session_id:"seed-9-4",position:2,d:9},
+    {exercise_id:122,sets:3,reps:10,weight:37,session_id:"seed-9-4",position:3,d:9},
+    {exercise_id:1,sets:2,reps:15,weight:0,session_id:"seed-9-4",position:4,d:9},
+    {exercise_id:1,sets:2,reps:15,weight:0,session_id:"seed-11-5",position:0,d:11},
+    {exercise_id:2,sets:2,reps:15,weight:0,session_id:"seed-11-5",position:1,d:11},
+    {exercise_id:9,sets:3,reps:12,weight:42,session_id:"seed-11-5",position:2,d:11},
+    {exercise_id:10,sets:3,reps:8,weight:0,session_id:"seed-11-5",position:3,d:11},
+    {exercise_id:11,sets:3,reps:10,weight:32,session_id:"seed-11-5",position:4,d:11},
+    {exercise_id:123,sets:3,reps:10,weight:20,session_id:"seed-14-6",position:0,d:14},
+    {exercise_id:124,sets:3,reps:10,weight:20,session_id:"seed-14-6",position:1,d:14},
+    {exercise_id:125,sets:3,reps:15,weight:0,session_id:"seed-14-6",position:2,d:14},
+    {exercise_id:126,sets:3,reps:12,weight:20,session_id:"seed-14-6",position:3,d:14},
+    {exercise_id:127,sets:3,reps:12,weight:20,session_id:"seed-14-6",position:4,d:14},
+    {exercise_id:127,sets:3,reps:12,weight:20,session_id:"seed-16-7",position:0,d:16},
+    {exercise_id:128,sets:3,reps:12,weight:20,session_id:"seed-16-7",position:1,d:16},
+    {exercise_id:129,sets:3,reps:15,weight:0,session_id:"seed-16-7",position:2,d:16},
+    {exercise_id:130,sets:3,reps:15,weight:0,session_id:"seed-16-7",position:3,d:16},
+    {exercise_id:131,sets:3,reps:12,weight:20,session_id:"seed-16-7",position:4,d:16},
+    {exercise_id:131,sets:3,reps:12,weight:20,session_id:"seed-18-8",position:0,d:18},
+    {exercise_id:132,sets:3,reps:15,weight:0,session_id:"seed-18-8",position:1,d:18},
+    {exercise_id:133,sets:3,reps:30,weight:0,session_id:"seed-18-8",position:2,d:18},
+    {exercise_id:134,sets:3,reps:12,weight:0,session_id:"seed-18-8",position:3,d:18},
+    {exercise_id:135,sets:3,reps:12,weight:0,session_id:"seed-18-8",position:4,d:18},
+    {exercise_id:119,sets:3,reps:15,weight:0,session_id:"seed-21-9",position:0,d:21},
+    {exercise_id:120,sets:3,reps:10,weight:42,session_id:"seed-21-9",position:1,d:21},
+    {exercise_id:121,sets:3,reps:10,weight:42,session_id:"seed-21-9",position:2,d:21},
+    {exercise_id:122,sets:3,reps:10,weight:42,session_id:"seed-21-9",position:3,d:21},
+    {exercise_id:1,sets:2,reps:15,weight:0,session_id:"seed-21-9",position:4,d:21},
+    {exercise_id:1,sets:2,reps:15,weight:0,session_id:"seed-23-10",position:0,d:23},
+    {exercise_id:2,sets:2,reps:15,weight:0,session_id:"seed-23-10",position:1,d:23},
+    {exercise_id:9,sets:3,reps:12,weight:47,session_id:"seed-23-10",position:2,d:23},
+    {exercise_id:10,sets:3,reps:8,weight:0,session_id:"seed-23-10",position:3,d:23},
+    {exercise_id:11,sets:3,reps:10,weight:37,session_id:"seed-23-10",position:4,d:23},
+    {exercise_id:11,sets:3,reps:10,weight:37,session_id:"seed-25-11",position:0,d:25},
+    {exercise_id:12,sets:3,reps:12,weight:37,session_id:"seed-25-11",position:1,d:25},
+    {exercise_id:13,sets:3,reps:8,weight:37,session_id:"seed-25-11",position:2,d:25},
+    {exercise_id:14,sets:3,reps:10,weight:42,session_id:"seed-25-11",position:3,d:25},
+    {exercise_id:100,sets:2,reps:15,weight:0,session_id:"seed-25-11",position:4,d:25},
+    {exercise_id:17,sets:3,reps:12,weight:25,session_id:"seed-28-12",position:0,d:28},
+    {exercise_id:18,sets:3,reps:12,weight:25,session_id:"seed-28-12",position:1,d:28},
+    {exercise_id:19,sets:3,reps:15,weight:0,session_id:"seed-28-12",position:2,d:28},
+    {exercise_id:20,sets:3,reps:15,weight:20,session_id:"seed-28-12",position:3,d:28},
+    {exercise_id:21,sets:3,reps:10,weight:0,session_id:"seed-28-12",position:4,d:28},
+    {exercise_id:21,sets:3,reps:10,weight:0,session_id:"seed-30-13",position:0,d:30},
+    {exercise_id:104,sets:3,reps:10,weight:0,session_id:"seed-30-13",position:1,d:30},
+    {exercise_id:105,sets:3,reps:12,weight:0,session_id:"seed-30-13",position:2,d:30},
+    {exercise_id:106,sets:3,reps:12,weight:35,session_id:"seed-30-13",position:3,d:30},
+    {exercise_id:107,sets:3,reps:15,weight:0,session_id:"seed-30-13",position:4,d:30},
+    {exercise_id:107,sets:3,reps:15,weight:0,session_id:"seed-32-14",position:0,d:32},
+    {exercise_id:108,sets:3,reps:10,weight:35,session_id:"seed-32-14",position:1,d:32},
+    {exercise_id:109,sets:3,reps:8,weight:0,session_id:"seed-32-14",position:2,d:32},
+    {exercise_id:110,sets:3,reps:15,weight:0,session_id:"seed-32-14",position:3,d:32},
+    {exercise_id:111,sets:3,reps:10,weight:0,session_id:"seed-32-14",position:4,d:32},
+    {exercise_id:1,sets:2,reps:15,weight:0,session_id:"seed-35-15",position:0,d:35},
+    {exercise_id:2,sets:2,reps:15,weight:0,session_id:"seed-35-15",position:1,d:35},
+    {exercise_id:9,sets:3,reps:12,weight:52,session_id:"seed-35-15",position:2,d:35},
+    {exercise_id:10,sets:3,reps:8,weight:0,session_id:"seed-35-15",position:3,d:35},
+    {exercise_id:11,sets:3,reps:10,weight:42,session_id:"seed-35-15",position:4,d:35},
+    {exercise_id:11,sets:3,reps:10,weight:42,session_id:"seed-37-16",position:0,d:37},
+    {exercise_id:12,sets:3,reps:12,weight:42,session_id:"seed-37-16",position:1,d:37},
+    {exercise_id:13,sets:3,reps:8,weight:42,session_id:"seed-37-16",position:2,d:37},
+    {exercise_id:14,sets:3,reps:10,weight:47,session_id:"seed-37-16",position:3,d:37},
+    {exercise_id:100,sets:2,reps:15,weight:0,session_id:"seed-37-16",position:4,d:37},
+    {exercise_id:100,sets:2,reps:15,weight:0,session_id:"seed-39-17",position:0,d:39},
+    {exercise_id:101,sets:2,reps:10,weight:0,session_id:"seed-39-17",position:1,d:39},
+    {exercise_id:102,sets:2,reps:15,weight:0,session_id:"seed-39-17",position:2,d:39},
+    {exercise_id:103,sets:2,reps:12,weight:0,session_id:"seed-39-17",position:3,d:39},
+    {exercise_id:115,sets:3,reps:15,weight:0,session_id:"seed-39-17",position:4,d:39}
+  ];
+  const workoutLogs = [];
+  for (let si = 0; si < SEED_WL.length; si++) {
+    const t = SEED_WL[si];
+    const wlDay = dayOffset(t.d);
+    workoutLogs.push({user_id:userId,exercise_id:t.exercise_id,date:wlDay.toISOString(),sets:t.sets,reps:t.reps,weight:t.weight,notes:"Seeded "+t.sets+"x"+t.reps+(t.weight?" @"+t.weight+"lbs":" BW"),session_id:t.session_id,position:t.position});
   }
-
-  var workoutDays = [];
-  for (var w = 0; w < 6; w++) {
-    var offsets = [0, 2, 4];
-    for (var oi = 0; oi < offsets.length; oi++) {
-      var offset = offsets[oi];
-      var d = w * 7 + offset;
-      if (d <= 42) workoutDays.push({ d: d, week: w, isUpper: (w % 2 === 0) });
-    }
-  }
-
-  var workoutLogs = [];
-
-  for (var si = 0; si < workoutDays.length; si++) {
-    var wday = workoutDays[si];
-    var wd = wday.d;
-    var week = wday.week;
-    var isUpper = wday.isUpper;
-    var day = dayOffset(wd);
-    var progress = week * 2.5;
-    var sessionId = "seed-" + wd + "-" + si;
-    var pool = isUpper ? upperEx : lowerEx;
-    if (!pool.length) continue;
-    var startIdx = (si * 4) % pool.length;
-    var sessionExercises = [];
-    for (var k = 0; k < 5; k++) {
-      var ex = pool[(startIdx + k) % pool.length];
-      if (ex) {
-        var isDup = false;
-        for (var m = 0; m < sessionExercises.length; m++) {
-          if (sessionExercises[m].id === ex.id) { isDup = true; break; }
-        }
-        if (!isDup) sessionExercises.push(ex);
-      }
-    }
-    for (var p = 0; p < sessionExercises.length; p++) {
-      var sex = sessionExercises[p];
-      var sSets = parseInt(sex.defaultSets) || 3;
-      var sReps = parseInt(sex.defaultReps) || 10;
-      var sBaseW = seedBaseWeight(sex);
-      var sWeight = sex.type === "weighted" ? Math.round((sBaseW + progress) / 2.5) * 2.5 : 0;
-      workoutLogs.push({
-        user_id: userId,
-        exercise_id: sex.id,
-        date: day.toISOString(),
-        sets: sSets,
-        reps: sReps,
-        weight: sWeight,
-        notes: "Seeded: " + sSets + "x" + sReps + (sWeight ? " @" + sWeight + "lbs" : " BW"),
-        session_id: sessionId,
-        position: p,
-      });
-    }
-  }
-
-  for (let i = 0; i < workoutLogs.length; i += 20) {
+    for (let i = 0; i < workoutLogs.length; i += 20) {
     await fetch(SUPABASE_URL + "/rest/v1/workout_logs", {
       method: "POST", headers, body: JSON.stringify(workoutLogs.slice(i, i + 20)),
     });
