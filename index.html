@@ -3474,8 +3474,7 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
     const byDate = {};
     logs.forEach(l => {
       const pf = calcPF(l.sets, l.reps, l.weight, ex.type, ex.laterality);
-      const dateKey = new Date(l.date).toLocaleDateString("en-CA");
-      if (!byDate[dateKey] || pf > byDate[dateKey]) byDate[dateKey] = pf;
+      if (!byDate[l.date] || pf > byDate[l.date]) byDate[l.date] = pf;
     });
     const pfSeries = Object.keys(byDate).sort().map(date => ({ value: byDate[date], date }));
 
@@ -4602,7 +4601,7 @@ async function seedDevData(session, userId) {
           reps: parseInt(ex.defaultReps) || 10,
           weight: seedWeight(ex, w),
           notes: `Seeded ${ex.defaultSets}x${ex.defaultReps}`,
-          session_id: `seed-${d}-${sessionIdx}`,
+          session_id: crypto.randomUUID(),
           position: pos,
         });
       });
@@ -4673,7 +4672,6 @@ async function seedDevData(session, userId) {
       before_low_back_tightness: Math.round(Math.random() * 2),
       after_low_back_tightness: Math.round(Math.random()),
       result_rating: afterEnergy > beforeEnergy ? "better" : "neutral",
-      items: [],
     });
   }
   for (let i = 0; i < recoverySessions.length; i += 20) {
