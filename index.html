@@ -4503,20 +4503,21 @@ async function seedDevData(session, userId) {
     "Content-Type": "application/json",
     "Prefer": "return=minimal",
   };
-  const post = async (table, rows) => {
-    const batch = Array.isArray(rows) ? rows : [rows];
-    await fetch(SUPABASE_URL + "/rest/v1/" + table, {
-      method: "POST", headers,
-      body: JSON.stringify(batch.map(r => ({ ...r, user_id: userId }))),
-    });
-  };
 
+  // ── Seed constants ────────────────────────────────────────────────────────
+  // 12-week / 84-day full-body every-other-day seed.
+  // 42 sessions total. Each session: 2 warm-up + 9 strength + 3 core = 14 exercises.
+  // Every active exercise appears 6+ times across the 84-day window.
+  // Progression is deterministic and realistic — not a perfect PR ladder.
+
+  const SEED_DAYS = 84;
   const today = new Date();
-  const phaseStart = new Date(today); phaseStart.setDate(today.getDate() - 42); // 6 weeks ago — mid-phase
-  const phaseEnd   = new Date(phaseStart); phaseEnd.setDate(phaseStart.getDate() + 84); // 12 weeks from start
-  const dateStr = d => d.toLocaleDateString("en-CA");
+  const phaseStart = new Date(today); phaseStart.setDate(today.getDate() - SEED_DAYS);
+  const phaseEnd   = new Date(phaseStart); phaseEnd.setDate(phaseStart.getDate() + 168);
+  const dateStr  = d => d.toLocaleDateString("en-CA");
   const dayOffset = n => { const d = new Date(phaseStart); d.setDate(phaseStart.getDate() + n); return d; };
 
+  // ── Phase data ────────────────────────────────────────────────────────────
   const phaseRes = await fetch(SUPABASE_URL + "/rest/v1/phase_data", {
     method: "POST",
     headers: { ...headers, "Prefer": "return=representation" },
@@ -4538,22 +4539,28 @@ async function seedDevData(session, userId) {
     });
   }
 
+  // ── Body logs ─────────────────────────────────────────────────────────────
+  // Daily weigh-ins with slow upward trend (~0.4 lbs/week).
+  // Deterministic daily fluctuation using sine wave to avoid Math.random().
+  // Measurements logged weekly (every 7 days).
   const bodyLogs = [];
-  let weight = 189.5;
-  for (let d = 0; d <= 42; d++) {
-    const day = dayOffset(d);
-    weight += (Math.random() * 0.15 - 0.03); // ~0.4 lbs/week gain trend
-    const isWeekly = d % 7 === 0;
+  const baseWeight = 189.5;
+  for (let d = 0; d <= SEED_DAYS; d++) {
+    const trendLbs   = (d / 7) * 0.4;
+    const fluctuation = Math.sin(d * 1.7) * 0.3 + Math.sin(d * 0.9) * 0.15;
+    const weight     = +(baseWeight + trendLbs + fluctuation).toFixed(1);
+    const isWeekly   = d % 7 === 0;
+    const wk         = d / 7;
     bodyLogs.push({
       user_id: userId,
-      date: day.toISOString(),
-      weight: +weight.toFixed(1),
-      waist:  isWeekly ? +(40.0 + d * 0.002 + (Math.random() * 0.1 - 0.05)).toFixed(1) : null,
-      chest:  isWeekly ? +(41.5 + d * 0.006 + (Math.random() * 0.1)).toFixed(1) : null,
-      arms:   isWeekly ? +(14.0 + d * 0.003 + (Math.random() * 0.05)).toFixed(1) : null,
-      glutes: isWeekly ? +(41.0 + d * 0.008 + (Math.random() * 0.1)).toFixed(1) : null,
-      thighs: isWeekly ? +(22.5 + d * 0.004 + (Math.random() * 0.1)).toFixed(1) : null,
-      hips:   isWeekly ? +(40.5 + d * 0.002).toFixed(1) : null,
+      date: dayOffset(d).toISOString(),
+      weight,
+      waist:  isWeekly ? +(40.0 + wk * 0.04 + Math.sin(d) * 0.05).toFixed(1) : null,
+      chest:  isWeekly ? +(41.5 + wk * 0.04 + Math.sin(d * 1.1) * 0.05).toFixed(1) : null,
+      arms:   isWeekly ? +(14.0 + wk * 0.02 + Math.sin(d * 0.8) * 0.02).toFixed(1) : null,
+      glutes: isWeekly ? +(41.0 + wk * 0.05 + Math.sin(d * 1.3) * 0.05).toFixed(1) : null,
+      thighs: isWeekly ? +(22.5 + wk * 0.03 + Math.sin(d * 0.7) * 0.04).toFixed(1) : null,
+      hips:   isWeekly ? +(40.5 + wk * 0.02).toFixed(1) : null,
     });
   }
   for (let i = 0; i < bodyLogs.length; i += 20) {
@@ -4562,77 +4569,161 @@ async function seedDevData(session, userId) {
     });
   }
 
-  // ── Dynamic workout seeding from ALL_EXERCISES ───────────────────────────
-  // Fully dynamic: any exercise added to ALL_EXERCISES is automatically seeded.
-  // Exercises are grouped by muscleGroup and rotated across 6 weeks of workouts.
-  // Each exercise gets at least 3 sessions (enough for calibration + trend).
+  // ── Workout logs ──────────────────────────────────────────────────────────
+  // Full-body every other day. Session structure per workout:
+  //   [Warm-up x2] → [Chest x2, Back x2, Shoulders x1, Arms x1, Legs x1, Glutes x1, Hamstrings x1] → [Core x3]
+  // Rotation: deterministic pointer per group, advances each session.
+  // Progression: weighted = gradual load increase with plateaus and occasional dips.
+  //              bodyweight = slow rep increase every 3 weeks.
+  //              banded = rep bump at week 4 and week 8.
+  //              warm-up = stable throughout.
 
-  // Dynamic workout seeding — now works correctly outside Babel CDN
-  const upperGroups = ["Chest", "Back", "Shoulders", "Arms", "Core"];
-  const lowerGroups = ["Legs", "Glutes", "Hamstrings", "Warm-up"];
-  const activeExercises = ALL_EXERCISES.filter(e => e.active);
-  const upperEx = activeExercises.filter(e => upperGroups.includes(e.muscleGroup));
-  const lowerEx = activeExercises.filter(e => lowerGroups.includes(e.muscleGroup));
+  const activeEx = ALL_EXERCISES.filter(e => e.active);
+  const poolFor  = group => activeEx.filter(e => e.muscleGroup === group);
 
-  const seedWeight = (ex, week) => {
-    if (ex.type !== "weighted") return 0;
-    const base = {Chest:25,Back:25,Shoulders:15,Arms:15,Legs:35,Glutes:40,Hamstrings:30,Core:10}[ex.muscleGroup] || 20;
-    return Math.round((base + week * 2.5) / 2.5) * 2.5;
+  const warmupPool    = poolFor("Warm-up");
+  const chestPool     = poolFor("Chest");
+  const backPool      = poolFor("Back");
+  const shoulderPool  = poolFor("Shoulders");
+  const armsPool      = poolFor("Arms");
+  const legsPool      = poolFor("Legs");
+  const glutesPool    = poolFor("Glutes");
+  const hamPool       = poolFor("Hamstrings");
+  const corePool      = poolFor("Core");
+
+  // Base weights by muscle group for weighted exercises
+  const BASE_WEIGHT = { Chest: 25, Back: 25, Shoulders: 15, Arms: 15, Legs: 35, Glutes: 40, Hamstrings: 30, Core: 10 };
+
+  const seedPerf = (ex, sessionIdx) => {
+    const week = Math.floor(sessionIdx / 3); // ~3 sessions/week
+    const baseReps = parseInt(ex.defaultReps) || 10;
+    const baseSets = parseInt(ex.defaultSets) || 3;
+
+    if (ex.type === "weighted") {
+      const baseW = BASE_WEIGHT[ex.muscleGroup] || 20;
+      // Progress: +2.5 lbs every 2 weeks, plateau at weeks 5-6 and 10-11
+      const plateauWeeks = [5, 6, 10, 11];
+      const progressWeeks = plateauWeeks.includes(week) ? Math.max(0, week - 1) : week;
+      const weeklyGain = Math.floor(progressWeeks / 2) * 2.5;
+      // Every 7th session: slight dip (fatigue day)
+      const fatigueDip = sessionIdx % 7 === 6 ? -2.5 : 0;
+      const w = Math.max(baseW, baseW + weeklyGain + fatigueDip);
+      // Rep progression: every 5th session add 1 rep (capped at baseReps + 3)
+      const repBonus = Math.min(3, Math.floor(sessionIdx / 5));
+      // On fatigue days, reps drop back to base
+      const reps = sessionIdx % 7 === 6 ? baseReps : baseReps + repBonus;
+      return { sets: baseSets, reps, weight: Math.round(w / 2.5) * 2.5 };
+    }
+
+    if (ex.type === "bodyweight") {
+      // Reps increase by 1 every 3 weeks, capped at baseReps + 4
+      const repBonus = Math.min(4, Math.floor(week / 3));
+      return { sets: baseSets, reps: baseReps + repBonus, weight: 0 };
+    }
+
+    if (ex.type === "banded") {
+      // Rep bump at week 4 and week 8
+      const repBonus = (week >= 8 ? 4 : week >= 4 ? 2 : 0);
+      return { sets: baseSets, reps: baseReps + repBonus, weight: 0 };
+    }
+
+    return { sets: baseSets, reps: baseReps, weight: 0 };
   };
 
   const workoutLogs = [];
   let sessionIdx = 0;
-  for (let w = 0; w < 6; w++) {
-    for (const offset of [0, 2, 4]) {
-      const d = w * 7 + offset;
-      if (d > 42) continue;
-      const pool = w % 2 === 0 ? upperEx : lowerEx;
-      if (!pool.length) continue;
-      const start = (sessionIdx * 4) % pool.length;
-      const picked = [];
-      for (let k = 0; k < 5; k++) {
-        const ex = pool[(start + k) % pool.length];
-        if (ex && !picked.find(p => p.id === ex.id)) picked.push(ex);
-      }
-      picked.forEach((ex, pos) => {
-        workoutLogs.push({
-          user_id: userId,
-          exercise_id: ex.id,
-          date: dayOffset(d).toISOString(),
-          sets: parseInt(ex.defaultSets) || 3,
-          reps: parseInt(ex.defaultReps) || 10,
-          weight: seedWeight(ex, w),
-          notes: `Seeded ${ex.defaultSets}x${ex.defaultReps}`,
-          session_id: crypto.randomUUID(),
-          position: pos,
-        });
-      });
-      sessionIdx++;
-    }
+
+  for (let d = 0; d <= SEED_DAYS; d += 2) {
+    const sessionId = crypto.randomUUID();
+    const si = sessionIdx;
+    let position = 0;
+
+    const pick = (pool, offset) => pool[(si + offset) % pool.length];
+
+    // 2 Warm-up
+    [pick(warmupPool, 0), pick(warmupPool, 1)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 2 Chest
+    [pick(chestPool, 0), pick(chestPool, 1)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 2 Back
+    [pick(backPool, 0), pick(backPool, 1)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 1 Shoulders
+    [pick(shoulderPool, 0)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 1 Arms
+    [pick(armsPool, 0)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 1 Legs
+    [pick(legsPool, 0)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 1 Glutes
+    [pick(glutesPool, 0)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 1 Hamstrings
+    [pick(hamPool, 0)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    // 3 Core
+    [pick(corePool, 0), pick(corePool, 1), pick(corePool, 2)].forEach(ex => {
+      const { sets, reps, weight } = seedPerf(ex, si);
+      workoutLogs.push({ user_id: userId, exercise_id: ex.id, date: dayOffset(d).toISOString(), sets, reps, weight, session_id: sessionId, position: position++ });
+    });
+
+    sessionIdx++;
   }
 
-    for (let i = 0; i < workoutLogs.length; i += 20) {
+  for (let i = 0; i < workoutLogs.length; i += 20) {
     await fetch(SUPABASE_URL + "/rest/v1/workout_logs", {
       method: "POST", headers, body: JSON.stringify(workoutLogs.slice(i, i + 20)),
     });
   }
 
+  // ── Nutrition logs ────────────────────────────────────────────────────────
+  // ~86% of days logged (skip every 7th day).
+  // Protein hit ~80% of logged days.
+  // Calories vary ±150 around 2650 target using deterministic sine variation.
+  // No remaining_* or raw_import fields.
   const nutritionLogs = [];
-  for (let d = 0; d <= 42; d++) {
-    if (Math.random() < 0.14) continue; // ~1 skip per week
-    const day = dayOffset(d);
-    const hitProtein = Math.random() > 0.15;
-    const calories = 2580 + Math.round(Math.random() * 200 - 50);
-    const protein  = hitProtein ? 185 + Math.round(Math.random() * 20) : 140 + Math.round(Math.random() * 30);
-    const fat      = 60 + Math.round(Math.random() * 15);
-    const carbs    = Math.round((calories - protein * 4 - fat * 9) / 4);
+  for (let d = 0; d <= SEED_DAYS; d++) {
+    if (d % 7 === 3) continue; // skip ~1 day/week deterministically
+    const hitProtein  = d % 5 !== 4; // miss every 5th day = 80% hit rate
+    const calVariance = Math.round(Math.sin(d * 1.3) * 120 + Math.sin(d * 0.6) * 40);
+    const calories    = 2650 + calVariance;
+    const protein     = hitProtein ? 188 + (d % 7) : 145 + (d % 10);
+    const fat         = 62 + (d % 6);
+    const carbs       = Math.max(150, Math.round((calories - protein * 4 - fat * 9) / 4));
     nutritionLogs.push({
       user_id: userId,
-      date: dateStr(day),
+      date: dateStr(dayOffset(d)),
       phase: "Gain Phase",
       total_calories: calories,
       total_protein: protein,
-      total_carbs: Math.max(carbs, 150),
+      total_carbs: carbs,
       total_fat: fat,
       target_calories: 2650,
       target_protein: 191,
@@ -4648,31 +4739,43 @@ async function seedDevData(session, userId) {
     });
   }
 
+  // ── Recovery sessions ─────────────────────────────────────────────────────
+  // ~5 sessions/week deterministically (skip days where d % 7 === 3 or d % 7 === 6).
+  // Heel pain and back tightness trend downward over 12 weeks (rehab progress).
+  // result_rating tied to after_energy vs before_energy.
   const recovTemplates = ["Daily Maintenance", "Post-Lift Reset", "Full Body Recovery"];
   const recoverySessions = [];
-  for (let d = 0; d <= 42; d++) {
-    if (Math.random() < 0.28) continue; // ~5/week
-    const day = dayOffset(d);
-    const template = recovTemplates[d % recovTemplates.length];
-    const beforeEnergy = 2 + Math.round(Math.random() * 2);
-    const afterEnergy  = Math.min(5, beforeEnergy + 1 + Math.round(Math.random()));
-    const beforeHeel   = Math.round(Math.random() * 3);
-    const afterHeel    = Math.max(0, beforeHeel - Math.round(Math.random() * 2));
+  for (let d = 0; d <= SEED_DAYS; d++) {
+    if (d % 7 === 3 || d % 7 === 6) continue; // 5 of 7 days
+    const week          = Math.floor(d / 7);
+    const template      = recovTemplates[d % recovTemplates.length];
+    const beforeEnergy  = 2 + (d % 3);
+    const afterEnergy   = Math.min(5, beforeEnergy + 1 + (d % 2));
+    const beforeSore    = 2 + (d % 3);
+    const afterSore     = Math.max(0, beforeSore - 1 - (d % 2));
+    // Heel pain trends from ~2 early to ~0-1 by week 10
+    const heelBase      = Math.max(0, 2 - Math.floor(week / 5));
+    const beforeHeel    = heelBase + (d % 2);
+    const afterHeel     = Math.max(0, beforeHeel - 1 - (week >= 6 ? 1 : 0));
+    // Back tightness trends from ~2 early to ~0 by week 8
+    const backBase      = Math.max(0, 2 - Math.floor(week / 4));
+    const beforeBack    = backBase + (d % 2 === 0 ? 1 : 0);
+    const afterBack     = Math.max(0, beforeBack - 1);
     recoverySessions.push({
       user_id: userId,
-      date: dateStr(day),
+      date: dateStr(dayOffset(d)),
       template_name: template,
-      duration_minutes: 15 + Math.round(Math.random() * 20),
-      completed_count: 4 + Math.round(Math.random() * 2),
+      duration_minutes: 15 + (d % 4) * 5,
+      completed_count: 4 + (d % 3),
       total_count: 6,
       before_energy: beforeEnergy,
       after_energy: afterEnergy,
-      before_soreness: 2 + Math.round(Math.random() * 2),
-      after_soreness: 1 + Math.round(Math.random()),
+      before_soreness: beforeSore,
+      after_soreness: afterSore,
       before_heel_pain: beforeHeel,
       after_heel_pain: afterHeel,
-      before_low_back_tightness: Math.round(Math.random() * 2),
-      after_low_back_tightness: Math.round(Math.random()),
+      before_low_back_tightness: beforeBack,
+      after_low_back_tightness: afterBack,
       result_rating: afterEnergy > beforeEnergy ? "better" : "neutral",
     });
   }
