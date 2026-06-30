@@ -5691,17 +5691,27 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
         </Modal>
       )}
 
-      {/* Primary action + History toggle — matches the established Nutrition/Recovery pattern exactly */}
+      {/* Dashboard / Log Measurements / History — same toggle-bar visual language as
+          Nutrition and Recovery. "Log Measurements" is a modal trigger rather than a
+          view (Body has no equivalent of "Log Daily Nutrition" as an inline view), so
+          it's kept as its own control alongside a dedicated Dashboard button — this
+          avoids the dead-end where History had no way back to Dashboard without
+          first opening the modal. */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-          <button onClick={() => { setView("dashboard"); setEditingId(null); setShowForm(true); }}
+          <button onClick={() => setView("dashboard")}
             style={{ background: view === "dashboard" ? "#4A90D9" : "none", color: view === "dashboard" ? "#fff" : "#8B92A5",
-              border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === "dashboard" ? 600 : 400, cursor: "pointer" }}>
+              border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: view === "dashboard" ? 600 : 400, cursor: "pointer" }}>
+            Dashboard
+          </button>
+          <button onClick={() => { setView("dashboard"); setEditingId(null); setShowForm(true); }}
+            style={{ background: "none", color: "#8B92A5",
+              border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
             + Log Measurements
           </button>
           <button onClick={() => setView("history")}
             style={{ background: view === "history" ? "#4A90D9" : "none", color: view === "history" ? "#fff" : "#8B92A5",
-              border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === "history" ? 600 : 400, cursor: "pointer" }}>
+              border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: view === "history" ? 600 : 400, cursor: "pointer" }}>
             History
           </button>
         </div>
