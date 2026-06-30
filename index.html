@@ -3591,9 +3591,26 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
             </Card>
           </div>
 
-          <SectionLabel>All Exercises — Click to Drill Down</SectionLabel>
+          <SectionLabel>My Exercises — Click to Drill Down</SectionLabel>
+          {(() => {
+            // Visibility source: getLoggedExercises (single source of truth for
+            // "has this been logged"). exStats itself is never filtered — its
+            // entries still power Overall Strength Factor Score and Muscle Group
+            // summaries above, unchanged. Here we only decide which exStats
+            // entries get a visible card, via id membership against the logged set.
+            const loggedIds = new Set(getLoggedExercises(workoutLogs, exercises).map(e => e.id));
+            const visibleStats = exStats.filter(s => loggedIds.has(s.ex.id));
+            if (visibleStats.length === 0) {
+              return (
+                <div style={{ textAlign: "center", padding: "48px 24px", color: "#4B5563" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#8B92A5", marginBottom: 6 }}>No Exercise History Yet</div>
+                  <div style={{ fontSize: 13 }}>Complete your first workout to unlock exercise tracking.</div>
+                </div>
+              );
+            }
+            return (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {exStats.map(({ ex, pfSeries, totalGain, sessionGain }) => {
+            {visibleStats.map(({ ex, pfSeries, totalGain, sessionGain }) => {
               const color = MUSCLE_COLORS[ex.muscleGroup] || "#4B5563";
               const gainColor = totalGain === null ? "#4B5563" : totalGain >= 0 ? "#4AD99A" : "#D94A4A";
               return (
@@ -3633,6 +3650,8 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
               );
             })}
           </div>
+            );
+          })()}
         </div>
       )}
 
