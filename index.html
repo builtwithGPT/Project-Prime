@@ -6009,7 +6009,16 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 2 — CORE KPI SCOREBOARD (4 cards only)
+          Hidden 2026-06-29: duplicated the Prime Score card's Strength/
+          Waist/Weight breakdown above, using a different calculation path
+          (calcGroupPFChange vs calcStrengthScore), which produced two
+          conflicting Strength Factor percentages on the same screen.
+          Prime Score card is the hero KPI going forward. Physique
+          Development sub-card has no other home in the UI yet — kept here,
+          inactive, in case it needs to be resurfaced later.
+          Flip SHOW_KPI_SCOREBOARD to true to restore.
       ══════════════════════════════════════════════════════════════════ */}
+      {false && (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
 
         {/* Weight */}
@@ -6093,6 +6102,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
           {!latest.chest && !latest.arms && <div style={{ color: "#3A3D4A", fontSize: 11 }}>Log measurements to see development</div>}
         </div>
       </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 3 — TREND CHARTS (question-answering)
