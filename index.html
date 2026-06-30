@@ -7772,13 +7772,8 @@ function App() {
         total_protein: Number(parsed.totals?.protein) || 0,
         total_carbs: Number(parsed.totals?.carbs) || 0,
         total_fat: Number(parsed.totals?.fat) || 0,
-        remaining_calories: Number(parsed.remaining?.calories) || 0,
-        remaining_protein: Number(parsed.remaining?.protein) || 0,
-        remaining_carbs: Number(parsed.remaining?.carbs) || 0,
-        remaining_fat: Number(parsed.remaining?.fat) || 0,
         compliance: typeof parsed.compliance === "string" ? parsed.compliance.slice(0, 200) : null,
         notes: Array.isArray(parsed.notes) ? parsed.notes.join(" ").slice(0, 1000) : (typeof parsed.notes === "string" ? parsed.notes.slice(0, 1000) : null),
-        raw_import: rawText ? rawText.slice(0, 4000) : null,
       };
 
       const existing = nutritionDays.find(d => d.date === parsed.date);
