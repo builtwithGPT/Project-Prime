@@ -5095,10 +5095,12 @@ function buildCoachNarrative(confidence, weightChange, wRate, waistChange, total
   return "Progress is mixed. Continue consistent logging and avoid large plan changes until trends are clearly confirmed over multiple weeks.";
 }
 
-function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, recoverySessions, phase, phaseInfo }) {
+function BodyTab({ bodyLogs, onSave, onUpdate, workoutLogs, exercises, nutritionDays, recoverySessions, phase, phaseInfo }) {
   const [showForm, setShowForm]     = useState(false);
   const [fields, setFields]         = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
   const [saveStatus, setSaveStatus] = useState(null);
+  const [view, setView]             = useState("dashboard"); // "dashboard" | "history"
+  const [editingId, setEditingId]   = useState(null); // null = adding new entry, else = id of body_logs row being edited
   const [activeTrend, setActiveTrend] = useState("weight");
   const [tappedPoint, setTappedPoint] = useState(null); // { index, date, value } | null — interactive trend chart popover
   const [weeklyReview, setWeeklyReview] = useState(null);
@@ -5109,6 +5111,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
 
   const sorted = [...bodyLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
   const latest = sorted[sorted.length - 1] || {};
+  const editingLog = editingId ? bodyLogs.find(l => l.id === editingId) : null;
   const phaseStart = phase?.startDate ? new Date(phase.startDate) : null;
 
   const baseline = phaseStart
@@ -5551,10 +5554,29 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
   const handleSave = async () => {
     setSaveStatus("saving");
-    const ok = await onSave({ date: new Date().toISOString(), ...Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v ? Number(v) : null])) });
+    const measurementPayload = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v ? Number(v) : null]));
+    // Editing an existing row: PATCH only the measurement fields. Date is
+    // deliberately omitted from this payload so the existing row's date is
+    // never overwritten — Supabase PATCH only touches keys present in the body.
+    // Adding a new row: POST with today's date, same as before.
+    const ok = editingId
+      ? await onUpdate(editingId, measurementPayload)
+      : await onSave({ date: new Date().toISOString(), ...measurementPayload });
     setSaveStatus(ok ? "saved" : "error");
     setTimeout(() => setSaveStatus(null), 3000);
-    if (ok) { setShowForm(false); setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" }); }
+    if (ok) { setShowForm(false); setEditingId(null); setFields({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" }); }
+  };
+
+  // Opens the existing Log Measurements modal pre-filled with a row's current
+  // values for editing. Empty/null measurements stay as empty string in the
+  // form (never "0"), so untouched fields remain visually blank.
+  const startEdit = (log) => {
+    setFields({
+      weight: log.weight ?? "", chest: log.chest ?? "", waist: log.waist ?? "",
+      hips: log.hips ?? "", glutes: log.glutes ?? "", thighs: log.thighs ?? "", arms: log.arms ?? "",
+    });
+    setEditingId(log.id);
+    setShowForm(true);
   };
 
   const recent = [...sorted].reverse().slice(0, 10);
@@ -5653,7 +5675,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
       {/* ── Log form modal ─────────────────────────────────────────────── */}
       {showForm && (
-        <Modal title="Log Body Measurements" onClose={() => setShowForm(false)} width={520}>
+        <Modal title={editingLog ? `Edit Measurement — ${fmtDateLong(editingLog.date)}` : "Log Body Measurements"} onClose={() => { setShowForm(false); setEditingId(null); }} width={520}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
             {[["Weight (lbs)", "weight"], ["Chest (in)", "chest"], ["Waist (in)", "waist"], ["Hips (in)", "hips"], ["Glutes (in)", "glutes"], ["Thighs (in)", "thighs"], ["Arms (in)", "arms"]].map(([label, k]) => (
               <div key={k}>
@@ -5669,6 +5691,21 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
         </Modal>
       )}
 
+      {/* ── Dashboard / History sub-tabs (mirrors Nutrition tab's Log/History pattern) ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
+          {[["dashboard", "Dashboard"], ["history", "History"]].map(([id, label]) => (
+            <button key={id} onClick={() => setView(id)}
+              style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
+                border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === "dashboard" && (
+      <>
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 1 — PROJECT PRIME SCORE
       ══════════════════════════════════════════════════════════════════ */}
@@ -5679,7 +5716,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
           <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>PROJECT PRIME SCORE</div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <SaveStatus status={saveStatus} />
-            <button onClick={() => setShowForm(true)} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Log Measurements</button>
+            <button onClick={() => { setEditingId(null); setShowForm(true); }} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Log Measurements</button>
           </div>
         </div>
 
@@ -6314,7 +6351,11 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
         </div>
       </div>
       )}
+      </>
+      )}
 
+      {view === "history" && (
+      <>
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 5 — HISTORICAL MEASUREMENT LOG
       ══════════════════════════════════════════════════════════════════ */}
@@ -6325,19 +6366,29 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
-                  <tr>{["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms"].map(h => (
-                    <th key={h} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
+                  <tr>{["Date", "Weight", "Chest", "Waist", "Hips", "Glutes", "Thighs", "Arms", ""].map(h => (
+                    <th key={h || "actions"} style={{ color: "#4B5563", fontWeight: 700, textAlign: "left", padding: "6px 12px", borderBottom: "1px solid #2A2D3A" }}>{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody>
-                  {recent.map((l, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #1A1D26" }}>
+                  {recent.map((l) => (
+                    <tr key={l.id ?? l.date} style={{ borderBottom: "1px solid #1A1D26" }}>
                       <td style={{ color: "#8B92A5", padding: "8px 12px" }}>{fmtDateLong(l.date)}</td>
                       {["weight", "chest", "waist", "hips", "glutes", "thighs", "arms"].map(k => (
                         <td key={k} style={{ color: k === "glutes" ? "#E87D38" : "#C8CDD8", padding: "8px 12px", fontWeight: k === "glutes" ? 700 : 400 }}>
                           {l[k] ? `${l[k]}${k === "weight" ? " lbs" : '"'}` : "—"}
                         </td>
                       ))}
+                      <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                        {/* Edit affordance — same pencil icon/style used for editing logged sets elsewhere
+                            (Workout/Progress tabs), enlarged here for reliable iPad tap targets. */}
+                        <button onClick={() => l.id && startEdit(l)} disabled={!l.id}
+                          title={l.id ? "Edit measurement" : "Still syncing — try again in a moment"}
+                          style={{ background: "none", border: "none", color: l.id ? "#4B5563" : "#2A2D3A",
+                            cursor: l.id ? "pointer" : "not-allowed", fontSize: 16, padding: 10, lineHeight: 1 }}>
+                          ✎
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -6345,6 +6396,8 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
             </div>
           </Card>
         </div>
+      )}
+      </>
       )}
     </div>
   );
@@ -7974,6 +8027,19 @@ function App() {
     return false;
   };
 
+  // Edits an existing body_logs row in place — mirrors addWorkoutLog's proven
+  // PATCH pattern. The `entry` payload intentionally never includes `date`,
+  // so the row's original date is always preserved. Optimistic local update
+  // touches only the matching row; every other row is returned by reference,
+  // unchanged. PATCHes the exact existing id — never creates a new row.
+  const updateBodyLog = async (id, entry) => {
+    const optimistic = bodyLogs.map(l => l.id === id ? { ...l, ...entry } : l);
+    setBodyLogs(optimistic);
+    lsSet(LS_KEYS.body, optimistic);
+    const ok = await sbPatch(`body_logs?id=eq.${id}`, entry, session);
+    return ok;
+  };
+
   const saveNutritionDay = async (parsed, rawText) => {
     try {
       const dayPayload = {
@@ -8343,7 +8409,7 @@ function App() {
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px 0", minHeight: 0, WebkitOverflowScrolling: "touch", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}>
         {tab === "workout"   && <WorkoutTab exercises={exercises} workoutLogs={workoutLogs} onLogExercise={addWorkoutLog} onEditSet={editWorkoutSet} onSaveSummary={saveWorkoutSummary} session={session} userId={userId} phase={phase} bodyLogs={bodyLogs} nutritionDays={nutritionDays} recoverySessions={recoverySessions} />}
         {tab === "progress"  && <ProgressTab exercises={exercises} workoutLogs={workoutLogs} bodyLogs={bodyLogs} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} />}
-        {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
+        {tab === "body"      && <BodyTab bodyLogs={bodyLogs} onSave={addBodyLog} onUpdate={updateBodyLog} workoutLogs={workoutLogs} exercises={exercises} nutritionDays={nutritionDays} recoverySessions={recoverySessions} phase={phase} phaseInfo={phaseInfo} />}
         {tab === "nutrition" && <NutritionTab nutritionDays={nutritionDays} onSaveDay={saveNutritionDay} session={session} userId={userId} phase={phase} />}
         {tab === "recovery"  && <RecoveryTab recoverySessions={recoverySessions} onSaveSession={saveRecoverySession} />}
       </div>
