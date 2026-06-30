@@ -4339,6 +4339,22 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
   );
 }
 
+// Computes a smoothed trend line from raw data points using a simple moving
+// average (window of up to 5 points). The line communicates overall direction
+// rather than every daily fluctuation — bars remain the source of truth for
+// individual measurements. The final point is forced to equal the actual last
+// raw value so the line visually terminates at today's measurement.
+function smoothedTrendLine(values, windowSize = 5) {
+  if (!values || values.length < 2) return values || [];
+  const smoothed = values.map((_, i) => {
+    const start = Math.max(0, i - windowSize + 1);
+    const window = values.slice(start, i + 1);
+    return window.reduce((s, v) => s + v, 0) / window.length;
+  });
+  smoothed[smoothed.length - 1] = values[values.length - 1];
+  return smoothed;
+}
+
 function MiniBarChart({ data, color = "#4A90D9", height = 56 }) {
   if (!data || data.length < 2) return <div style={{ color: "#3A3D4A", fontSize: 11 }}>Not enough data</div>;
   const vals = data.map(d => d.value);
@@ -5084,6 +5100,7 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
   const [fields, setFields]         = useState({ weight: "", chest: "", waist: "", hips: "", glutes: "", thighs: "", arms: "" });
   const [saveStatus, setSaveStatus] = useState(null);
   const [activeTrend, setActiveTrend] = useState("weight");
+  const [tappedPoint, setTappedPoint] = useState(null); // { index, date, value } | null — interactive trend chart popover
   const [weeklyReview, setWeeklyReview] = useState(null);
   const [generating, setGenerating]     = useState(false);
   const [showAllWins, setShowAllWins]     = useState(false);
@@ -5290,9 +5307,10 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     const pct = ((last - first) / first) * 100;
     const isNeutral = Math.abs(pct) < 1;
     const isGood = higherIsBetter ? pct > 0 : pct < 0;
+    const direction = pct > 0 ? "Trending Up" : pct < 0 ? "Trending Down" : "Stable";
     if (isNeutral) return { verdict: "Stable — holding steady",                                           verdictColor: "#E8A838", verdictEmoji: "\uD83D\uDFE1" };
-    if (isGood)    return { verdict: higherIsBetter ? "On target — trending up" : "Controlled",           verdictColor: "#4AD99A", verdictEmoji: "\uD83D\uDFE2" };
-    return         { verdict: higherIsBetter ? "Stagnant — needs attention" : "Increasing — monitor",    verdictColor: "#D94A4A", verdictEmoji: "\uD83D\uDD34" };
+    if (isGood)    return { verdict: "On Target • " + direction,           verdictColor: "#4AD99A", verdictEmoji: "\uD83D\uDFE2" };
+    return         { verdict: higherIsBetter ? "Needs Attention • " + direction : "Monitor • " + direction,    verdictColor: "#D94A4A", verdictEmoji: "\uD83D\uDD34" };
   };
 
   const trendOptions = [
@@ -5305,6 +5323,16 @@ function BodyTab({ bodyLogs, onSave, workoutLogs, exercises, nutritionDays, reco
     { id: "thighs", label: "Thighs",       data: thighsSeries, color: "#E8A838", unit: "in",  ...trendVerdict(thighsSeries, true) },
   ];
   const activeTrendData = trendOptions.find(t => t.id === activeTrend);
+
+  // Baseline delta for the richer trend header — reuses the same first-vs-last
+  // logic already used for the top-right summary number. No new calculations.
+  const activeBaselineDelta = (() => {
+    if (!activeTrendData || activeTrendData.data.length < 2) return null;
+    const first = activeTrendData.data[0].value;
+    const last  = activeTrendData.data[activeTrendData.data.length - 1].value;
+    return +(last - first).toFixed(activeTrendData.unit === "in" ? 2 : 1);
+  })();
+  const activeBaselineLabel = activeTrend === "weight" ? "since phase start" : "from baseline";
 
   const generateReview = async () => {
     setGenerating(true);
@@ -6115,13 +6143,14 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
       )}
 
       {/* ══════════════════════════════════════════════════════════════════
-          SECTION 3 — TREND CHARTS (question-answering)
+          SECTION 3 — TREND ANALYSIS (mini-dashboard: bars = raw data,
+          smoothed line = direction, tap = precise readout)
       ══════════════════════════════════════════════════════════════════ */}
       <div style={{ background: "#1A1D26", borderRadius: 14, border: "1px solid #2A2D3A", padding: 20 }}>
         <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 14 }}>TREND ANALYSIS</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
           {trendOptions.map(t => (
-            <button key={t.id} onClick={() => setActiveTrend(t.id)}
+            <button key={t.id} onClick={() => { setActiveTrend(t.id); setTappedPoint(null); }}
               style={{ background: activeTrend === t.id ? t.color : "#0F1117",
                 color: activeTrend === t.id ? "#0F1117" : "#8B92A5",
                 border: activeTrend === t.id ? `1px solid ${t.color}` : "1px solid #2A2D3A",
@@ -6132,60 +6161,123 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
         </div>
         {activeTrendData && (
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 10 }}>
+            {/* Mini-dashboard header: metric name, current value, qualitative status, baseline delta */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 14 }}>
               <div>
                 <div style={{ color: "#E8EAF0", fontSize: 15, fontWeight: 700 }}>{activeTrendData.label}</div>
-                {/* Question-answering verdict */}
                 {activeTrendData.verdict && (
                   <div style={{ color: activeTrendData.verdictColor, fontSize: 12, fontWeight: 700, marginTop: 2 }}>
                     {activeTrendData.verdictEmoji} {activeTrendData.verdict}
                   </div>
                 )}
-              </div>
-              {activeTrendData.data.length >= 2 && (() => {
-                const first = activeTrendData.data[0].value;
-                const last  = activeTrendData.data[activeTrendData.data.length - 1].value;
-                const diff  = +(last - first).toFixed(1);
-                const up    = diff >= 0;
-                return (
-                  <div style={{ textAlign: "right" }}>
-                    <span style={{ color: activeTrendData.color, fontSize: 24, fontWeight: 800 }}>{last}</span>
-                    <span style={{ color: "#8B92A5", fontSize: 12, marginLeft: 4 }}>{activeTrendData.unit}</span>
-                    <div style={{ color: up ? "#4AD99A" : "#D94A4A", fontSize: 11, fontWeight: 700, marginTop: 2 }}>
-                      {up ? "+" : ""}{diff} {activeTrendData.unit} since first log
-                    </div>
+                {activeBaselineDelta !== null && (
+                  <div style={{ color: "#8B92A5", fontSize: 12, marginTop: 2 }}>
+                    {activeBaselineDelta >= 0 ? "+" : ""}{activeBaselineDelta} {activeTrendData.unit} {activeBaselineLabel}
                   </div>
-                );
-              })()}
+                )}
+              </div>
+              {activeTrendData.data.length >= 1 && (
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ color: activeTrendData.color, fontSize: 28, fontWeight: 800 }}>{activeTrendData.data[activeTrendData.data.length - 1].value}</span>
+                  <span style={{ color: "#8B92A5", fontSize: 12, marginLeft: 4 }}>{activeTrendData.unit}</span>
+                </div>
+              )}
             </div>
+
             {activeTrendData.data.length < 2 ? (
               <div style={{ color: "#3A3D4A", fontSize: 13, padding: "32px 0", textAlign: "center" }}>Log at least 2 entries to see trend</div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
-                {activeTrendData.data.slice(-24).map((d, i, arr) => {
-                  const vals = arr.map(x => x.value);
-                  const mn = Math.min(...vals), mx = Math.max(...vals), range = mx - mn || 0.01;
-                  const h = Math.max(6, ((d.value - mn) / range) * 84 + 8);
-                  const isLast = i === arr.length - 1;
-                  return (
-                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                      {isLast && <div style={{ fontSize: 9, color: activeTrendData.color, fontWeight: 700 }}>{d.value}</div>}
-                      <div style={{ width: "100%", height: h, background: isLast ? activeTrendData.color : activeTrendData.color + "44", borderRadius: "3px 3px 0 0" }} />
-                      {(i === 0 || i === arr.length - 1 || i === Math.floor(arr.length / 2)) && (
-                        <div style={{ fontSize: 8, color: "#3A3D4A", textAlign: "center" }}>{fmtDate(d.date)}</div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            ) : (() => {
+              const points = activeTrendData.data.slice(-24);
+              const vals = points.map(p => p.value);
+              const mn = Math.min(...vals), mx = Math.max(...vals), range = mx - mn || 0.01;
+              const n = points.length;
+
+              // Chart geometry — SVG so the smoothed trend line can be drawn
+              // precisely over the bars using shared coordinates.
+              const chartW = 680, chartH = 120, barGap = 3;
+              const barW = (chartW - barGap * (n - 1)) / n;
+              const barTopMax = 92, barBaseY = 100;
+
+              const barX = i => i * (barW + barGap);
+              const barH = v => Math.max(6, ((v - mn) / range) * (barTopMax - 8) + 8);
+              const barY = v => barBaseY - barH(v);
+
+              const smoothed = smoothedTrendLine(vals, 5);
+              const lineY = v => barBaseY - (((v - mn) / range) * (barTopMax - 8) + 8);
+              const linePoints = smoothed.map((v, i) => `${barX(i) + barW / 2},${lineY(v)}`).join(" ");
+
+              const tapped = tappedPoint && tappedPoint.metricId === activeTrend ? tappedPoint : null;
+
+              return (
+                <div style={{ position: "relative" }}>
+                  <svg viewBox={`0 0 ${chartW} ${chartH}`} width="100%" height={chartH} style={{ display: "block", overflow: "visible" }}>
+                    {/* Bars — raw measurements, source of truth */}
+                    {points.map((d, i) => {
+                      const isLast = i === n - 1;
+                      return (
+                        <rect key={"bar" + i}
+                          x={barX(i)} y={barY(d.value)} width={barW} height={barH(d.value)}
+                          rx={2}
+                          fill={isLast ? activeTrendData.color : activeTrendData.color + "44"} />
+                      );
+                    })}
+                    {/* Smoothed trend line — overall direction, not daily noise.
+                        Terminates exactly at the latest raw value. */}
+                    <polyline points={linePoints} fill="none" stroke={activeTrendData.color} strokeOpacity={0.85} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx={barX(n - 1) + barW / 2} cy={lineY(smoothed[n - 1])} r={3} fill={activeTrendData.color} />
+                    {/* Invisible tap targets — full bar-column height for easy tapping */}
+                    {points.map((d, i) => (
+                      <rect key={"tap" + i}
+                        x={barX(i)} y={0} width={barW} height={chartH}
+                        fill="transparent" style={{ cursor: "pointer" }}
+                        onClick={() => setTappedPoint(prev =>
+                          (prev && prev.metricId === activeTrend && prev.index === i)
+                            ? null
+                            : { metricId: activeTrend, index: i, date: d.date, value: d.value, label: activeTrendData.label, unit: activeTrendData.unit, x: barX(i) + barW / 2, y: barY(d.value) }
+                        )} />
+                    ))}
+                  </svg>
+                  {/* Axis labels: first, middle, last date */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                    <span style={{ fontSize: 8, color: "#3A3D4A" }}>{fmtDate(points[0].date)}</span>
+                    {n > 2 && <span style={{ fontSize: 8, color: "#3A3D4A" }}>{fmtDate(points[Math.floor(n / 2)].date)}</span>}
+                    <span style={{ fontSize: 8, color: "#3A3D4A" }}>{fmtDate(points[n - 1].date)}</span>
+                  </div>
+                  {/* Tap-to-inspect floating callout */}
+                  {tapped && (
+                    <>
+                      <div onClick={() => setTappedPoint(null)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
+                      <div style={{
+                        position: "absolute",
+                        left: `${(tapped.x / chartW) * 100}%`,
+                        top: `calc(${Math.max(0, (tapped.y / chartH) * 100)}% - 54px)`,
+                        transform: "translateX(-50%)",
+                        background: "#0F1117", border: `1px solid ${activeTrendData.color}66`,
+                        borderRadius: 8, padding: "8px 12px", whiteSpace: "nowrap",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.4)", zIndex: 10, pointerEvents: "none",
+                      }}>
+                        <div style={{ color: "#8B92A5", fontSize: 10 }}>{fmtDate(tapped.date)}</div>
+                        <div style={{ color: "#E8EAF0", fontSize: 11, fontWeight: 700 }}>{tapped.label}</div>
+                        <div style={{ color: activeTrendData.color, fontSize: 13, fontWeight: 800 }}>{tapped.value} {tapped.unit}</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 4 — PHYSIQUE MEASUREMENT DETAILS
+          Hidden 2026-06-29: superseded by the richer Trend Analysis header
+          above (qualitative status + baseline delta now shown per metric
+          without scrolling). Calculation code and underlying series
+          (chestSeries, armsSeries, etc.) are preserved and still feed
+          Trend Analysis — only this redundant card grid is hidden.
       ══════════════════════════════════════════════════════════════════ */}
+      {false && (
       <div>
         <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>PHYSIQUE MEASUREMENT DETAILS</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
@@ -6221,6 +6313,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
           })}
         </div>
       </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           SECTION 5 — HISTORICAL MEASUREMENT LOG
