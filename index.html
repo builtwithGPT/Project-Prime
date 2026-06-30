@@ -3504,7 +3504,10 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
     const first = baselineEntry?.value;
     const last  = pfSeries[pfSeries.length - 1]?.value;
     const prev  = pfSeries[pfSeries.length - 2]?.value;
-    const totalGain   = first && last  ? ((last  - first) / first * 100) : null;
+    // totalGain requires at least 2 sessions — with only 1, first === last
+    // (same data point), which previously produced a spurious 0% "gain"
+    // instead of correctly staying null until real comparison data exists.
+    const totalGain   = (pfSeries.length >= 2 && first && last) ? ((last  - first) / first * 100) : null;
     const sessionGain = last  && prev  ? ((last  - prev)  / prev  * 100) : null;
     const peak = pfSeries.length ? Math.max(...pfSeries.map(d => d.value)) : null;
     return { ex, logs, pfSeries, first, last, prev, totalGain, sessionGain, peak, baseline, baselineEntry };
