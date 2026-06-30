@@ -5691,16 +5691,19 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
         </Modal>
       )}
 
-      {/* ── Dashboard / History sub-tabs (mirrors Nutrition tab's Log/History pattern) ── */}
+      {/* Primary action + History toggle — matches the established Nutrition/Recovery pattern exactly */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <div style={{ display: "flex", background: "#1A1D26", borderRadius: 8, padding: 3, border: "1px solid #2A2D3A" }}>
-          {[["dashboard", "Dashboard"], ["history", "History"]].map(([id, label]) => (
-            <button key={id} onClick={() => setView(id)}
-              style={{ background: view === id ? "#4A90D9" : "none", color: view === id ? "#fff" : "#8B92A5",
-                border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === id ? 600 : 400, cursor: "pointer" }}>
-              {label}
-            </button>
-          ))}
+          <button onClick={() => { setView("dashboard"); setEditingId(null); setShowForm(true); }}
+            style={{ background: view === "dashboard" ? "#4A90D9" : "none", color: view === "dashboard" ? "#fff" : "#8B92A5",
+              border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === "dashboard" ? 600 : 400, cursor: "pointer" }}>
+            + Log Measurements
+          </button>
+          <button onClick={() => setView("history")}
+            style={{ background: view === "history" ? "#4A90D9" : "none", color: view === "history" ? "#fff" : "#8B92A5",
+              border: "none", borderRadius: 6, padding: "7px 20px", fontSize: 13, fontWeight: view === "history" ? 600 : 400, cursor: "pointer" }}>
+            History
+          </button>
         </div>
       </div>
 
