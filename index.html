@@ -346,6 +346,24 @@ function calcPF(sets, reps, weight, type, laterality) {
   return sets * reps * (weight || 0) * mult;
 }
 
+// Single source of truth for "has this exercise been logged at least once."
+// Exercise visibility in Exercise Detail is derived entirely from
+// workout_logs — no hidden/visible/active flags, no localStorage lists.
+// An exercise is visible if exists(workout_logs.exercise_id). Nothing more.
+function getLoggedExercises(workoutLogs, allExercises) {
+  const loggedIds = new Set(workoutLogs.map(l => Number(l.exerciseId)));
+  return allExercises.filter(e => e.active && loggedIds.has(Number(e.id)));
+}
+
+// Most recent log date for a given exercise — used to order Exercise Detail
+// chips by recency (most-recently-performed first), so Progress reads like
+// a personal training journal rather than the static exercise library order.
+function mostRecentLogDate(exercise, workoutLogs) {
+  const logs = workoutLogs.filter(l => Number(l.exerciseId) === Number(exercise.id));
+  if (!logs.length) return 0;
+  return Math.max(...logs.map(l => new Date(l.date).getTime()));
+}
+
 const AI_WORKER = "https://shrill-cloud-995e.jdurham.workers.dev";
 
 async function callAI(systemPrompt, userPrompt, maxTokens = 1000) {
@@ -3618,10 +3636,19 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
         </div>
       )}
 
-      {view === "detail" && (
+      {view === "detail" && (() => {
+        const loggedExercises = getLoggedExercises(workoutLogs, exercises)
+          .sort((a, b) => mostRecentLogDate(b, workoutLogs) - mostRecentLogDate(a, workoutLogs));
+        return (
         <div>
+          {loggedExercises.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "48px 24px", color: "#4B5563" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#8B92A5", marginBottom: 6 }}>No Exercise History Yet</div>
+              <div style={{ fontSize: 13 }}>Complete your first workout to unlock exercise tracking.</div>
+            </div>
+          ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
-            {exercises.filter(e => e.active).map(e => (
+            {loggedExercises.map(e => (
               <button key={e.id} onClick={() => setSelected(e.id)}
                 style={{ background: selected === e.id ? MUSCLE_COLORS[e.muscleGroup] : "#1A1D26",
                   color: selected === e.id ? "#fff" : "#8B92A5",
@@ -3631,6 +3658,7 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
               </button>
             ))}
           </div>
+          )}
 
           {selStats && (
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
@@ -3841,9 +3869,10 @@ function ProgressTab({ exercises, workoutLogs, bodyLogs, nutritionDays, recovery
               </Card>
             </div>
           )}
-          {!selected && <div style={{ color: "#3A3D4A", textAlign: "center", padding: "60px 0", fontSize: 14 }}>Select an exercise above to see detail</div>}
+          {!selected && loggedExercises.length > 0 && <div style={{ color: "#3A3D4A", textAlign: "center", padding: "60px 0", fontSize: 14 }}>Select an exercise above to see detail</div>}
         </div>
-      )}
+        );
+      })()}
 
       {view === "history" && (
         <div>
