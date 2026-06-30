@@ -4806,11 +4806,9 @@ function calcStrengthScore(workoutLogs, exercises, phase) {
   const baselineEnd = new Date(phaseStart);
   baselineEnd.setDate(phaseStart.getDate() + 7);
 
-  const calcSF = (log, ex) => {
-    if (ex.type === "weighted")   return log.sets * log.reps * log.weight;
-    if (ex.type === "bodyweight") return log.sets * log.reps * 10;
-    return log.sets * log.reps; // banded
-  };
+  // Uses the official calcPF formula (single source of truth, shared with
+  // Progress tab) — do not reintroduce a private strength-factor formula here.
+  const calcSF = (log, ex) => calcPF(log.sets, log.reps, log.weight, ex.type, ex.laterality);
 
   const ssBaselines = getBaselines(); // per-exercise recalibration baselines
   const byEx = {};
@@ -5751,7 +5749,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
               {[
                 {
                   icon: "💪", color: "#4A90D9", bg: "#1E3A5F",
-                  label: "STRENGTH (50%)", sub: "Average Strength Progress (" + (strengthResult.window || 14) + "d)",
+                  label: "STRENGTH (50%)", sub: "Strength momentum: first week vs last " + (strengthResult.window || 14) + "d",
                   detail: strengthResult.pct !== null ? (strengthResult.pct >= 0 ? "↑ +" : "↓ ") + Math.abs(strengthResult.pct) + "%" : "Building data...",
                   detailColor: strengthResult.pct !== null ? (strengthResult.pct >= 0 ? "#4AD99A" : "#D94A4A") : "#4B5563",
                   interp: strengthResult.score !== null
@@ -5913,7 +5911,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
             <div style={{ background: "#0F1117", borderRadius: 10, padding: "14px 16px" }}>
               <div style={{ color: "#4B5563", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>WHY THIS SCORE?</div>
               {[
-                { icon: "💪", bg: "#1E3A5F", text: strengthResult.pct !== null ? "Strength is " + (strengthResult.pct >= 0 ? "up +" : "down ") + Math.abs(strengthResult.pct) + "% over the last 28 days." : "Log 2 comparable workout sessions to unlock strength score." },
+                { icon: "💪", bg: "#1E3A5F", text: strengthResult.pct !== null ? "Strength momentum (first week vs last " + (strengthResult.window || 14) + "d): " + (strengthResult.pct >= 0 ? "up +" : "down ") + Math.abs(strengthResult.pct) + "%." : "Log 2 comparable workout sessions to unlock strength score." },
                 { icon: "📏", bg: "#1A3A2A", text: waistResult.change !== null ? "Waist is " + (waistResult.change === 0 ? "unchanged" : (waistResult.change > 0 ? "up +" : "down ") + Math.abs(waistResult.change) + '"') + " since phase start." : "Log a waist measurement to unlock waist score." },
                 { icon: "⚖️", bg: "#3A2E0A", text: weightResult.rate !== null ? "Weight gain rate is " + (weightResult.rate >= 0 ? "+" : "") + weightResult.rate + " lbs per week " + (weightResult.score >= 90 ? "(ideal range)." : "(outside ideal range).") : "Log weight daily to calculate gain rate." },
                 { icon: "📊", bg: "#2A2040", text: confidence.nutritionLogs >= 5 ? "Nutrition and training consistency are high." : "Log nutrition for " + Math.max(0, 5 - confidence.nutritionLogs) + " more days to improve score accuracy." },
