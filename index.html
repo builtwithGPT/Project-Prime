@@ -5717,10 +5717,7 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
         {/* Top bar */}
         <div style={{ padding: "12px 20px", borderBottom: "1px solid #2A2D3A", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: "#4B5563", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em" }}>PROJECT PRIME SCORE</div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <SaveStatus status={saveStatus} />
-            <button onClick={() => { setEditingId(null); setShowForm(true); }} style={{ background: "#4A90D9", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Log Measurements</button>
-          </div>
+          <SaveStatus status={saveStatus} />
         </div>
 
         {/* Two column body — always shown */}
